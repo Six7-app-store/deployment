@@ -80,6 +80,9 @@ jobs:
           terraform plan -out=tfplan
           terraform apply tfplan
           echo "VM_IP=$(terraform output -raw vm_ip)" >> "$GITHUB_ENV"
+          echo "VM_IPV4=$(terraform output -raw vm_ipv4)" >> "$GITHUB_ENV"
+          echo "VM_IPV4_GATEWAY=$(terraform output -raw vm_ipv4_gateway)" >> "$GITHUB_ENV"
+          echo "VM_IPV4_MAC=$(terraform output -raw vm_ipv4_mac)" >> "$GITHUB_ENV"
 
       - name: Install Ansible and Dependencies
         run: |
@@ -102,7 +105,11 @@ jobs:
         working-directory: infrastructure/ansible
         run: |
           ansible-playbook -i inventory.ini \
-            --private-key ~/.ssh/openstack-key staging.yml
+            --private-key ~/.ssh/openstack-key \
+            -e "secondary_ipv4=${VM_IPV4}" \
+            -e "secondary_gateway=${VM_IPV4_GATEWAY}" \
+            -e "secondary_mac=${VM_IPV4_MAC}" \
+            staging.yml
         env:
           ANSIBLE_HOST_KEY_CHECKING: 'False'
           ANSIBLE_FORCE_COLOR: 'True'

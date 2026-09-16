@@ -9,8 +9,180 @@
     docker_install_compose: true
     project_root: "/home/ubuntu/app"
     local_compose_path: "{{ playbook_dir }}/../../"
+    # Vom Workflow über -e gesetzt. Der Default gilt, wenn das Playbook von
+    # Hand läuft: ein Deploy fasst keine Anwendungsdaten an, solange es nicht
+    # ausdrücklich verlangt wird.
+    seed_data: false
+    # Muss zu docker_data_volume_size_gb in envs/staging passen: "" solange dort
+    # 0 steht, /dev/vdb sobald wieder ein Volume angelegt wird.
+    docker_data_device: ""
 
   pre_tasks:
+    # Das zweite Interface hängt Terraform an die laufende VM, konfiguriert ist
+    # es damit nicht - cloud-init läuft nur beim ersten Boot.
+    #
+    # Die eigene Routing-Tabelle ist nicht optional: Antworten von der
+    # IPv4-Adresse müssen über deren Gateway hinaus, sonst verwirft Neutrons
+    # Port-Security sie als gefälschte Absenderadresse.
+    - name: Netplan für das sekundäre IPv4-Interface schreiben
+      when: secondary_mac | default('') | length > 0
+      ansible.builtin.copy:
+        dest: /etc/netplan/60-secondary-ipv4.yaml
+        owner: root
+        group: root
+        mode: '0600'
+        content: |
+          network:
+            version: 2
+            ethernets:
+              secondary:
+                match:
+                  macaddress: "{{ secondary_mac }}"
+                dhcp4: true
+                dhcp4-overrides:
+                  use-routes: false
+                routes:
+                  - to: default
+                    via: "{{ secondary_gateway }}"
+                    table: 100
+                routing-policy:
+                  - from: "{{ secondary_ipv4 }}"
+                    table: 100
+      register: netplan_secondary
+      tags: [network]
+
+    # Fasst nur das neue Interface an; die Verbindung dieses Playbooks läuft
+    # über IPv6 auf dem primären und bleibt bestehen.
+    - name: Netplan anwenden
+      when: netplan_secondary is changed
+      ansible.builtin.command: netplan apply
+      changed_when: true
+      tags: [network]
+
+    # Die Regel oben erfasst nur Antworten, die der Host selbst erzeugt - darum
+    # funktioniert SSH und ein veröffentlichter Port nicht: Docker leitet die
+    # Anfrage per DNAT weiter, bevor geroutet wird, die Antwort trägt also noch
+    # die Adresse des Containers als Absender und die Regel greift nicht. Sie
+    # geht dann über das primäre Interface hinaus, mit einer Adresse, die dieser
+    # Port nicht führen darf, und Neutron verwirft sie. Die Verbindung zu
+    # markieren statt die Adresse zu prüfen deckt beide Fälle ab.
+    #
+    # Ein Skript statt des iptables-Moduls, weil die Regeln einen Neustart
+    # überstehen müssen. mangle verwaltet Docker nicht, es kollidiert also
+    # nichts mit dessen Ketten.
+    - name: Connmark-Skript installieren
+      ansible.builtin.copy:
+        dest: /usr/local/sbin/secondary-ipv4-marks.sh
+        owner: root
+        group: root
+        mode: '0755'
+        content: |
+          #!/bin/sh
+          set -eu
+
+          iface=$(ip -o -4 addr show \
+            | awk '$4 ~ /^{{ secondary_ipv4 }}\// {print $2; exit}')
+          [ -n "$iface" ] || exit 0
+
+          add() {
+            iptables -t mangle -C "$@" 2>/dev/null || iptables -t mangle -A "$@"
+          }
+
+          # Entfernt eine frühere Fassung der Restore-Regel ohne Bedingung.
+          iptables -t mangle -D PREROUTING -j CONNMARK --restore-mark \
+            2>/dev/null || true
+
+          add PREROUTING -i "$iface" -m conntrack --ctstate NEW \
+            -j CONNMARK --set-mark 100
+
+          # Nie auf dem sekundären Interface selbst. Wäre auch die Anfrage
+          # markiert, ginge sie in die Tabelle unten statt weiter zum Container.
+          add PREROUTING ! -i "$iface" -j CONNMARK --restore-mark
+          add OUTPUT -j CONNMARK --restore-mark
+
+          # ip rule gibt die Marke hexadezimal aus, daher 0x64.
+          ip rule show | grep -q 'fwmark 0x64 lookup 100' \
+            || ip rule add fwmark 100 table 100 priority 32764
+      register: marks_script
+      tags: [network]
+
+    - name: Unit installieren, die die Marken beim Booten neu setzt
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/secondary-ipv4-marks.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Connection marks for the secondary IPv4 interface
+          After=network-online.target docker.service
+          Wants=network-online.target
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart=/usr/local/sbin/secondary-ipv4-marks.sh
+
+          [Install]
+          WantedBy=multi-user.target
+      register: marks_unit
+      tags: [network]
+
+    - name: Aktivieren und ausführen
+      when: marks_script is changed or marks_unit is changed
+      ansible.builtin.systemd:
+        name: secondary-ipv4-marks.service
+        enabled: true
+        state: restarted
+        daemon_reload: true
+      tags: [network]
+
+    # Das Volume muss hängen, bevor Docker dort Daten anlegt. Über ein
+    # gefülltes /var/lib/docker gelegt, verschwinden Images, Container und
+    # benannte Volumes für den Daemon, ohne Fehlermeldung.
+    - name: Datenvolume vorhanden?
+      ansible.builtin.stat:
+        path: "{{ docker_data_device }}"
+      register: data_device
+      when: docker_data_device | length > 0
+
+    - name: Abbrechen, wenn das erwartete Volume fehlt
+      ansible.builtin.fail:
+        msg: >-
+          {{ docker_data_device }} existiert nicht. Entweder wurde die VM ohne
+          docker_data_volume_size_gb gebaut - dann docker_data_device auf ""
+          setzen - oder das Volume hängt unter anderem Namen. Vorhanden:
+          {{ ansible_devices.keys() | list | join(', ') }}
+      when:
+        - docker_data_device | length > 0
+        - not data_device.stat.exists
+
+    # force: no ist die tragende Zeile. Ohne sie formatiert der nächste
+    # Playbook-Lauf das Volume neu und löscht beide Datenbanken.
+    - name: Dateisystem auf dem Datenvolume anlegen
+      community.general.filesystem:
+        fstype: ext4
+        dev: "{{ docker_data_device }}"
+        force: no
+      when: docker_data_device | length > 0
+
+    # Über die UUID statt /dev/vdb, weil Gerätenamen sich beim Booten
+    # verschieben können, sobald ein zweites Volume dazukommt.
+    - name: UUID des Datenvolumes lesen
+      ansible.builtin.command: blkid -s UUID -o value {{ docker_data_device }}
+      register: data_uuid
+      changed_when: false
+      when: docker_data_device | length > 0
+
+    - name: Datenvolume unter /var/lib/docker einhängen
+      ansible.posix.mount:
+        path: /var/lib/docker
+        src: "UUID={{ data_uuid.stdout | trim }}"
+        fstype: ext4
+        opts: defaults,noatime
+        state: mounted
+      when: docker_data_device | length > 0
+
     - name: Verzeichnis für App erstellen
       ansible.builtin.file:
         path: "{{ project_root }}"
@@ -63,24 +235,10 @@
       register: app_base_url_raw
       changed_when: false
 
-    - name: Self-signed TLS-Zertifikat generieren (falls nicht vorhanden)
-      ansible.builtin.shell:
-        cmd: |
-          mkdir -p {{ project_root }}/nginx/certs
-          if [ ! -f {{ project_root }}/nginx/certs/cert.pem ]; then
-            openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-              -keyout {{ project_root }}/nginx/certs/key.pem \
-              -out    {{ project_root }}/nginx/certs/cert.pem \
-              -subj "/CN={{ inventory_hostname }}" \
-              -addext "subjectAltName=IP:{{ inventory_hostname }}"
-            chmod 600 {{ project_root }}/nginx/certs/key.pem
-            echo "cert generated"
-          else
-            echo "cert exists, skipped"
-          fi
-        executable: /bin/bash
-      register: cert_result
-      changed_when: "'cert generated' in cert_result.stdout"
+    # Kein Schritt für ein selbstsigniertes Zertifikat mehr: Caddy holt sich
+    # eines vom ACME-Endpunkt der DHBW und erneuert es selbst. Das alte
+    # openssl-Zertifikat lautete ohnehin auf die IP der VM und wurde bei jedem
+    # Adresswechsel ungültig.
 
     - name: Keycloak realm-export.json aus Template rendern
       ansible.builtin.template:
@@ -93,27 +251,12 @@
         app_base_url: "{{ app_base_url_raw.stdout | trim }}"
         app_api_url: "{{ app_base_url_raw.stdout | trim }}/api"
 
-    # nginx.conf is bind-mounted, so Compose has no way to detect a
-    # content change and recreate the container. We hash the file and
-    # put the hash into a docker label via NGINX_CONFIG_HASH — when the
-    # hash changes the label changes, Compose sees a spec drift and
-    # recreates nginx-prod on the next ``up``.
-    - name: Compute nginx config hash
-      ansible.builtin.shell:
-        cmd: sha256sum {{ project_root }}/nginx/nginx.conf | cut -c1-12
-        executable: /bin/bash
-      register: nginx_config_hash
-      changed_when: false
-
-    - name: Persist NGINX_CONFIG_HASH in .env
-      ansible.builtin.lineinfile:
-        path: "{{ project_root }}/.env"
-        line: "NGINX_CONFIG_HASH={{ nginx_config_hash.stdout }}"
-        regexp: "^NGINX_CONFIG_HASH="
-        create: yes
-        owner: ubuntu
-        group: ubuntu
-        mode: '0600'
+    # Der NGINX_CONFIG_HASH-Trick entfällt: er existierte nur, weil Compose
+    # eine inhaltliche Änderung an der bind-gemounteten nginx.conf nicht
+    # bemerkt und der Container deshalb über ein Label-Drift neu erzeugt
+    # werden musste. Der Caddyfile ist ebenso bind-gemountet, aber Caddy lädt
+    # ihn über den Reload-Schritt am Playbook-Ende neu — validiert und ohne
+    # Unterbrechung, statt den Container wegzuwerfen.
 
     - name: Log in to GHCR using credentials from the deployed .env
       ansible.builtin.shell:
@@ -132,7 +275,12 @@
 
     - name: Pull alle Images
       ansible.builtin.shell:
-        cmd: docker compose -f docker-compose.staging.yml pull
+        # --ignore-buildable überspringt Dienste mit build:-Abschnitt. Ohne das
+        # versucht compose auch appstore-caddy:rfc2136 zu ziehen, das nur lokal
+        # gebaut wird und in keiner Registry liegt - der Pull scheitert und
+        # bricht das Playbook an dieser Stelle ab, noch bevor der Stack
+        # überhaupt neu gestartet wird.
+        cmd: docker compose -f docker-compose.staging.yml pull --ignore-buildable
         chdir: "{{ project_root }}"
       changed_when: true
       async: 600
@@ -143,13 +291,78 @@
         path: /root/.docker/config.json
         state: absent
 
+    # Validiert die zusammengesetzte Konfiguration, bevor das Modul übernimmt.
+    # Der Schritt existiert nur wegen der Diagnose: docker_compose_v2 ruft
+    # `compose images --format json` auf und liest ausschließlich stdout.
+    # Bricht Compose ab — etwa weil eine ${VAR:?...}-Pflichtvariable in der .env
+    # fehlt — steht die Erklärung auf stderr, stdout bleibt leer, und das Modul
+    # meldet stattdessen "Expecting value: line 1 column 1 (char 0)". Diese
+    # Meldung sagt nichts über die Ursache und hat schon einmal eine ganze
+    # Fehlersuche in die falsche Richtung geschickt.
+    #
+    # `config -q` interpoliert dieselbe Datei, gibt bei Erfolg nichts aus und
+    # nennt im Fehlerfall die betroffene Variable — Ansible zeigt stderr an.
+    - name: Compose-Konfiguration validieren
+      ansible.builtin.command:
+        cmd: docker compose -f docker-compose.staging.yml config -q
+        chdir: "{{ project_root }}"
+      changed_when: false
+
+    # Ein expliziter Befehl statt community.docker.docker_compose_v2, aus zwei
+    # Gründen 
+    #
+    # Erstens verschluckt das Modul Fehler: es liest den Zustand über
+    # `compose images --format json` und wertet nur stdout aus. Bricht Compose
+    # ab, steht die Meldung auf stderr und das Modul meldet stattdessen
+    # "Expecting value: line 1 column 1".
+    #
+    # Zweitens baut es in einem eigenen Schritt vor dem Start. Buildx vergibt
+    # dabei jedes Mal eine neue Image-ID (die Provenance-Manifeste tragen
+    # Zeitstempel), das Tag wandert mit, und die alte ID wird entsorgt — obwohl
+    # der laufende caddy-prod noch auf sie zeigt. Der anschließende
+    # Zustandsabruf findet dieses Image nicht mehr und bricht ab, bevor `up`
+    # den Container ersetzen kann. Der Container bleibt damit dauerhaft auf
+    # einer toten ID stehen und jeder weitere Lauf scheitert genauso.
+    #
+    # `up -d --build` baut und ersetzt in einem Zug, also bleibt kein Container
+    # auf einem entsorgten Image zurück.
     - name: Start the application with Docker Compose
-      community.docker.docker_compose_v2:
-        project_src: "{{ project_root }}"
-        files: ["docker-compose.staging.yml"]
-        pull: never
-        state: present
+      ansible.builtin.command:
+        cmd: docker compose -f docker-compose.staging.yml up -d --build
+        chdir: "{{ project_root }}"
       register: compose_output
+      changed_when: true
+
+    # `up -d --build` baut Caddy neu, ersetzt den Container aber nicht, wenn
+    # sich nur die Image-ID geändert hat: Compose entscheidet darüber anhand der
+    # Service-Definition, und die bleibt gleich. Der Container läuft dann weiter
+    # auf dem vorigen Image, das kein Tag mehr trägt und irgendwann eingesammelt
+    # wird — danach lässt er sich nicht mehr starten.
+    #
+    # Deshalb der Vergleich statt eines pauschalen --force-recreate: das würde
+    # den Proxy bei jedem Deploy kurz aus dem Netz nehmen, auch wenn sich am
+    # Image nichts geändert hat.
+    - name: Prüfen, ob Caddy auf dem aktuellen Image läuft
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          tagged=$(docker image inspect appstore-caddy:rfc2136 \
+                   --format '{% raw %}{{.Id}}{% endraw %}')
+          running=$(docker inspect caddy-prod \
+                    --format '{% raw %}{{.Image}}{% endraw %}' 2>/dev/null || echo none)
+          [ "$tagged" = "$running" ] && echo current || echo stale
+        executable: /bin/bash
+        chdir: "{{ project_root }}"
+      register: caddy_image_state
+      changed_when: false
+
+    - name: Caddy auf das neu gebaute Image heben
+      ansible.builtin.command:
+        cmd: >-
+          docker compose -f docker-compose.staging.yml
+          up -d --force-recreate --no-deps caddy
+        chdir: "{{ project_root }}"
+      when: caddy_image_state.stdout == "stale"
 
     # Migrations live OUTSIDE the compose file on purpose: a previous
     # backend-migrate init container buried failure stderr inside the
@@ -169,19 +382,94 @@
       register: migration_result
       changed_when: "'Running upgrade' in migration_result.stdout"
 
-    # Safety net for nginx.conf changes that the config_hash label
-    # would normally catch — if the label-based recreate didn't fire
-    # for some reason (manual edit, cache, etc.), a graceful reload
-    # picks up the new config without downtime. ``-t`` validates first
-    # so a broken config doesn't take nginx down.
-    - name: Reload nginx config (catches volume-only changes)
-      ansible.builtin.shell:
-        cmd: docker exec nginx-prod sh -c 'nginx -t && nginx -s reload'
-        executable: /bin/bash
-      register: nginx_reload
-      changed_when: "'signal process started' in nginx_reload.stdout or 'signal process started' in nginx_reload.stderr"
-      failed_when: false
+    # Das Gegenstück zu keycloak-wait im Makefile: bei leerer Datenbank startet
+    # Keycloak erst Quarkus, importiert den Realm und bindet den Listener zuletzt.
+    # Ein Seed davor scheitert mit "Connection refused".
+    #
+    # Ein TCP-Verbindungsversuch statt einer HTTP-Anfrage, weil schon das
+    # gebundene Socket das gesuchte Signal ist - der Makefile muss dafür
+    # Keycloaks 403 auf /realms/master gesondert behandeln.
+    - name: Auf Keycloak warten
+      when: seed_data | bool
+      ansible.builtin.shell: |
+        set -eu
+        cd {{ project_root }}
+        for _ in $(seq 1 60); do
+          if docker compose -f docker-compose.staging.yml exec -T backend \
+               python -c "import socket; socket.create_connection(('keycloak', 8080), 2)" \
+               >/dev/null 2>&1; then
+            exit 0
+          fi
+          sleep 5
+        done
+        echo "Keycloak nimmt nach fuenf Minuten keine Verbindungen an" >&2
+        exit 1
+      changed_when: false
 
+    # Seeding läuft nach den Migrationen, weil das Skript in die Tabellen
+    # schreibt, die dort erst entstehen. Es legt Keycloak-Benutzer an (Profs,
+    # Studierende, ein Admin — alle mit Passwort 1234) und füllt Kurse, Apps
+    # und Freigaben in der Datenbank.
+    - name: Seed-Skript und Beschreibungen in den Backend-Container kopieren
+      ansible.builtin.command:
+        cmd: >-
+          docker compose -f docker-compose.staging.yml
+          cp {{ item.src }} backend:{{ item.dest }}
+        chdir: "{{ project_root }}"
+      loop:
+        - { src: "./seed/seed_data.py", dest: "/tmp/seed_data.py" }
+        - { src: "./seed/app_descriptions", dest: "/tmp/app_descriptions" }
+        - { src: "./keycloak/realm-export.json", dest: "/tmp/realm-export.json" }
+      when: seed_data | bool
+
+    # Die .env wird in der Rezept-Shell gelesen, statt die Werte über Ansible
+    # zu reichen: so stehen die Admin-Zugangsdaten nur in der Umgebung des
+    # docker-Aufrufs und nicht im Playbook-Protokoll. Ohne sie meldet Keycloak
+    # dem Skript ein 401.
+    - name: Seed ausführen
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          set -a; . ./.env; set +a
+          if [ -z "${KEYCLOAK_ADMIN_USER:-}" ] || [ -z "${KEYCLOAK_ADMIN_PASSWORD:-}" ]; then
+            echo "KEYCLOAK_ADMIN_USER / KEYCLOAK_ADMIN_PASSWORD fehlen in der .env" >&2
+            exit 1
+          fi
+          docker compose -f docker-compose.staging.yml exec -T \
+            -e KEYCLOAK_ADMIN_USER="$KEYCLOAK_ADMIN_USER" \
+            -e KEYCLOAK_ADMIN_PASSWORD="$KEYCLOAK_ADMIN_PASSWORD" \
+            -e REALM_EXPORT_PATH=/tmp/realm-export.json \
+            backend python /tmp/seed_data.py
+        executable: /bin/bash
+        chdir: "{{ project_root }}"
+      when: seed_data | bool
+      changed_when: true
+
+    # Der Caddyfile ist bind-gemountet, Compose bemerkt eine inhaltliche
+    # Änderung daran also nicht. Dieser Reload übernimmt sie. Caddy prüft die
+    # Konfiguration dabei selbst und wechselt erst bei gültigem Ergebnis —
+    # eine kaputte Datei legt den laufenden Proxy nicht lahm.
+    #
+    # Anders als beim früheren nginx-Label-Trick ist das kein Sicherheitsnetz,
+    # sondern der einzige Weg, auf dem eine Konfigurationsänderung wirksam
+    # wird. failed_when bleibt deshalb bewusst nicht auf false: schlägt der
+    # Reload fehl, läuft der Proxy mit einer veralteten Konfiguration weiter,
+    # und das soll auffallen.
+    - name: Caddy-Konfiguration neu laden
+      ansible.builtin.command:
+        cmd: docker exec caddy-prod caddy reload --config /etc/caddy/Caddyfile
+      register: caddy_reload
+      changed_when: caddy_reload.rc == 0
+
+    # `compose_output` ist jetzt die Ausgabe des up-Befehls, nicht mehr die
+    # Zustandsstruktur des Moduls. Für die Übersicht am Ende fragt dieser
+    # Schritt den Zustand deshalb selbst ab.
     - name: Status der Deployment anzeigen
-      ansible.builtin.debug:
-        var: compose_output
+      ansible.builtin.command:
+        cmd: docker compose -f docker-compose.staging.yml ps
+        chdir: "{{ project_root }}"
+      register: compose_ps
+      changed_when: false
+
+    - ansible.builtin.debug:
+        var: compose_ps.stdout_lines

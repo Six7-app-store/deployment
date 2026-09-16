@@ -67,7 +67,7 @@ make --version
 sudo mkdir -p /opt/app-store
 sudo chown $USER:$USER /opt/app-store
 cd /opt/app-store
-git clone https://github.com/six7-click-n-deploy/deployment
+git clone https://github.com/DHBW-AppStore/deployment
 cd deployment
 ```
 

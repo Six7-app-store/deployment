@@ -19,7 +19,12 @@ output and writes a small `inventory.ini` that Ansible then deploys onto. The tw
 
 | Environment | Terraform dir               | Ansible playbook | Inventory                         | Trigger                          |
 |-------------|-----------------------------|------------------|-----------------------------------|----------------------------------|
-| staging     | `terraform/envs/staging`    | `staging.yml`    | generated `inventory.ini`         | push to `main`                   |
+| staging     | `terraform/envs/staging`    | `staging.yml`    | generated `inventory.ini`         | manual dispatch (Forgejo Actions) |
+| forgejo     | `terraform/envs/forgejo`    | `forgejo.yml`    | `inventory-forgejo.sh`            | run by hand from a workstation   |
+
+`forgejo` is bootstrap infrastructure: it hosts the forge, its database and the
+Actions runner that deploys staging. It therefore cannot be deployed by that
+runner, and its state backend is local rather than the database this host runs.
 
 > A separate production environment is documented as future work in
 > the project plan but not yet wired into the codebase. The Terraform
@@ -30,10 +35,39 @@ output and writes a small `inventory.ini` that Ansible then deploys onto. The tw
 
 ```text
 terraform/
-├── modules/openstack_vm/             # reusable VM module (keypair + instance + optional floating IP + optional Cinder data volume)
+├── modules/openstack_vm/             # reusable VM module (keypair + instance + optional floating IP,
+│                                     # optional Cinder data volume, optional second interface)
 └── envs/
-    └── staging/                      # staging-docker VM (mb1.large)
+    ├── staging/                      # the application stack (gp1.large)
+    └── forgejo/                      # the forge, its database and the Actions runner (gp1.medium)
 ```
+
+## Addressing
+
+Both hosts sit on `DHBWV6`, whose IPv4 subnet is private — so their only public
+address is IPv6, and neither is reachable from a network without it. The module
+therefore takes an optional `secondary_network_name`, which attaches a second
+interface on a publicly routed IPv4 network. Each host then answers on both
+families under one hostname, with an A and an AAAA record side by side.
+
+Three details are load-bearing:
+
+- The interface is attached to the **running** instance
+  (`openstack_compute_interface_attach_v2`). A second `network` block on the
+  instance would force a replacement, and the root disk holds container data.
+- `secondary_subnet_name` is required where the network has more than one IPv4
+  subnet, as `DHBWv4` does. The port is pinned to that subnet so the address and
+  the gateway Ansible routes through belong together.
+- The playbooks configure the interface with a dedicated routing table **and** a
+  connection mark. The routing rule on the source address only covers replies the
+  host generates itself, which is why SSH worked while every published port timed
+  out: Docker DNATs the request before the routing decision, so a container's
+  reply still carries its own source address. Neutron's port security then drops
+  it on the way out of the primary interface, silently.
+
+Floating IPs are not an option here — the subnet has no router to the external
+network, so associating one fails with `ExternalGatewayForFloatingIPNotFound`.
+The App blueprints set `enable_floating_ip = false` for the same reason.
 
 Each env dir has:
 
@@ -186,6 +220,38 @@ follows this shape:
 `STAGING_OS_APPLICATION_CREDENTIAL_SECRET`, `STAGING_OS_REGION_NAME`, plus a shared
 `SSH_PRIVATE_KEY` — an **unencrypted** private key. Terraform registers its derived public half as
 the OpenStack keypair, so there is no separate "key pair" name to keep in sync.
+
+`STAGING_ENV_FILE` holds the stack's entire `.env` as one secret. Ansible writes it to the VM
+verbatim, so it is runtime configuration rather than CI configuration.
+
+### The staging `.env`
+
+Fields written as `${VAR:?…}` in `docker-compose.staging.yml` abort `compose up` when unset **or
+empty**, so the stack refuses to start half-configured:
+
+| Group | Fields |
+|---|---|
+| URLs | `APP_HOSTNAME`, `APP_BASE_URL`, `CORS_ORIGINS`, `VITE_APP_URL`, `VITE_API_URL`, `VITE_KEYCLOAK_URL` |
+| TLS | `ACME_EMAIL`, `DNS_TSIG_KEY_NAME`, `DNS_TSIG_KEY` |
+| Backend | `SECRET_KEY`, `CREDENTIAL_ENCRYPTION_KEY`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` |
+| Keycloak | `KEYCLOAK_ADMIN_USER`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_DB_USER`, `KEYCLOAK_DB_PASSWORD`, `KEYCLOAK_DB_NAME` |
+| Broker | `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
+| TF state | `TFSTATE_DB_USER`, `TFSTATE_DB_PASSWORD`, `TFSTATE_DB_NAME` |
+| App repos | `GIT_ACCESS_TOKEN` — backend and worker clone private App repos with it. The GHCR images are public, so pulling them needs no credentials. |
+
+Everything else carries a `:-` default and can be omitted. Two of those defaults are DHBW-specific
+and worth knowing about: `ACME_CA_URL` points at HARICA, and `DNS_SERVER` /`DNS_TSIG_KEY_ALG`
+describe the zone that answers the dns-01 challenge.
+
+`APP_HOSTNAME` must be a DNS name with a record pointing at the VM. ACME issues certificates for
+domains, never for bare addresses — there is no longer any `<VM-IP>` to substitute, and no
+self-signed fallback.
+
+**Do not define a key twice.** Compose takes the *last* occurrence, while the playbook's
+`grep … | head -n1` for `APP_BASE_URL` takes the *first*. A duplicated key therefore does not
+merely pick one value — it hands the containers and the Keycloak realm template two *different*
+ones, and the stack starts cleanly while the backend disagrees with its own realm about what URL
+it is served from.
 
 ### Notes / follow-ups
 
