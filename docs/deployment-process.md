@@ -23,7 +23,7 @@ geht es um den Ablauf, der sie verbindet.
  Code ändern          CI auf dem PR        Image bauen         Deploy
  Branch, Commit   →   Lint, Tests,     →   und nach GHCR   →   Terraform
  Push                 Scans, Build         pushen              + Ansible
-   ⬤ manuell            ○ automatisch        ○ automatisch       ○ automatisch
+   ⬤ manuell            ○ automatisch        ○ automatisch       ⬤ manuell
                              │                     ▲                  │
                              ▼                     │                  ▼
                        Code Review            Merge auf main         DNS
@@ -36,10 +36,10 @@ geht es um den Ablauf, der sie verbindet.
 
 `○` automatisch · `⬤` manuell · `◑` gemischt
 
-Zwischen Image-Push und Deploy liegt ein `repository_dispatch`: `backend`,
-`frontend` und `worker` melden dem `deployment`-Repository, dass ein neues
-Image bereitsteht, und dessen Workflow rollt es aus. Ein Merge auf `main`
-erreicht OpenStack damit ohne weiteres Zutun.
+**Die Kette ist an genau einer Stelle unterbrochen**: zwischen Image-Push und
+Ausrollen. Das Image entsteht ohne Zutun, auf die VM bringt es ein Mensch.
+Warum das so ist und nicht anders sein kann, steht in Abschnitt 6; wie es geht,
+im [Deploy-Runbook](deploy-runbook.md).
 
 Beteiligt sind vier Repositories: `backend`, `frontend` und `worker` liefern je
 ein Container-Image; dieses `deployment`-Repository hält die Compose-Stacks,
@@ -112,9 +112,9 @@ Repositories. Die Jobs laufen parallel, `Build` wartet auf die Prüfjobs.
 | QA | `ansible-lint` | nein |
 | QA | Trivy-Scan der Terraform-Definitionen | nein, aber SARIF |
 
-> Der QA-Job gehört zum Deploy-Workflow, läuft aber auf `ubuntu-latest` und
-> braucht deshalb weder OpenStack noch den self-hosted Runner. Er prüft damit
-> auch dann, wenn gar nicht ausgerollt werden kann — siehe Abschnitt 6.
+> Der Workflow heißt `CI - Infrastructure QA`. Er prüft die Definitionen, die
+> beim Deploy von Hand ausgeführt werden — ein kaputtes Playbook fällt damit
+> auf, bevor es jemand auf die VM trägt.
 
 Alle Sicherheitsbefunde werden zusätzlich als SARIF in den Security-Tab
 hochgeladen — auch die per `.trivyignore` unterdrückten, damit sie sichtbar
@@ -147,21 +147,14 @@ Getaggt wird:
 | `sha-<commit>` | immer |
 | `<major>.<minor>.<patch>` | bei Git-Tags `v*.*.*` |
 
-Danach meldet der Job **🚀 Deploy anstoßen** dem `deployment`-Repository per
-`repository_dispatch` (`event_type: service-image-published`), dass ein neues
-Image bereitsteht. Das ist das Bindeglied, das einen Merge bis auf die VM
-durchreicht.
-
-> Der Job läuft ausschließlich bei `push` auf `main`, nie aus einem Pull
-> Request. Fehlt das Secret `DEPLOY_DISPATCH_TOKEN`, endet er mit einer Warnung
-> statt mit einem Fehler — eine noch nicht eingerichtete Automatik soll keinen
-> grünen Build rot färben.
+**Hier endet die Automatik.** Ein neues Image liegt in der Registry — auf der
+VM läuft weiterhin das alte, bis jemand den Deploy ausführt.
 
 ---
 
-## 6. Phase 5 — Deploy ○ automatisch
+## 6. Phase 5 — Deploy ⬤ manuell
 
-### Warum ein self-hosted Runner nicht verhandelbar ist
+### Warum das nicht automatisiert ist
 
 Das ist kein Sicherheitsargument, sondern schlicht Netzwerk. Gemessen am
 2026-09-18 von einem GitHub-gehosteten Runner (öffentliche IP
@@ -175,20 +168,12 @@ Das ist kein Sicherheitsargument, sondern schlicht Netzwerk. Gemessen am
 
 Der Name ist öffentlich, das Netz ist es nicht. Ein gehosteter Runner kann also
 grundsätzlich nicht nach OpenStack ausrollen — unabhängig davon, welche
-Zugangsdaten er hätte. Der Runner muss im DHBW-Netz stehen (Campus oder VPN).
+Zugangsdaten er hätte. **Das ist eine Firewall, kein Konfigurationsproblem.**
 
-Daraus folgt der Zuschnitt des Workflows `CD - Deploy to OpenStack`:
+Automatisieren ließe sich der Deploy deshalb nur mit einem **self-hosted
+Runner** im Campusnetz. Und damit kommt das zweite Argument:
 
-| Job | Runner | Inhalt |
-|---|---|---|
-| `qa` | `ubuntu-latest` | `terraform fmt`/`validate`, Ansible-Syntaxcheck und -Lint, Trivy-IaC-Scan mit SARIF |
-| `deploy` | `[self-hosted, openstack]` | Terraform + Ansible gegen OpenStack |
-
-> Alles, was ohne OpenStack auskommt, läuft damit auf GitHubs Infrastruktur —
-> auch dann, wenn der self-hosted Runner gerade aus ist. Nur der Deploy selbst
-> braucht das Universitätsnetz.
-
-### Die Sicherheitsfrage, die dabei bleibt
+### Die Sicherheitsfrage
 
 Ein self-hosted Runner an einem **öffentlichen** Repository ist genau das,
 wovor GitHub warnt:
@@ -199,62 +184,57 @@ wovor GitHub warnt:
 >
 > — GitHub, *Secure use reference*, „Hardening for self-hosted runners"
 
-Diese Warnung entfällt nicht dadurch, dass der Prozess so verlangt ist. Drei
-Maßnahmen halten das Risiko klein:
+Ein Runner mit Produktionszugang, der an einem Repository hängt, bei dem jeder
+Fremde einen Pull Request öffnen kann — das ist eine Kombination, die man für
+einen gesparten Klick nicht eingeht.
 
-1. **`deploy` ist aus einem Pull Request nicht erreichbar.** Der Job nimmt nur
-   `push` auf `main`, `workflow_dispatch` und `repository_dispatch` an. Wer
-   einen Fork anlegt und einen PR öffnet, erreicht den Runner nicht — und
-   Secrets bekommt ein Fork-PR ohnehin keine.
-2. **Die Credentials hängen an der Environment `openstack`**, nicht am
-   Repository. Nur ein Job, der diese Environment anfordert, sieht sie; dort
-   lässt sich zusätzlich ein Reviewer als Freigabe erzwingen.
-3. In *Settings → Actions → General* gehört **„Require approval for all
-   external contributors"** aktiviert.
+**Beides zusammen** — das Netz lässt GitHub nicht durch, und der Ausweg über
+einen eigenen Runner schafft ein größeres Problem als er löst — führt zu der
+Entscheidung: Der Deploy bleibt ein Schritt, den ein Mensch im VPN ausführt.
 
-> Die Alternative, die dieses Projekt früher verfolgt hat, war ein eigener
-> Forgejo-Host: Code öffentlich auf GitHub, Runner und Secrets in einer selbst
-> kontrollierten Instanz. Das ist sicherheitstechnisch die sauberere Trennung,
-> kostet aber den durchgehenden Automatismus, weil der Deploy dort von Hand
-> gestartet wurde. Der Aufbau ist in [staging-setup.md](staging-setup.md)
-> beschrieben und bleibt als Rückfallweg bestehen.
+> Dieses Projekt hat den Ausweg früher anders gelöst: ein eigener
+> **Forgejo-Host**, Code öffentlich auf GitHub, Runner und Secrets in einer
+> selbst kontrollierten Instanz. Das ist die sauberere Trennung und bleibt als
+> Weg bestehen, siehe [staging-setup.md](staging-setup.md). Auch dort wurde der
+> Deploy allerdings von Hand gestartet — an dieser Stelle der Kette ändert der
+> Umweg nichts.
 
 ### Auslösen
 
-Drei Wege:
+Ein Mensch im Campusnetz oder VPN führt Terraform und Ansible aus. Die Schritte
+im Einzelnen stehen im **[Deploy-Runbook](deploy-runbook.md)**.
 
-| Auslöser | Modus | Wann |
-|---|---|---|
-| `push` auf `main` (deployment-Repo) | `apply` | Änderung an Compose, Terraform oder Ansible |
-| `repository_dispatch` | `apply` | `backend`, `frontend` oder `worker` hat ein Image gepusht |
-| `workflow_dispatch` | `plan` (Default) oder `apply` | von Hand, etwa zur Vorführung |
+Zwei Sicherungen sind dabei bewusst eingebaut:
 
-> Der manuelle Lauf steht absichtlich auf `plan`: ein Fehlklick darf keine
-> Infrastruktur verändern. Ein Plan-Lauf prüft trotzdem alles Wesentliche —
-> Runner, Checkout, alle Secrets und eine echte Keystone-Anmeldung.
+> **Erst `plan` lesen, dann `apply`.** Zwei Dinge im Plan sind ein Stoppsignal:
+> `must be replaced` an der VM und `destroy` an einem Volume — beides würde
+> Daten vernichten.
 >
-> `seed` bleibt ebenfalls auf `false`: ein Deploy fasst keine Anwendungsdaten
-> an, solange es nicht ausdrücklich verlangt wird.
+> **Seed-Daten nur auf ausdrückliche Anforderung** (`-e seed_data=true`). Ein
+> Deploy fasst sonst keine Anwendungsdaten an.
 
-### Was der Lauf dann selbst erledigt ○
+### Was dabei abläuft
 
-1. **Vorprüfungen** — sind alle Secrets da, sind die Werkzeuge da, und
-   antwortet Keystone überhaupt? Fehlt etwas, bricht der Lauf hier ab statt
-   zwanzig Minuten später mitten in einem `terraform apply`.
-2. **SSH-Schlüssel** aus dem Secret schreiben, den öffentlichen Teil ableiten
-   und an Terraform übergeben.
-3. **Terraform** — `init`, `validate`, `plan`; bei `apply` die VM, ihre
-   Security-Group und das zweite IPv4-Interface abgleichen. State liegt in einem
-   Postgres-Backend.
-4. **Inventory** aus den Terraform-Outputs erzeugen (bricht ab, wenn leer —
-   sonst liefe Ansible mit „no hosts matched" grün durch, ohne etwas zu tun).
-5. **Ansible** — Netzwerk einrichten, Docker installieren, Stack und `.env`
+1. **Umgebung setzen** — `OS_CLOUD`, der State-Backend-Zugang, und der
+   öffentliche SSH-Schlüssel aus dem privaten abgeleitet, damit das
+   OpenStack-Keypair zu dem Schlüssel passt, mit dem Ansible sich verbindet.
+2. **Terraform** — `init`, `validate`, `plan`, dann nach Prüfung `apply`. Er
+   gleicht die VM, ihre Security-Group und das zweite IPv4-Interface ab. Der
+   State liegt in einem Postgres-Backend, nicht lokal.
+3. **Inventory** aus den Terraform-Outputs erzeugen. Ist die Adresse leer, hier
+   abbrechen — sonst liefe Ansible mit „no hosts matched" grün durch, ohne
+   etwas zu tun.
+4. **Ansible** — Netzwerk einrichten, Docker installieren, Stack und `.env`
    kopieren, Keycloak-Realm rendern, an GHCR anmelden, Images ziehen,
    `docker compose up -d`, Caddy bei Bedarf neu bauen.
-6. **Migrationen** anwenden, bei `seed: true` das Seed-Skript.
-7. **Aufräumen** — Schlüssel und Inventory werden in jedem Fall gelöscht.
+5. **Migrationen** anwenden, bei `seed_data=true` zusätzlich das Seed-Skript.
+6. **Aufräumen** — Inventory löschen, Secrets aus der Shell entfernen.
 
-Ein vollständiger Lauf dauert etwa fünf Minuten.
+Ein vollständiger Durchlauf dauert etwa fünf bis zehn Minuten.
+
+> Die Schritte 2 bis 5 laufen nach dem Start ohne weiteres Zutun. Manuell ist
+> der *Anstoß*, nicht die Ausführung — Terraform und Ansible machen dieselbe
+> Arbeit, die eine Pipeline machen würde.
 
 ---
 
@@ -319,7 +299,7 @@ Die Images zieht auch Prod aus GHCR — gebaut wird auf der VM nichts.
 | 7 | Code Review und Freigabe | ⬤ manuell | **muss** manuell bleiben |
 | 8 | Merge auf `main` | ⬤ manuell | **muss** manuell bleiben |
 | 9 | Image nach GHCR pushen | ○ automatisch (CI) | — |
-| 10 | Deploy auslösen | ○ automatisch (`repository_dispatch`) | — |
+| 10 | Deploy auslösen | ⬤ manuell (Mensch im VPN) | **muss**, siehe Abschnitt 6 |
 | 11 | Terraform: Infrastruktur abgleichen | ○ automatisch | — |
 | 12 | Ansible: VM konfigurieren, Stack starten | ○ automatisch | — |
 | 13 | Migrationen | ○ automatisch | — |
@@ -330,20 +310,27 @@ Die Images zieht auch Prod aus GHCR — gebaut wird auf der VM nichts.
 | 18 | Prod-Deployment | ⬤ manuell | **soll** automatisiert werden |
 | 19 | Pre-commit-Hooks | — nicht vorhanden | **soll** eingerichtet werden |
 
-**Die Kette läuft von Schritt 2 bis Schritt 16 ohne menschliches Zutun durch.**
-Menschlich bleiben genau die beiden Entscheidungen, die es auch bleiben sollen:
-ob der Code taugt (Review) und ob er nach `main` darf (Merge). Danach greift
-niemand mehr ein, bis die Umgebung steht.
+**Die Schritte 2 bis 9 laufen vollautomatisch** — von der ersten Prüfung bis zum
+fertigen, auf Sicherheitslücken gescannten Image in der Registry greift niemand
+ein.
 
-Der verbleibende manuelle Rest ist entweder einmalig (DNS), eine bewusste
-Sperre (Seed-Daten) oder schlicht noch nicht gebaut (Prod, Pre-commit,
-Smoke-Test).
+**Die Kette ist an genau einer Stelle unterbrochen:** zwischen Schritt 9 und
+Schritt 10. Diese Unterbrechung ist der interessante Teil der Antwort, denn sie
+hat zwei voneinander unabhängige Gründe, von denen schon jeder für sich reicht:
 
-> **Die eigentliche Grenze ist nicht organisatorisch, sondern physisch:** Der
-> Deploy kann nur aus dem DHBW-Netz heraus laufen. Ist der self-hosted Runner
-> aus, bleibt Schritt 10 in der Warteschlange stehen — die Automatik ist dann
-> nicht falsch, sondern wartet. Die Schritte 2 bis 9 laufen davon unberührt auf
-> GitHubs Runnern weiter.
+1. **Sie *muss* dort sein.** Die OpenStack-API ist von außen nicht erreichbar.
+   Kein GitHub-Runner kommt hin — das ist eine Firewall, keine
+   Konfigurationsfrage.
+2. **Sie *soll* dort sein.** Der einzige Ausweg wäre ein self-hosted Runner an
+   einem öffentlichen Repository, und der gäbe jedem, der einen Pull Request
+   öffnen kann, eine Ausführungsumgebung mit Produktionszugang.
+
+Danach läuft wieder alles von selbst: Terraform und Ansible erledigen die
+Schritte 11 bis 13 und 16 ohne weiteres Zutun. **Manuell ist der Anstoß, nicht
+die Arbeit.**
+
+Der übrige manuelle Rest ist entweder einmalig (DNS), eine bewusste Sperre
+(Seed-Daten) oder schlicht noch nicht gebaut (Prod, Pre-commit, Smoke-Test).
 
 ---
 
@@ -358,23 +345,25 @@ Pipelines.
 **Erledigt:**
 
 - CI läuft in allen vier Repositories, `workflow_dispatch` ergänzt.
-- `CD - Deploy to OpenStack` ersetzt die alte `staging.yml`, die einen nie
-  registrierten Runner nannte und jeden Push auf `main` rot gefärbt hätte.
-- Die vier OpenStack-Secrets liegen in der Environment `openstack`.
+- `CI - Infrastructure QA` prüft Terraform und Ansible bei jedem Push und Pull
+  Request. Sie ersetzt die alte `staging.yml`, die einen nie registrierten
+  Runner nannte und jeden Push auf `main` rot gefärbt hätte.
+- Der manuelle Deploy ist als [Runbook](deploy-runbook.md) beschrieben.
 
-**Noch offen — ohne diese Punkte bleibt der Deploy stehen:**
+**Noch offen:**
 
-| Was | Warum es nicht automatisch geht |
+| Was | Wann nötig |
 |---|---|
-| **Self-hosted Runner registrieren**, Labels `self-hosted` + `openstack` | Er muss im DHBW-Netz stehen; einen Dienst auf einem Rechner einzurichten ist eine bewusste Entscheidung des Betreibers |
-| **`DEPLOY_DISPATCH_TOKEN`** in `backend`, `frontend`, `worker` | GitHub kann sich kein Token für sich selbst ausstellen. Fine-grained PAT mit `Contents:write` auf `Six7-app-store/deployment` |
-| **`SSH_PRIVATE_KEY`**, **`STAGING_ENV_FILE`**, **`PG_CONN_STR`** | Liegen beim Team, nicht ableitbar. Ohne sie läuft der Deploy bis zum Terraform-Plan und hält dann an |
-| **`IMAGE_NAMESPACE` umstellen** | Erst wenn unter `ghcr.io/six7-app-store/` Images liegen — also nach dem ersten grünen Lauf auf `main` und dem Öffentlich-Stellen der Packages |
+| **`IMAGE_NAMESPACE` umstellen** | Erst wenn unter `ghcr.io/six7-app-store/` Images liegen — also nach dem ersten Merge auf `main` und dem Öffentlich-Stellen der Packages unter `github.com/orgs/Six7-app-store/packages`. Siehe [`.env.staging.example`](../.env.staging.example) |
+| **Smoke-Test nach dem Deploy** | Wäre der nächste sinnvolle Ausbauschritt, siehe Abschnitt 8 |
+| **Pre-commit-Hooks** | Siehe Abschnitt 2 |
 
 ---
 
 ## 12. Weiterführend
 
+- [deploy-runbook.md](deploy-runbook.md) — der Deploy Schritt für Schritt, mit
+  den Stolperstellen, die tatsächlich Zeit gekostet haben
 - [staging-setup.md](staging-setup.md) — Staging im Detail, Secrets, Verifikation
 - [prod-setup.md](prod-setup.md) — der manuelle Prod-Weg, Schritt für Schritt
 - [`infrastructure/README.md`](../infrastructure/README.md) — Terraform-Modul,

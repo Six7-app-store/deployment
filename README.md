@@ -14,6 +14,8 @@ zusammengesetzt, konfiguriert und ausgerollt.
 - [Deploymentprozess](docs/deployment-process.md) — was nach einer Codeänderung
   passiert, bis sie live ist, und welche Schritte dabei automatisch bzw. von
   Hand erfolgen
+- [Deploy-Runbook](docs/deploy-runbook.md) — den Store von Hand ausrollen,
+  Schritt für Schritt
 
 ## Setup-Anleitungen
 
