@@ -228,7 +228,14 @@ jobs:
           # Kurse oder Apps - der Keycloak-Realm bringt nur das Dienstkonto des
           # Backends mit. Nach einem destroy/apply muss also geseedet werden,
           # sonst steht der App-Store leer da. Das Skript ist idempotent.
-          SEED: ${{ github.event_name == 'workflow_dispatch' && inputs.seed || 'true' }}
+          #
+          # Die Bedingung ist absichtlich herum: `event == 'workflow_dispatch'
+          # && inputs.seed || 'true'` waere falsch. GitHubs || liefert den
+          # ersten wahrheitswerthaltigen Operanden, und bei seed=false ergaebe
+          # `false || 'true'` wieder 'true' - die Wahl im Formular haette keine
+          # Wirkung. So herum steht der Default links und wird nur dann
+          # ausgewertet, wenn es kein workflow_dispatch ist.
+          SEED: ${{ github.event_name != 'workflow_dispatch' && 'true' || inputs.seed }}
         run: |
           ansible-playbook -i inventory.ini \
             --private-key ~/.ssh/openstack-key \
