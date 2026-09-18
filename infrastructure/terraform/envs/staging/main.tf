@@ -4,7 +4,7 @@ module "vm" {
   source = "../../modules/openstack_vm"
 
   name       = "staging-dhbw-appstore"
-  image      = "Ubuntu 22.04"
+  image      = "Ubuntu 24.04"
   flavor     = "gp1.large"
   public_key = var.ssh_public_key
 
@@ -23,13 +23,23 @@ module "vm" {
   network_name = "DHBWV6"
   connect_via  = "fixed_ipv6"
 
-  # Second interface so clients without IPv6 can reach the app. Ansible connects
-  # over IPv6 as before; only the A record is new.
+  # Second interface for IPv4 - not currently possible on newstack.dhbw.cloud.
+  # Both routes to a public IPv4 address are closed to this project:
   #
-  # The subnet is named because DHBWv4 has two, and the address has to come from
-  # the one whose gateway Ansible routes through.
-  secondary_network_name = "DHBWv4"
-  secondary_subnet_name  = "DHBWv4-188"
+  #   - A port on "DHBW" is refused by Neutron with 403 HTTPForbidden,
+  #     "Tenant ... not allowed to create port on this network".
+  #   - A floating IP can be allocated from "DHBW" (141.72.178.x) but not
+  #     associated: "External network ... is not reachable from subnet ...".
+  #     The same missing router the old stack had.
+  #
+  # The stack therefore runs IPv6-only: an AAAA record, no A record. That
+  # costs nothing for the certificate - Caddy proves the domain over dns-01,
+  # which needs no inbound connection of either family.
+  #
+  # Re-enable once the project is allowed to create ports on DHBW, or once a
+  # router exists between the VM subnet and the external network.
+  # secondary_network_name = "DHBW"
+  # secondary_subnet_name  = "DHBW-178"
 
   # Referencing the resource rather than a bare name gives Terraform the
   # dependency, so the group and its rules exist before the instance is built.
@@ -39,8 +49,21 @@ module "vm" {
   # /var/lib/docker hold both databases, and a volume also survives a
   # replacement of the instance.
   #
-  # The root disk is 10 GB and the image store alone fills it. Moves together
-  # with docker_data_device in the playbook; both are 0 / "" or both are set.
+  # Raised back to 50: on newstack.dhbw.cloud Cinder hands out volumes
+  # normally - a test volume went from "creating" to "available" in seconds,
+  # so the ten-minute timeout that forced the 0 no longer applies. The root
+  # disk of gp1.large is 10 GB, of which ~7 GB are free, and the documented
+  # failure mode is "no space left on device" during the Caddy build.
+  #
+  # NOTE: this env sets no user_data, so the module's comment about cloud-init
+  # formatting the volume does not apply here. The Ansible playbook does that
+  # job instead, but only when docker_data_device is set - it defaults to ""
+  # and must be kept in step with this value:
+  #
+  #     ansible-playbook ... -e docker_data_device=/dev/vdb
+  #
+  # The playbook creates the filesystem with force: no and mounts it by UUID,
+  # so re-running a deploy never reformats the volume.
   docker_data_volume_size_gb = 50
 
   metadata = {

@@ -71,6 +71,10 @@
     # überstehen müssen. mangle verwaltet Docker nicht, es kollidiert also
     # nichts mit dessen Ketten.
     - name: Connmark-Skript installieren
+      # Wie beim Netplan-Task darueber: ohne zweites Interface gibt es
+      # kein secondary_ipv4, und die Vorlage unten liesse sich nicht
+      # aufloesen.
+      when: secondary_mac | default('') | length > 0
       ansible.builtin.copy:
         dest: /usr/local/sbin/secondary-ipv4-marks.sh
         owner: root
@@ -107,6 +111,10 @@
       tags: [network]
 
     - name: Unit installieren, die die Marken beim Booten neu setzt
+      # Wie beim Netplan-Task darueber: ohne zweites Interface gibt es
+      # kein secondary_ipv4, und die Vorlage unten liesse sich nicht
+      # aufloesen.
+      when: secondary_mac | default('') | length > 0
       ansible.builtin.copy:
         dest: /etc/systemd/system/secondary-ipv4-marks.service
         owner: root
