@@ -216,7 +216,29 @@ services:
       KEYCLOAK_ENABLED: ${KEYCLOAK_ENABLED:-true}
       
       # CORS
-      CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000", "http://localhost:5173", "http://localhost:8080"]}'
+      # host.docker.internal is in the default list because a Moodle
+      # launch reaches the frontend under that name, not under
+      # localhost — see docs/moodle-lti-dev.md.
+      CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000", "http://localhost:5173", "http://localhost:8080", "http://host.docker.internal:5173"]}'
+
+      # LTI 1.3 (Moodle). Off unless LTI_ENABLED=true — the remaining
+      # values come from registering the tool in Moodle.
+      LTI_ENABLED: ${LTI_ENABLED:-false}
+      LTI_PLATFORM_ISSUER: ${LTI_PLATFORM_ISSUER:-}
+      LTI_CLIENT_ID: ${LTI_CLIENT_ID:-}
+      LTI_DEPLOYMENT_ID: ${LTI_DEPLOYMENT_ID:-}
+      LTI_JWKS_URL: ${LTI_JWKS_URL:-}
+      LTI_AUTH_LOGIN_URL: ${LTI_AUTH_LOGIN_URL:-}
+      LTI_TOKEN_URL: ${LTI_TOKEN_URL:-}
+      LTI_PRIVATE_KEY_B64: ${LTI_PRIVATE_KEY_B64:-}
+      LTI_SESSION_SECRET: ${LTI_SESSION_SECRET:-}
+      LTI_SESSION_TTL_MINUTES: ${LTI_SESSION_TTL_MINUTES:-120}
+      LTI_LINK_CHALLENGE_TTL_MINUTES: ${LTI_LINK_CHALLENGE_TTL_MINUTES:-10}
+      LTI_LAUNCH_REDIRECT_URL: ${LTI_LAUNCH_REDIRECT_URL:-http://host.docker.internal:5173/lti/callback}
+      LTI_LINK_REDIRECT_URL: ${LTI_LINK_REDIRECT_URL:-http://localhost:5173/lti/link}
+      LTI_TRUST_INSTRUCTOR_ROLE: ${LTI_TRUST_INSTRUCTOR_ROLE:-false}
+      # Redis DB 1 — Celery owns DB 0.
+      LTI_REDIS_URL: ${LTI_REDIS_URL:-redis://redis:6379/1}
 
       # Email (Gmail SMTP) — used by the post-deploy notify hook in
       # celery_event_listener.py. SMTP_ENABLED is the explicit
@@ -241,6 +263,11 @@ services:
       APP_NAME: ${APP_NAME:-Backend API Dev}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
+    extra_hosts:
+      # The backend fetches Moodle's JWKS under the same host name the
+      # browser uses. On Docker Desktop the name already resolves;
+      # Linux engines need this mapping.
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy

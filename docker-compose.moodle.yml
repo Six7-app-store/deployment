@@ -1,0 +1,152 @@
+# ================================================================
+# Moodle — lokale LTI-1.3-Testplattform (nur Entwicklung)
+# ================================================================
+# Eigenständiger Stack neben `docker-compose.dev.yml`. Moodle ist hier
+# die LTI-*Platform*, der App Store der LTI-*Tool*: Moodle stellt beim
+# Klick auf eine Aktivität ein signiertes id_token aus, das Backend
+# prüft die Signatur gegen Moodles öffentlichen Schlüssel.
+#
+# Beschreibt den seit 04.09.2026 laufenden Stack (erseco/alpine-moodle
+# + Postgres). Die ursprüngliche Compose-Datei war verlorengegangen,
+# die Container liefen verwaist weiter — deshalb greift diese Datei die
+# bestehenden Volumes über feste Namen wieder auf.
+#
+# Start:
+#   docker compose -f docker-compose.moodle.yml up -d
+#   docker compose -f docker-compose.moodle.yml logs -f moodle
+#
+# Details + Tool-Registrierung: docs/moodle-lti-dev.md
+# ================================================================
+
+# Eigener Projektname. Ohne ihn leiten beide Compose-Dateien ihren
+# Projektnamen aus dem Verzeichnis ab ("deployment"), und `up`/`down`
+# auf der einen Datei behandelt die Container der anderen als Orphans.
+name: appstore-moodle
+
+services:
+  # ----------------------------------------------------------------
+  # PostgreSQL (nur für Moodle)
+  # ----------------------------------------------------------------
+  # Bewusst getrennt von den Postgres-Instanzen des App Stores: Moodle
+  # ist Fremdsoftware und darf die Anwendungsdaten nicht sehen. Kein
+  # Host-Port — die DB wird nur vom Moodle-Container gebraucht.
+  #
+  # Der Servicename muss `moodle-postgres` bleiben: er ist zugleich der
+  # DNS-Name und steht so bereits als $CFG->dbhost in der persistierten
+  # config.php.
+  moodle-postgres:
+    image: postgres:16-alpine
+    container_name: moodle-postgres-dev
+    environment:
+      POSTGRES_DB: ${MOODLE_DB_NAME:-moodle}
+      POSTGRES_USER: ${MOODLE_DB_USER:-moodle}
+      POSTGRES_PASSWORD: ${MOODLE_DB_PASSWORD:-moodle}
+    volumes:
+      - moodle_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MOODLE_DB_USER:-moodle}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ----------------------------------------------------------------
+  # Moodle (LTI 1.3 Platform)
+  # ----------------------------------------------------------------
+  moodle:
+    # Auf die installierte Version gepinnt. `latest` würde beim nächsten
+    # Pull ungefragt hochziehen und einen Moodle-Upgrade-Lauf gegen die
+    # bestehende DB auslösen.
+    image: erseco/alpine-moodle:v5.2.2
+    container_name: moodle-dev
+    environment:
+      # --- wwwroot ---
+      # Landet als $CFG->wwwroot in der config.php und wird damit zum
+      # LTI-Issuer (`iss`) jedes ausgestellten id_token. Das Backend muss
+      # unter genau dieser URL Moodles JWKS abrufen können.
+      #
+      # Deshalb host.docker.internal und nicht localhost: `localhost`
+      # zeigt im Backend-Container auf den Backend-Container selbst, der
+      # JWKS-Abruf liefe ins Leere und der Launch scheiterte mit einem
+      # Signaturfehler ohne erkennbare Ursache. host.docker.internal
+      # löst im Browser (Docker Desktop trägt es in die hosts-Datei ein)
+      # und im Container auf dieselbe Maschine auf.
+      SITE_URL: ${MOODLE_SITE_URL:-http://host.docker.internal:8081}
+
+      # --- Admin-Konto (nur beim ersten Boot wirksam) ---
+      MOODLE_USERNAME: ${MOODLE_ADMIN_USER:-admin}
+      MOODLE_PASSWORD: ${MOODLE_ADMIN_PASSWORD:-Moodle#2026}
+      MOODLE_EMAIL: ${MOODLE_ADMIN_EMAIL:-admin@example.com}
+      MOODLE_SITENAME: ${MOODLE_SITE_NAME:-DHBW-Fake-Moodle}
+      MOODLE_LANGUAGE: de
+
+      # --- Datenbank ---
+      DB_TYPE: pgsql
+      DB_HOST: moodle-postgres
+      DB_PORT: 5432
+      DB_NAME: ${MOODLE_DB_NAME:-moodle}
+      DB_USER: ${MOODLE_DB_USER:-moodle}
+      DB_PASS: ${MOODLE_DB_PASSWORD:-moodle}
+
+      REVERSEPROXY: "true"
+      SSLPROXY: "false"
+      # Kein stiller Code-Upgrade beim Boot — sonst driften Image-Tag und
+      # tatsächlich laufender Code auseinander.
+      AUTO_UPDATE_MOODLE: "false"
+    ports:
+      # Host-Port muss zu SITE_URL passen. Wer ihn ändert, ändert beides.
+      - "${MOODLE_PORT:-8081}:8080"
+    volumes:
+      - moodle_html:/var/www/html
+      - moodle_data:/var/www/moodledata
+    extra_hosts:
+      # Damit Moodle serverseitig die Keyset-URL des Tools abrufen kann.
+      # Auf Docker Desktop ohnehin gesetzt, auf Linux-Engines nötig.
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/login/index.php || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      # Erstinstallation dauert mehrere Minuten; vorher ist "unhealthy"
+      # kein Fehler, sondern der laufende Setup.
+      start_period: 600s
+    depends_on:
+      moodle-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+# ----------------------------------------------------------------
+# Volumes
+# ----------------------------------------------------------------
+# `external`, weil die Volumes aus dem verwaisten Vorgänger-Stack
+# stammen und die Installation vom 04.09.2026 enthalten. Ohne das Flag
+# warnt Compose bei jedem `up`, dass sie einem anderen Projekt gehören.
+#
+# Zweiter Effekt, durchaus erwünscht: `down -v` fasst externe Volumes
+# nicht an. Die Moodle-Installation überlebt also auch einen
+# versehentlichen Aufruf mit -v.
+#
+# Auf einer frischen Maschine einmalig anlegen:
+#   docker volume create moodle_html_dev
+#   docker volume create moodle_data_dev
+#   docker volume create moodle_postgres_data_dev
+volumes:
+  moodle_html:
+    external: true
+    name: moodle_html_dev
+  moodle_data:
+    external: true
+    name: moodle_data_dev
+  moodle_postgres_data:
+    external: true
+    name: moodle_postgres_data_dev
+
+# ----------------------------------------------------------------
+# Networks
+# ----------------------------------------------------------------
+# Kein gemeinsames Netz mit dem App Store, bewusst. Backend und Moodle
+# reden über host.docker.internal — also über dieselbe URL, die auch der
+# Browser benutzt. Ein zweiter Pfad über Docker-DNS (`http://moodle:8080`)
+# würde genau die Issuer-Verwechslung wieder einladen, die oben
+# beschrieben ist, und der Stack hinge beim Start am Dev-Netz.

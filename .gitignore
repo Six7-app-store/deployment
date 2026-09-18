@@ -18,3 +18,4 @@ __pycache__/
 
 # `terraform plan -out=tfplan` in the deploy workflow.
 tfplan
+*.pem
