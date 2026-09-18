@@ -16,6 +16,13 @@
     # Muss zu docker_data_volume_size_gb in envs/staging passen: "" solange dort
     # 0 steht, /dev/vdb sobald wieder ein Volume angelegt wird.
     docker_data_device: "/dev/vdb"
+    # Installiert den Timer, der neue Images aus GHCR selbst nachzieht. Damit
+    # aktualisiert sich Staging nach einem Merge auf main ohne Deploy.
+    # Auf false setzen, um ihn wieder abzuschalten - die Tasks am Playbook-Ende
+    # halten den Dienst dann an und entfernen ihn.
+    auto_update: true
+    # Wie oft nachgesehen wird. systemd-Zeitangabe.
+    auto_update_interval: "5min"
 
   pre_tasks:
     # Das zweite Interface hängt Terraform an die laufende VM, konfiguriert ist
@@ -548,3 +555,110 @@
 
     - ansible.builtin.debug:
         var: compose_ps.stdout_lines
+
+    # ----------------------------------------------------------------
+    # Selbstaktualisierung
+    # ----------------------------------------------------------------
+    # Ein Timer auf der VM zieht neue Images aus GHCR und startet die
+    # betroffenen Dienste neu. Damit wird ein Merge auf main auf Staging
+    # sichtbar, ohne dass jemand einen Deploy ausloest.
+    #
+    # Die Richtung ist umgedreht, weil die andere nicht geht: Ein GitHub-Runner
+    # erreicht hier weder die OpenStack-API noch Port 22 - beides ist
+    # abgeschottet. GHCR erreichen beide Seiten. Also holt die Maschine sich,
+    # was sie braucht, statt dass jemand hereinkommt.
+    #
+    # Was der Timer NICHT kann: Aenderungen an Terraform, Ansible oder der
+    # Compose-Datei. Dafuer bleibt dieses Playbook zustaendig.
+    - name: Update-Skript auf die VM legen
+      ansible.builtin.copy:
+        src: "{{ local_compose_path }}/scripts/autoupdate.sh"
+        dest: /usr/local/bin/appstore-autoupdate
+        owner: root
+        group: root
+        mode: "0755"
+      when: auto_update | bool
+
+    - name: Service-Unit fuer die Selbstaktualisierung
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/appstore-autoupdate.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=App Store: neue Images aus GHCR nachziehen
+          After=network-online.target docker.service
+          Wants=network-online.target
+          Requires=docker.service
+
+          [Service]
+          Type=oneshot
+          Environment=PROJECT_ROOT={{ project_root }}
+          ExecStart=/usr/local/bin/appstore-autoupdate
+          User=root
+          TimeoutStartSec=900
+      when: auto_update | bool
+
+    - name: Timer fuer die Selbstaktualisierung
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/appstore-autoupdate.timer
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=App Store: regelmaessig nach neuen Images sehen
+
+          [Timer]
+          OnBootSec=10min
+          OnUnitActiveSec={{ auto_update_interval }}
+          RandomizedDelaySec=60s
+          Persistent=true
+
+          [Install]
+          WantedBy=timers.target
+      when: auto_update | bool
+
+    - name: Timer aktivieren
+      ansible.builtin.systemd_service:
+        name: appstore-autoupdate.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+      when: auto_update | bool
+
+    - name: Timer abschalten und entfernen, wenn auto_update false ist
+      when: not (auto_update | bool)
+      block:
+        - name: Timer anhalten
+          ansible.builtin.systemd_service:
+            name: appstore-autoupdate.timer
+            enabled: false
+            state: stopped
+          failed_when: false
+
+        - name: Units und Skript loeschen
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /etc/systemd/system/appstore-autoupdate.timer
+            - /etc/systemd/system/appstore-autoupdate.service
+            - /usr/local/bin/appstore-autoupdate
+          notify: reload systemd
+
+    - name: Naechster Lauf des Timers
+      ansible.builtin.command: systemctl list-timers appstore-autoupdate.timer --no-pager
+      register: autoupdate_timers
+      changed_when: false
+      when: auto_update | bool
+
+    - ansible.builtin.debug:
+        var: autoupdate_timers.stdout_lines
+      when: auto_update | bool
+
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
