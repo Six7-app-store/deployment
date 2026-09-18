@@ -10,6 +10,43 @@ Ein vollständiger Durchlauf dauert etwa **fünf bis zehn Minuten**.
 
 ---
 
+## Der schnelle Weg: `deploy.cmd`
+
+Wer die Schritte nicht einzeln tippen will, startet **`deploy.cmd`** im
+Repository-Wurzelverzeichnis per Doppelklick. Das Skript führt genau die unten
+beschriebenen Schritte aus — nur in einem Container, sodass auf dem Rechner
+weder WSL noch Terraform oder Ansible installiert sein muss. Gebraucht wird nur
+Docker Desktop.
+
+Einmalig vorbereiten:
+
+```
+copy deploy.local.env.example deploy.local.env
+```
+
+Dann die Werte eintragen (OpenStack-Zugang, `PG_CONN_STR`, Pfad zum
+SSH-Schlüssel, Pfad zur `.env`). Die Datei steht in `.gitignore`.
+
+Beim Start fragt das Skript, was passieren soll:
+
+| Auswahl | Wirkung |
+|---|---|
+| **Nur ansehen** | Führt den Terraform-Plan aus und zeigt ihn. Es wird nichts verändert. |
+| **Ausrollen** | Wendet die Änderungen an und startet danach Ansible. |
+
+Zwei Sicherungen sind eingebaut, und beide brechen den Lauf ab statt zu warnen:
+
+- **Ohne `PG_CONN_STR` startet es gar nicht.** Terraform würde sonst mit leerem
+  State beginnen, die laufende VM nicht erkennen und eine **zweite** anlegen.
+- **Ein Plan, der Ressourcen ersetzt oder löscht, stoppt den Lauf.** Bei einem
+  gewöhnlichen Deploy darf das nicht vorkommen; die häufigste Ursache ist ein
+  falscher State.
+
+Der Rest dieses Dokuments beschreibt dieselben Schritte von Hand — nützlich, um
+zu verstehen, was `deploy.cmd` tut, und um einzugreifen, wenn etwas klemmt.
+
+---
+
 ## Voraussetzungen
 
 **Du bist im Campusnetz oder im VPN.** Ohne das schlägt bereits Schritt 1 fehl.
