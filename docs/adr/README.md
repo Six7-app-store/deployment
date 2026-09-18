@@ -52,3 +52,5 @@ Das ist Teil der Definition of Done in den `AGENTS.md` aller vier Repos.
 | Nr. | Titel | Status |
 |---|---|---|
 | [0001](0001-keine-windows-apps.md) | Windows-Apps werden nicht unterstützt | Angenommen |
+| [0002](0002-self-hosted-runner-auf-eigener-vm.md) | Der Staging-Deploy läuft auf einem self-hosted GitHub-Runner auf eigener VM | Angenommen |
+| [0003](0003-staging-wird-bei-jedem-merge-neu-gebaut.md) | Staging wird bei jedem Merge abgerissen und neu gebaut | Angenommen |

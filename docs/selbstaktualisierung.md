@@ -1,9 +1,20 @@
 # Staging aktualisiert sich selbst
 
-Nach einem Merge auf `main` liegt wenige Minuten später das neue Image auf der
-Staging-VM — ohne dass jemand einen Deploy startet.
+Nach einem Merge auf `main` steht wenige Minuten später der neue Stand auf
+Staging — ohne dass jemand einen Deploy startet.
 
-## Wie das läuft
+> **Seit dem self-hosted Runner gibt es dafür zwei Wege.** Der Hauptweg ist der
+> Deploy auf dem Runner: ein Merge in eines der vier Repositories reißt den
+> Staging-Stack ab und baut ihn vollständig neu auf, mit Terraform und Ansible.
+> Siehe [ADR-0002](adr/0002-self-hosted-runner-auf-eigener-vm.md) und
+> [ADR-0003](adr/0003-staging-wird-bei-jedem-merge-neu-gebaut.md).
+>
+> Der unten beschriebene Timer bleibt als Sicherheitsnetz aktiv: er greift,
+> wenn der Deploy scheitert oder wenn ein Image nach dem Aufbau nachgereicht
+> wird. Für den Normalfall ist er nicht mehr der Weg, auf dem Änderungen
+> ankommen.
+
+## Wie der Timer läuft
 
 ```
   Merge auf main
@@ -25,17 +36,22 @@ Staging-VM — ohne dass jemand einen Deploy startet.
 
 ## Warum die VM zieht, statt dass GitHub schiebt
 
-Weil die andere Richtung nicht geht. Von einem GitHub-Runner aus ist erreichbar:
+Weil ein **gehosteter** GitHub-Runner die andere Richtung nicht kann:
 
-| Ziel | |
-|---|---|
-| OpenStack-API (für Terraform) | ❌ Firewall — der Name löst öffentlich auf, das Netz ist es nicht |
-| SSH zur Staging-VM (für Ansible) | ❌ Security Group lässt Port 22 nur aus dem Campusnetz zu |
-| GHCR | ✅ |
+| Ziel | gehosteter Runner | Runner-VM im Campusnetz |
+|---|---|---|
+| OpenStack-API (für Terraform) | ❌ Timeout | ✅ |
+| SSH zur Staging-VM (für Ansible) | ❌ Port 22 nur aus dem Campusnetz | ✅ |
+| GHCR | ✅ | ✅ |
 
-Und GHCR erreicht auch die VM. Das ist der einzige Punkt, an dem sich beide
-Seiten treffen — also wird er benutzt. Es braucht dafür **keine** Öffnung in der
-Firewall, **keinen** SSH-Zugang von außen und **keine** Zugangsdaten bei GitHub.
+GHCR ist der einzige Punkt, an dem sich ein gehosteter Runner und die VM
+treffen — daher der Timer. Er braucht **keine** Öffnung in der Firewall,
+**keinen** SSH-Zugang von außen und **keine** Zugangsdaten bei GitHub, und
+genau das macht ihn als Rückfallebene wertvoll.
+
+Die rechte Spalte ist der Grund für den self-hosted Runner: eine eigene VM im
+Campusnetz erreicht alles drei und kann deshalb den vollen Deploy fahren, nicht
+nur Container tauschen.
 
 ## Was der Timer kann und was nicht
 
