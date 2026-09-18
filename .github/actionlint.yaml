@@ -1,7 +1,0 @@
-# Eigene Labels der self-hosted Runner. Ohne diese Liste meldet
-# actionlint sie als unbekannt, weil es nur GitHubs gehostete Labels
-# kennt.
-self-hosted-runner:
-  labels:
-    # Runner im DHBW-Netz, der als einziger die OpenStack-API erreicht.
-    - openstack
