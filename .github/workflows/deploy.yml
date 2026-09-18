@@ -110,6 +110,15 @@ jobs:
       - name: Ansible installieren
         run: pipx install ansible-core
 
+      # --syntax-check löst `roles:` wirklich auf und scheitert an einer
+      # fehlenden Galaxy-Rolle, obwohl es nichts ausführt. `roles_external`
+      # steht bereits im roles_path aus ansible.cfg.
+      - name: Galaxy-Abhängigkeiten installieren
+        working-directory: infrastructure/ansible
+        run: |
+          ansible-galaxy role install -r requirements.yml -p roles_external
+          ansible-galaxy collection install -r requirements.yml
+
       - name: Ansible Syntax Check
         working-directory: infrastructure/ansible
         run: |
