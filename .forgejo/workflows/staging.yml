@@ -41,16 +41,6 @@ on:
         type: boolean
         default: false
         required: false
-      # Escape hatch for a volume Cinder left in "creating". Such a volume
-      # cannot be deleted, so Terraform fails every apply that tries - blocking
-      # deploys that have nothing to do with it. Dropping it from state stops
-      # Terraform managing it; clearing it in OpenStack needs an operator.
-      # Off by default: it makes Terraform forget a resource that still exists.
-      forget_volume:
-        description: "drop the data volume from Terraform state (one-off)"
-        type: boolean
-        default: false
-        required: false
 
 jobs:
   deploy:
@@ -132,15 +122,6 @@ jobs:
       # That path is a named docker volume mounted by the runner
       # (runner/config.yml, container.options) — job containers are destroyed
       # after each run, so without it the state would be lost every time.
-      - name: Forget the data volume (one-off)
-        if: github.event.inputs.forget_volume == 'true'
-        working-directory: infrastructure/terraform/envs/staging
-        run: |
-          terraform init
-          # || true so the run continues when it is already gone - the flag may
-          # be left on by accident, and that should not fail a deploy.
-          terraform state rm 'module.vm.openstack_blockstorage_volume_v3.docker_data[0]' || true
-
       - name: Terraform Init, Validate & Plan
         working-directory: infrastructure/terraform/envs/staging
         run: |

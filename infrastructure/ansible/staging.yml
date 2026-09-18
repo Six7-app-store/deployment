@@ -15,7 +15,7 @@
     seed_data: false
     # Muss zu docker_data_volume_size_gb in envs/staging passen: "" solange dort
     # 0 steht, /dev/vdb sobald wieder ein Volume angelegt wird.
-    docker_data_device: ""
+    docker_data_device: "/dev/vdb"
 
   pre_tasks:
     # Das zweite Interface hängt Terraform an die laufende VM, konfiguriert ist
@@ -137,9 +137,8 @@
         daemon_reload: true
       tags: [network]
 
-    # Das Volume muss hängen, bevor Docker dort Daten anlegt. Über ein
-    # gefülltes /var/lib/docker gelegt, verschwinden Images, Container und
-    # benannte Volumes für den Daemon, ohne Fehlermeldung.
+    # Das Volume trägt die Docker-Daten, weil die Root-Disk dafür zu klein ist.
+    # Der erste Lauf leert die alten Verzeichnisse: Staging fängt leer an.
     - name: Datenvolume vorhanden?
       ansible.builtin.stat:
         path: "{{ docker_data_device }}"
@@ -174,14 +173,74 @@
       changed_when: false
       when: docker_data_device | length > 0
 
-    - name: Datenvolume unter /var/lib/docker einhängen
+    - name: Datenvolume einhängen
       ansible.posix.mount:
-        path: /var/lib/docker
+        path: /mnt/docker-data
         src: "UUID={{ data_uuid.stdout | trim }}"
         fstype: ext4
         opts: defaults,noatime
         state: mounted
       when: docker_data_device | length > 0
+
+    # Die Images liegen unter /var/lib/containerd, die benannten Volumes unter
+    # /var/lib/docker. Beide müssen aufs Volume, sonst bleibt der Platz knapp.
+    - name: Liegen die Datenverzeichnisse schon auf dem Volume?
+      ansible.builtin.command: mountpoint -q /var/lib/containerd
+      register: data_bound
+      changed_when: false
+      failed_when: false
+      when: docker_data_device | length > 0
+
+    - name: Dienste anhalten, bevor die Verzeichnisse überhängt werden
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: stopped
+      loop: [docker.socket, docker.service, containerd.service]
+      # Auf einer frisch gebauten VM gibt es die Dienste noch nicht.
+      failed_when: false
+      when:
+        - docker_data_device | length > 0
+        - data_bound.rc | default(1) != 0
+
+    # Ohne diesen Schritt belegt der alte Inhalt die Root-Disk weiter,
+    # unsichtbar unter dem Mount. Die Datenbanken sind danach leer.
+    - name: Alten Inhalt der Datenverzeichnisse löschen
+      ansible.builtin.shell: rm -rf /var/lib/docker/* /var/lib/docker/.[!.]* /var/lib/containerd/* /var/lib/containerd/.[!.]*
+      changed_when: true
+      failed_when: false
+      when:
+        - docker_data_device | length > 0
+        - data_bound.rc | default(1) != 0
+
+    - name: Zielverzeichnisse auf dem Volume anlegen
+      ansible.builtin.file:
+        path: "/mnt/docker-data/{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0711'
+      loop: [docker, containerd]
+      when: docker_data_device | length > 0
+
+    - name: Verzeichnisse an ihre gewohnten Pfade binden
+      ansible.posix.mount:
+        path: "/var/lib/{{ item }}"
+        src: "/mnt/docker-data/{{ item }}"
+        fstype: none
+        opts: bind
+        state: mounted
+      loop: [docker, containerd]
+      when: docker_data_device | length > 0
+
+    - name: Dienste wieder starten
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: started
+      loop: [containerd.service, docker.socket, docker.service]
+      failed_when: false
+      when:
+        - docker_data_device | length > 0
+        - data_bound.rc | default(1) != 0
 
     - name: Verzeichnis für App erstellen
       ansible.builtin.file:
@@ -258,21 +317,7 @@
     # ihn über den Reload-Schritt am Playbook-Ende neu — validiert und ohne
     # Unterbrechung, statt den Container wegzuwerfen.
 
-    - name: Log in to GHCR using credentials from the deployed .env
-      ansible.builtin.shell:
-        cmd: |
-          set -euo pipefail
-          env_file="{{ project_root }}/.env"
-          token=$(grep -E '^GIT_ACCESS_TOKEN=' "$env_file" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\042\047\r' || true)
-          user=$(grep -E '^GIT_USER=' "$env_file" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '\042\047\r' || true)
-          if [ -z "$token" ]; then
-            echo "no GIT_ACCESS_TOKEN in $env_file - skipping GHCR login"
-            exit 0
-          fi
-          echo "$token" | docker login ghcr.io --username "${user:-x}" --password-stdin
-        executable: /bin/bash
-      changed_when: true
-
+    # Ohne Anmeldung: die Images der Organisation sind öffentlich.
     - name: Pull alle Images
       ansible.builtin.shell:
         # --ignore-buildable überspringt Dienste mit build:-Abschnitt. Ohne das
@@ -286,7 +331,9 @@
       async: 600
       poll: 30
 
-    - name: GHCR credentials aus root-Store entfernen
+    # Räumt Zugangsdaten weg, die frühere Läufe mit GHCR-Anmeldung hinterlassen
+    # haben. Ohne Anmeldung entsteht die Datei nicht mehr neu.
+    - name: Zugangsdaten aus dem Root-Store entfernen
       ansible.builtin.file:
         path: /root/.docker/config.json
         state: absent

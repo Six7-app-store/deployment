@@ -237,9 +237,11 @@ empty**, so the stack refuses to start half-configured:
 | Keycloak | `KEYCLOAK_ADMIN_USER`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_DB_USER`, `KEYCLOAK_DB_PASSWORD`, `KEYCLOAK_DB_NAME` |
 | Broker | `RABBITMQ_USER`, `RABBITMQ_PASSWORD` |
 | TF state | `TFSTATE_DB_USER`, `TFSTATE_DB_PASSWORD`, `TFSTATE_DB_NAME` |
-| App repos | `GIT_ACCESS_TOKEN` — backend and worker clone private App repos with it. The GHCR images are public, so pulling them needs no credentials. |
 
-Everything else carries a `:-` default and can be omitted. Two of those defaults are DHBW-specific
+Everything else carries a `:-` default and can be omitted. That now includes the git credentials:
+private App repositories are read through the installation's GitHub App (`GITHUB_APP_ID`,
+`GITHUB_APP_PRIVATE_KEY`), public ones need nothing, and `GIT_ACCESS_TOKEN` remains only for GitLab
+repositories and as a fallback where the App is not installed. Two of those defaults are DHBW-specific
 and worth knowing about: `ACME_CA_URL` points at HARICA, and `DNS_SERVER` /`DNS_TSIG_KEY_ALG`
 describe the zone that answers the dns-01 challenge.
 
