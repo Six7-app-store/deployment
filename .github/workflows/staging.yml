@@ -101,6 +101,8 @@ jobs:
           terraform version
           ansible --version | head -1
           trivy --version | head -1
+          nsupdate -V | head -1
+          dig -v 2>&1 | head -1
 
       - name: Terraform Format Check
         working-directory: infrastructure/terraform
@@ -176,6 +178,90 @@ jobs:
           echo "VM_IPV4_GATEWAY=$(terraform output -raw vm_ipv4_gateway)" >> "$GITHUB_ENV"
           echo "VM_IPV4_MAC=$(terraform output -raw vm_ipv4_mac)" >> "$GITHUB_ENV"
 
+      # Ohne diesen Schritt ist der Neuaufbau wertlos: die neue VM bekommt eine
+      # neue IPv6-Adresse, der AAAA-Record zeigt aber weiter auf die alte, und
+      # unter dem Hostnamen ist nichts mehr erreichbar. Genau so ist der erste
+      # automatische Deploy am 18.09.2026 geendet.
+      #
+      # Das Runbook fuehrte den DNS-Eintrag als Schritt "nur beim ersten Mal" -
+      # unter der Annahme, die VM bleibe bestehen. Seit sie das nicht mehr tut,
+      # gehoert der Eintrag in jeden Lauf.
+      #
+      # Caddy benutzt denselben TSIG-Schluessel fuer den TXT-Record der
+      # dns-01-Pruefung. Er darf nachweislich auch AAAA schreiben.
+      - name: DNS-Eintrag auf die neue VM zeigen lassen
+        env:
+          STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          envfile=$(mktemp)
+          keyfile=$(mktemp)
+          # Beide Dateien enthalten Geheimnisse und verschwinden auch dann,
+          # wenn nsupdate abbricht.
+          trap 'rm -f "$envfile" "$keyfile"' EXIT
+          printf '%s\n' "$STAGING_ENV_FILE" > "$envfile"
+
+          wert() { grep -E "^$1=" "$envfile" | head -1 | cut -d= -f2- || true; }
+          hostname=$(wert APP_HOSTNAME)
+          keyname=$(wert DNS_TSIG_KEY_NAME)
+          keysecret=$(wert DNS_TSIG_KEY)
+          # DNS_SERVER und DNS_TSIG_KEY_ALG stehen ueblicherweise nicht in der
+          # .env - die Defaults hier sind dieselben wie in
+          # docker-compose.staging.yml, damit Caddy und dieser Schritt nicht
+          # auseinanderlaufen koennen.
+          server=$(wert DNS_SERVER); server=${server:-ns.cloud-ns.dhbw-mannheim.de.:53}
+          alg=$(wert DNS_TSIG_KEY_ALG); alg=${alg:-hmac-sha512}
+          nshost=${server%:*}
+          nsport=${server##*:}
+
+          for v in hostname keyname keysecret; do
+            if [ -z "${!v}" ]; then
+              echo "::error::$v fehlt in STAGING_ENV_FILE - der DNS-Eintrag kann nicht gesetzt werden." >&2
+              exit 1
+            fi
+          done
+
+          # Der Schluessel geht ueber eine Datei, nicht ueber -y: die
+          # Kommandozeile waere auf dieser dauerhaften Maschine fuer jeden
+          # sichtbar, der zur selben Zeit `ps` aufruft.
+          cat > "$keyfile" <<KEY
+          key "$keyname" {
+              algorithm $alg;
+              secret "$keysecret";
+          };
+          KEY
+
+          # Die Zone wird nicht geraten, sondern beim autoritativen Server
+          # erfragt. Ein falscher zone-Eintrag laesst nsupdate mit NOTZONE
+          # scheitern, und das sieht aus wie ein Rechteproblem.
+          zone=$(dig +noall +authority +answer SOA "$hostname" @"$nshost" -p "$nsport" \
+                 | awk '$4=="SOA"{print $1; exit}')
+          if [ -z "$zone" ]; then
+            echo "::error::Zu $hostname liess sich keine Zone ermitteln." >&2
+            exit 1
+          fi
+          echo "Zone: $zone"
+          echo "Setze $hostname auf $VM_IP"
+
+          nsupdate -k "$keyfile" <<UPDATE
+          server $nshost $nsport
+          zone $zone
+          update delete $hostname. AAAA
+          update add $hostname. 300 AAAA $VM_IP
+          send
+          UPDATE
+
+          # Nachsehen statt hoffen. Gefragt wird der autoritative Server
+          # direkt, damit kein Zwischenspeicher eine alte Antwort liefert.
+          gesetzt=$(dig +short AAAA "$hostname" @"$nshost" -p "$nsport" | head -1)
+          if [ "$gesetzt" != "$VM_IP" ]; then
+            echo "::error::DNS zeigt auf '$gesetzt', erwartet war '$VM_IP'." >&2
+            exit 1
+          fi
+          echo "AAAA-Record steht auf $gesetzt."
+          echo "APP_HOSTNAME=$hostname" >> "$GITHUB_ENV"
+
       # Terraform meldet die VM als fertig, sobald Nova sie als ACTIVE fuehrt.
       # Bis der SSH-Dienst darin antwortet, vergehen noch einige Sekunden -
       # ohne dieses Warten scheitert Ansible am ersten Verbindungsversuch.
@@ -248,12 +334,16 @@ jobs:
       - name: Ergebnis
         if: success()
         run: |
-          echo "### Staging neu aufgebaut" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| VM-Adresse | \`${VM_IP}\` |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Ausgeloest durch | ${{ github.event_name }} |" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Staging neu aufgebaut"
+            echo ""
+            echo "**https://${APP_HOSTNAME}**"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| VM-Adresse | \`${VM_IP}\` |"
+            echo "| Ausgeloest durch | ${{ github.event_name }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # Laeuft auch nach einem Abbruch. Der Runner ist eine dauerhafte Maschine,
       # kein wegwerfbarer Container - was hier liegen bleibt, bleibt liegen.

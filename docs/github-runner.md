@@ -36,11 +36,18 @@ also selbst nachziehen:
 | Terraform | 1.16.3 | apt, `apt.releases.hashicorp.com` |
 | Ansible | core 2.21.4 | `pip3 --break-system-packages` |
 | Trivy | 0.74.0 | Installskript nach `/usr/local/bin` |
+| nsupdate, dig | 9.18 | apt, `bind9-dnsutils` |
 | jq, rsync, unzip, python3-pip | Distribution | apt |
 
-Der Workflow prüft diese vier im Schritt **Werkzeuge prüfen**, bevor er
-irgendetwas anfasst. Fehlt eins, bricht der Lauf dort ab statt später mitten im
-`apply`.
+Der Workflow prüft sie im Schritt **Werkzeuge prüfen**, bevor er irgendetwas
+anfasst. Fehlt eins, bricht der Lauf dort ab statt später mitten im `apply`.
+
+`nsupdate` setzt nach dem `apply` den `AAAA`-Record auf die Adresse der neuen
+VM. Ohne diesen Schritt wäre der Neuaufbau wertlos: die neue VM bekommt eine
+neue IPv6-Adresse, und unter dem Hostnamen wäre nichts mehr erreichbar. Der
+dafür benutzte TSIG-Schlüssel ist derselbe, den Caddy für die
+dns-01-Prüfung verwendet — er steht als `DNS_TSIG_KEY` in `STAGING_ENV_FILE`
+und darf nachweislich auch `AAAA` schreiben.
 
 ## Der Terraform-State
 
