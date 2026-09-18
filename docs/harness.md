@@ -254,7 +254,7 @@ Produktion bleibt beim Menschen.
 |---|---|
 | Staging-Workflow anstoßen (`mode: plan`, dann `apply`) | Produktions-Deployment |
 | `/health` abfragen, Erreichbarkeit über IPv4 und IPv6 prüfen | `terraform apply` / `destroy` von Hand |
-| Containerstatus und Logs lesen | Rollback und `forget_volume` |
+| Containerstatus und Logs lesen | `deploy.cmd` / `scripts/deploy.sh` von Hand |
 | Pipeline-Ergebnis lesen | Secrets lesen oder schreiben |
 
 Die Grenze läuft nicht zwischen *lesen* und *schreiben*, sondern zwischen
@@ -262,6 +262,12 @@ Die Grenze läuft nicht zwischen *lesen* und *schreiben*, sondern zwischen
 Der Agent darf den Workflow starten; Terraform von Hand gegen OpenStack
 laufen zu lassen bleibt ihm verwehrt. Damit gilt für ihn genau dieselbe
 Regel wie für uns.
+
+Seit dem 18.09.2026 gibt es dafür einen zweiten Weg: `deploy.cmd` bzw.
+`scripts/deploy.sh` rollen von einem Entwicklerrechner aus aus, weil ein
+GitHub-gehosteter Runner die OpenStack-API der DHBW nicht erreicht. Dieser
+Weg ist für den Agenten **verschlossen** — er ist genau die Infrastruktur
+unter dem Knopf. Was der Agent darf, ist der Forgejo-Workflow.
 
 Zwei Dinge machen das vertretbar. Erstens steht die Workflow-Eingabe `mode`
 standardmäßig auf `plan` — ein `plan`-Lauf prüft Runner, Image, Checkout,

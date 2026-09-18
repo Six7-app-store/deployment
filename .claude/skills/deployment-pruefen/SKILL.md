@@ -16,7 +16,7 @@ Dev-Umgebung geprüft.
 |---|---|
 | Staging-Workflow anstoßen (`mode: plan`, dann `apply`) | Produktions-Deployment |
 | Health-Endpunkt abfragen | `terraform apply` / `destroy` von Hand |
-| Erreichbarkeit über IPv4 und IPv6 prüfen | Rollback und `forget_volume` |
+| Erreichbarkeit über IPv4 und IPv6 prüfen | Rollback, `deploy.cmd`, `scripts/deploy.sh` |
 | Containerstatus und Logs lesen | Secrets lesen oder schreiben |
 | Pipeline-Ergebnis lesen | |
 
