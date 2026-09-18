@@ -1,0 +1,258 @@
+name: CD - Staging Deployment
+
+# Baut den kompletten Staging-Stack bei jedem Merge neu auf: Terraform reisst
+# die alte VM ab und legt sie neu an, Ansible richtet sie ein. Nichts wird
+# aktualisiert, alles wird ersetzt - der Stack ist danach in genau dem Zustand,
+# den dieses Repository beschreibt, ohne von Hand gewachsene Reste.
+#
+# Laeuft auf dem self-hosted Runner (VM `github-runner`, 2001:7c0:1b20:c913:1::3f0).
+# Das ist keine Vorliebe, sondern Notwendigkeit: die OpenStack-API der DHBW ist
+# von ausserhalb des Campusnetzes nicht erreichbar, ein gehosteter GitHub-Runner
+# laeuft dort in einen Timeout. Der Runner steht im Netz, der Rest nicht.
+#
+# Runner-VM und AppStore-VM sind bewusst zwei verschiedene Maschinen. Der Runner
+# haelt den Terraform-State unter /var/lib/tf-state/staging/ und wird von diesem
+# Terraform nie angefasst - sonst wuerde `destroy` die eigene Grundlage
+# wegraeumen.
+
+on:
+  # Merge auf main in diesem Repository.
+  push:
+    branches: [main]
+
+  # Merge auf main in frontend, backend oder worker. Die schicken von ihrer CI
+  # aus einen repository_dispatch hierher, sobald ihr Image in GHCR liegt.
+  repository_dispatch:
+    types: [trigger-deployment]
+
+  workflow_dispatch:
+    inputs:
+      recreate:
+        description: "VM vorher zerstoeren (aus = nur Aenderungen anwenden)"
+        type: boolean
+        default: true
+      seed:
+        description: "Seed-Daten anlegen (Benutzer, Kurse, Apps)"
+        type: boolean
+        default: false
+
+# BEWUSST kein `pull_request`. Dieses Repository ist oeffentlich, und ein
+# self-hosted Runner an einem PR-Trigger gaebe jedem, der einen Fork-PR oeffnet,
+# eine Ausfuehrungsumgebung mit OpenStack-Zugang. push, workflow_dispatch und
+# repository_dispatch kann ein Aussenstehender nicht ausloesen.
+
+permissions:
+  contents: read
+  security-events: write
+
+# Zwei Merges kurz hintereinander duerfen sich nicht ueberholen. Abgebrochen
+# wird nichts: ein laufender destroy/apply ist nichts, das man auf halber
+# Strecke stehen laesst.
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Staging Deploy
+    runs-on: [self-hosted, deploy]
+    timeout-minutes: 90
+
+    env:
+      OS_AUTH_URL: ${{ secrets.STAGING_OS_AUTH_URL }}
+      OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.STAGING_OS_APPLICATION_CREDENTIAL_ID }}
+      OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.STAGING_OS_APPLICATION_CREDENTIAL_SECRET }}
+      OS_REGION_NAME: ${{ secrets.STAGING_OS_REGION_NAME }}
+      OS_AUTH_TYPE: v3applicationcredential
+      OS_IDENTITY_API_VERSION: '3'
+
+      # Terraform laeuft ohne Terminal: kein Farbcode-Muell im Log, und eine
+      # fehlende Variable bricht ab statt auf eine Eingabe zu warten, die nie
+      # kommt.
+      TF_IN_AUTOMATION: 'true'
+      TF_INPUT: '0'
+      TF_CLI_ARGS: '-no-color'
+
+      # Die Rollen aus requirements.yml liegen neben dem Playbook. ansible.cfg
+      # zeigt mit roles_path schon dorthin; das hier haelt es auch dann richtig,
+      # wenn ein Schritt aus einem anderen Verzeichnis startet.
+      ANSIBLE_HOST_KEY_CHECKING: 'False'
+      ANSIBLE_FORCE_COLOR: 'True'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Ausloeser protokollieren
+        run: |
+          echo "Ereignis:   ${{ github.event_name }}"
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "Ausgeloest von: ${{ github.event.client_payload.repository }}"
+            echo "Commit:         ${{ github.event.client_payload.sha }}"
+            echo "Nachricht:      ${{ github.event.client_payload.message }}"
+          else
+            echo "Commit:         ${{ github.sha }}"
+          fi
+
+      # Billiger Kanarienvogel: wenn auf dem Runner ein Werkzeug fehlt, soll das
+      # hier auffallen und nicht zwanzig Minuten spaeter mitten im apply.
+      - name: Werkzeuge pruefen
+        run: |
+          terraform version
+          ansible --version | head -1
+          trivy --version | head -1
+
+      - name: Terraform Format Check
+        working-directory: infrastructure/terraform
+        run: terraform fmt -check -recursive
+
+      # Staging ist absichtlich nicht blockierend: HIGH/CRITICAL-Funde werden
+      # sichtbar gemacht, halten den Deploy aber nicht auf.
+      - name: Terraform Security Scan (Trivy)
+        continue-on-error: true
+        run: trivy config --severity HIGH,CRITICAL infrastructure/terraform
+
+      - name: Terraform Security Scan (Trivy, SARIF)
+        if: always()
+        continue-on-error: true
+        run: |
+          trivy config --severity HIGH,CRITICAL \
+            --format sarif --output trivy-iac.sarif infrastructure/terraform
+
+      - name: Trivy-Ergebnisse an GitHub Security
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-iac.sarif
+          category: trivy-iac-staging
+
+      - name: SSH-Schluessel einrichten
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          # printf erhaelt die Zeilenumbrueche des PEM; die Variable in
+          # Anfuehrungszeichen haelt den Schluessel aus dem Skripttext heraus.
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/openstack-key
+          chmod 600 ~/.ssh/openstack-key
+          # Der oeffentliche Schluessel wird aus dem privaten abgeleitet, damit
+          # das OpenStack-Keypair immer zu dem Schluessel passt, mit dem Ansible
+          # sich gleich verbindet.
+          # -P '' erzwingt eine leere Passphrase: ein passphrase-geschuetzter
+          # Schluessel scheitert so mit klarer Meldung, statt auf /dev/tty zu
+          # haengen.
+          ssh-keygen -y -P '' -f ~/.ssh/openstack-key > ~/.ssh/openstack-key.pub
+          echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/openstack-key.pub)" >> "$GITHUB_ENV"
+
+      # Der State liegt unter /var/lib/tf-state/staging/ auf dem Runner, nicht
+      # im Workspace: actions/checkout raeumt den Workspace vor jedem Lauf, der
+      # State muss aber ueber Laeufe hinweg bestehen. Siehe backend.tf.
+      - name: Terraform Init & Validate
+        working-directory: infrastructure/terraform/envs/staging
+        run: |
+          terraform init
+          terraform validate
+
+      # Der eigentliche Punkt dieses Workflows: die alte VM verschwindet
+      # vollstaendig, bevor die neue entsteht. Kein In-place-Update, keine
+      # Reste aus frueheren Laeufen.
+      #
+      # Beim allerersten Lauf ist der State leer und destroy ein No-op - das
+      # ist kein Fehler.
+      - name: Terraform Destroy (alten Stack abreissen)
+        if: github.event_name != 'workflow_dispatch' || inputs.recreate
+        working-directory: infrastructure/terraform/envs/staging
+        run: terraform destroy -auto-approve
+
+      - name: Terraform Plan & Apply (neuen Stack aufbauen)
+        working-directory: infrastructure/terraform/envs/staging
+        run: |
+          terraform plan -out=tfplan
+          terraform apply tfplan
+          echo "VM_IP=$(terraform output -raw vm_ip)" >> "$GITHUB_ENV"
+          echo "VM_IPV4=$(terraform output -raw vm_ipv4)" >> "$GITHUB_ENV"
+          echo "VM_IPV4_GATEWAY=$(terraform output -raw vm_ipv4_gateway)" >> "$GITHUB_ENV"
+          echo "VM_IPV4_MAC=$(terraform output -raw vm_ipv4_mac)" >> "$GITHUB_ENV"
+
+      # Terraform meldet die VM als fertig, sobald Nova sie als ACTIVE fuehrt.
+      # Bis der SSH-Dienst darin antwortet, vergehen noch einige Sekunden -
+      # ohne dieses Warten scheitert Ansible am ersten Verbindungsversuch.
+      - name: Auf SSH der neuen VM warten
+        run: |
+          for i in $(seq 1 60); do
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+                   -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 \
+                   -i ~/.ssh/openstack-key "ubuntu@${VM_IP}" true 2>/dev/null; then
+              echo "SSH ist nach ${i} Versuchen da."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Die neue VM antwortet nach 10 Minuten nicht auf SSH." >&2
+          exit 1
+
+      - name: Ansible-Abhaengigkeiten installieren
+        working-directory: infrastructure/ansible
+        run: |
+          ansible-galaxy role install -r requirements.yml -p roles_external
+          ansible-galaxy collection install -r requirements.yml
+
+      - name: Ansible-Inventar erzeugen
+        working-directory: infrastructure/ansible
+        run: |
+          # Leer heisst: terraform hat keinen Output geliefert. ansible-playbook
+          # wuerde dann mit "no hosts matched" gruen durchlaufen und nichts
+          # ausrollen - ein gruener Lauf ohne Deploy ist schlimmer als ein roter.
+          if [ -z "$VM_IP" ]; then
+            echo "::error::VM_IP ist leer - terraform output hat nichts geliefert." >&2
+            exit 1
+          fi
+          # Die Adresse steht in ansible_host hinter einem Alias, nicht als
+          # Hostname selbst: eckige Klammern um ein IPv6-Literal liest das
+          # ini-Plugin als Host-Range und scheitert mit "host range must be
+          # begin:end". Ein Alias umgeht die Frage und ist fuer IPv4 und IPv6
+          # gleich.
+          cat > inventory.ini <<EOF
+          [docker_vm]
+          staging ansible_host=${VM_IP} ansible_user=ubuntu
+          EOF
+          echo "Inventar:" && cat inventory.ini
+
+      - name: Ansible Playbook ausfuehren
+        working-directory: infrastructure/ansible
+        env:
+          STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
+          # Bei einem frisch aufgebauten Stack existieren noch keine Benutzer,
+          # Kurse oder Apps - der Keycloak-Realm bringt nur das Dienstkonto des
+          # Backends mit. Nach einem destroy/apply muss also geseedet werden,
+          # sonst steht der App-Store leer da. Das Skript ist idempotent.
+          SEED: ${{ github.event_name == 'workflow_dispatch' && inputs.seed || 'true' }}
+        run: |
+          ansible-playbook -i inventory.ini \
+            --private-key ~/.ssh/openstack-key \
+            -e seed_data=${SEED} \
+            -e "secondary_ipv4=${VM_IPV4}" \
+            -e "secondary_gateway=${VM_IPV4_GATEWAY}" \
+            -e "secondary_mac=${VM_IPV4_MAC}" \
+            staging.yml
+
+      - name: Ergebnis
+        if: success()
+        run: |
+          echo "### Staging neu aufgebaut" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| VM-Adresse | \`${VM_IP}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Ausgeloest durch | ${{ github.event_name }} |" >> "$GITHUB_STEP_SUMMARY"
+
+      # Laeuft auch nach einem Abbruch. Der Runner ist eine dauerhafte Maschine,
+      # kein wegwerfbarer Container - was hier liegen bleibt, bleibt liegen.
+      - name: Sensible Dateien entfernen
+        if: always()
+        run: |
+          rm -f ~/.ssh/openstack-key ~/.ssh/openstack-key.pub
+          rm -f infrastructure/ansible/inventory.ini
+          echo "Zugangsdaten des Laufs entfernt."
