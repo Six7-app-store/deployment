@@ -1,0 +1,318 @@
+# Deploy des App-Stores nach OpenStack.
+#
+# Ersetzt die frühere staging.yml, die auf `runs-on: self-hosted` ohne
+# vorhandenen Runner lief und deshalb bei jedem Push auf main rot wurde.
+#
+# ----------------------------------------------------------------------
+# Warum zwei Jobs auf zwei verschiedenen Runnern
+# ----------------------------------------------------------------------
+# Ein GitHub-gehosteter Runner erreicht die OpenStack-API der DHBW nicht.
+# Nachgemessen am 2026-09-18 von einem Runner mit der öffentlichen IP
+# 145.132.101.182 aus:
+#
+#   DNS newstack.dhbw.cloud  -> 141.72.5.140   (löst öffentlich auf)
+#   https://...:5000/v3      -> 000 TIMEOUT    (Keystone)
+#   https://...:443/         -> 000 TIMEOUT    (Horizon)
+#
+# Der Name ist also öffentlich, das Netz ist es nicht. Für den Deploy
+# führt kein Weg an einem Runner innerhalb des DHBW-Netzes vorbei.
+#
+# Deshalb liegt alles, was ohne OpenStack auskommt, im Job `qa` auf einem
+# gehosteten Runner: Formatierung, Validierung, Lint und der IaC-Scan
+# laufen damit bei jedem Push, auch wenn der self-hosted Runner gerade
+# aus ist. Nur `deploy` braucht das Universitätsnetz.
+#
+# ----------------------------------------------------------------------
+# Sicherheitshinweis zum self-hosted Runner
+# ----------------------------------------------------------------------
+# Dieses Repository ist öffentlich, und GitHub rät von self-hosted
+# Runnern an öffentlichen Repositories ausdrücklich ab: wer einen Pull
+# Request öffnen darf, bekommt sonst Codeausführung auf dem Runner.
+#
+# Drei Maßnahmen halten das hier klein:
+#   1. `deploy` läuft nur bei `push` auf main, `workflow_dispatch` und
+#      `repository_dispatch` — niemals bei `pull_request`. Ein PR kann
+#      den Runner also nicht erreichen.
+#   2. Die Secrets hängen an der Environment `openstack`, nicht am
+#      Repository. Nur ein Job, der diese Environment anfordert, sieht
+#      sie; dort lässt sich zusätzlich ein Reviewer erzwingen.
+#   3. In Settings -> Actions -> General gehört
+#      "Require approval for all external contributors" aktiviert.
+name: CD - Deploy to OpenStack
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "plan = nur zeigen, was sich ändern würde; apply = ausrollen"
+        type: choice
+        options: [plan, apply]
+        default: plan
+        required: true
+      seed:
+        description: "Seed-Nutzer, Kurse und Apps anlegen (nur bei leerer DB)"
+        type: boolean
+        default: false
+        required: false
+  # Wird von backend, frontend und worker ausgelöst, nachdem deren CI ein
+  # neues Image nach GHCR gepusht hat. Erst dadurch rollt eine Änderung an
+  # einem Service ohne Zutun bis auf die VM durch.
+  repository_dispatch:
+    types: [service-image-published]
+
+# Zwei gleichzeitige Deploys auf dieselbe VM würden sich über den
+# Terraform-State in die Quere kommen. `cancel-in-progress: false`, weil
+# ein laufendes `terraform apply` abzubrechen schlimmer ist als zu warten.
+concurrency:
+  group: openstack-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ====================================================================
+  # QA — braucht kein OpenStack, läuft deshalb auf GitHubs Runnern
+  # ====================================================================
+  qa:
+    name: "QA (Terraform, Ansible, IaC-Scan)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform Format
+        run: terraform fmt -check -recursive infrastructure/terraform
+
+      # -backend=false: Der echte State liegt in Postgres, das ohne
+      # Credentials und ohne DHBW-Netz nicht erreichbar ist. Für eine
+      # reine Syntax- und Typprüfung braucht es ihn nicht.
+      - name: Terraform Validate
+        run: |
+          for env in infrastructure/terraform/envs/*/; do
+            echo "--- $env"
+            terraform -chdir="$env" init -backend=false -input=false
+            terraform -chdir="$env" validate
+          done
+
+      - name: Ansible installieren
+        run: pipx install ansible-core
+
+      - name: Ansible Syntax Check
+        working-directory: infrastructure/ansible
+        run: |
+          # Ein Inventory mit einem Platzhalter-Host genügt; --syntax-check
+          # verbindet sich nicht, will aber ein auflösbares Ziel.
+          printf '[docker_vm]\nplaceholder ansible_host=203.0.113.1\n' > inventory.syntax.ini
+          ansible-playbook -i inventory.syntax.ini --syntax-check staging.yml
+          rm -f inventory.syntax.ini
+
+      - name: Ansible Lint
+        continue-on-error: true
+        run: |
+          pipx install ansible-lint
+          ansible-lint infrastructure/ansible/staging.yml || true
+
+      # Nicht blockierend: Staging soll an einem IaC-Befund nicht hängen
+      # bleiben. Sichtbar bleibt er trotzdem, über den Security-Tab.
+      - name: Trivy IaC-Scan
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: infrastructure/terraform
+          severity: HIGH,CRITICAL
+
+      - name: Trivy IaC-Scan (SARIF)
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: infrastructure/terraform
+          severity: HIGH,CRITICAL
+          format: sarif
+          output: trivy-iac.sarif
+
+      - name: SARIF in den Security-Tab
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-iac.sarif
+          category: trivy-iac
+
+  # ====================================================================
+  # DEPLOY — braucht das DHBW-Netz, läuft deshalb self-hosted
+  # ====================================================================
+  deploy:
+    name: "Deploy nach OpenStack"
+    needs: [qa]
+    # Niemals bei pull_request — siehe Sicherheitshinweis oben.
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'repository_dispatch'
+    runs-on: [self-hosted, openstack]
+    environment: openstack
+    timeout-minutes: 45
+    env:
+      OS_AUTH_URL: ${{ secrets.STAGING_OS_AUTH_URL }}
+      OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.STAGING_OS_APPLICATION_CREDENTIAL_ID }}
+      OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.STAGING_OS_APPLICATION_CREDENTIAL_SECRET }}
+      OS_REGION_NAME: ${{ secrets.STAGING_OS_REGION_NAME }}
+      PG_CONN_STR: ${{ secrets.PG_CONN_STR }}
+      ANSIBLE_ROLES_PATH: /opt/ansible-roles
+      # Diese beiden liegen als Job-env und nicht nur im jeweiligen Step,
+      # weil der `secrets`-Kontext in `if:`-Bedingungen eines Steps nicht
+      # zur Verfügung steht — `env` schon. Nur so lassen sich die Ansible-
+      # Schritte überspringen, solange die Secrets noch fehlen.
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
+      # Ein Push auf main rollt aus. Ein manueller Lauf tut, was in der
+      # Eingabe steht, und das ist absichtlich `plan`: ein Fehlklick darf
+      # keine Infrastruktur verändern.
+      DEPLOY_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'apply' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fehlt ein Secret, soll das hier auffallen und nicht zwanzig
+      # Minuten später mitten in einem terraform apply.
+      - name: Secrets vollständig?
+        run: |
+          missing=""
+          for v in OS_AUTH_URL OS_APPLICATION_CREDENTIAL_ID \
+                   OS_APPLICATION_CREDENTIAL_SECRET OS_REGION_NAME; do
+            [ -z "${!v}" ] && missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Fehlende Secrets in der Environment 'openstack':$missing"
+            exit 1
+          fi
+          echo "OpenStack-Credentials vorhanden."
+          # Diese beiden braucht erst der Ansible-Teil. Ohne sie kommt der
+          # Lauf bis zum Terraform-Plan und hält dann an, statt eine halb
+          # konfigurierte VM zu hinterlassen.
+          [ -z "$PG_CONN_STR" ] && echo "::warning::PG_CONN_STR fehlt - Terraform nutzt lokalen State"
+          [ -z "$SSH_PRIVATE_KEY" ] && echo "::warning::SSH_PRIVATE_KEY fehlt - Ansible wird übersprungen"
+          [ -z "$STAGING_ENV_FILE" ] && echo "::warning::STAGING_ENV_FILE fehlt - Ansible wird übersprungen"
+          true
+
+      - name: Werkzeuge vorhanden?
+        run: |
+          terraform version
+          ansible --version | head -1
+
+      - name: Anmeldung an OpenStack prüfen
+        run: |
+          # Billiger Beweis, dass Netz und Credentials stimmen, bevor
+          # Terraform überhaupt startet.
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${OS_AUTH_URL}/v3" || echo TIMEOUT)
+          if [ "$code" = "TIMEOUT" ] || [ "$code" = "000" ]; then
+            echo "::error::Keystone nicht erreichbar. Ist dieser Runner im DHBW-Netz bzw. VPN?"
+            exit 1
+          fi
+          echo "Keystone antwortet mit HTTP $code."
+
+      - name: SSH-Schlüssel einrichten
+        id: ssh
+        if: env.SSH_PRIVATE_KEY != ''
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          # printf statt echo, damit die Zeilenumbrüche des PEM erhalten
+          # bleiben; die Anführungszeichen halten den Schlüssel aus dem
+          # gerenderten Skripttext heraus.
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/openstack-key
+          chmod 600 ~/.ssh/openstack-key
+          # -P '' erzwingt eine leere Passphrase: ein geschützter
+          # Schlüssel scheitert so sofort, statt auf /dev/tty zu hängen.
+          ssh-keygen -y -P '' -f ~/.ssh/openstack-key > ~/.ssh/openstack-key.pub
+          echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/openstack-key.pub)" >> "$GITHUB_ENV"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Terraform Init, Validate, Plan
+        working-directory: infrastructure/terraform/envs/staging
+        run: |
+          terraform init
+          terraform validate
+          terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        if: env.DEPLOY_MODE == 'apply'
+        working-directory: infrastructure/terraform/envs/staging
+        run: |
+          terraform apply -auto-approve tfplan
+          {
+            echo "VM_IP=$(terraform output -raw vm_ip)"
+            echo "VM_IPV4=$(terraform output -raw vm_ipv4)"
+            echo "VM_IPV4_GATEWAY=$(terraform output -raw vm_ipv4_gateway)"
+            echo "VM_IPV4_MAC=$(terraform output -raw vm_ipv4_mac)"
+          } >> "$GITHUB_ENV"
+
+      - name: Ansible-Inventory erzeugen
+        if: env.DEPLOY_MODE == 'apply' && steps.ssh.outputs.ready == 'true'
+        working-directory: infrastructure/ansible
+        run: |
+          # Leer heißt, Terraform hat nichts ausgegeben. Ohne diese Prüfung
+          # liefe ansible-playbook mit "no hosts matched" grün durch und
+          # hätte nichts getan.
+          if [ -z "$VM_IP" ]; then
+            echo "::error::VM_IP ist leer - terraform output hat nichts geliefert"
+            exit 1
+          fi
+          # Die Adresse steht hinter einem Alias in ansible_host. Eine
+          # IPv6-Literal in Klammern liest das ini-Plugin als Host-Range
+          # und bricht ab; ein Alias umgeht die Frage für beide Familien.
+          cat > inventory.ini <<EOF
+          [docker_vm]
+          staging ansible_host=${VM_IP} ansible_user=ubuntu
+          EOF
+          cat inventory.ini
+
+      - name: Ansible Playbook
+        if: env.DEPLOY_MODE == 'apply' && steps.ssh.outputs.ready == 'true' && env.STAGING_ENV_FILE != ''
+        working-directory: infrastructure/ansible
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: 'False'
+          ANSIBLE_FORCE_COLOR: 'True'
+        run: |
+          # `seed` kommt als String "true"/"false" an; das Playbook schickt
+          # ihn durch den bool-Filter, weil "false" sonst als nicht-leerer
+          # String wahr wäre.
+          ansible-playbook -i inventory.ini \
+            --private-key ~/.ssh/openstack-key \
+            -e seed_data=${{ github.event_name == 'workflow_dispatch' && inputs.seed || false }} \
+            -e "secondary_ipv4=${VM_IPV4}" \
+            -e "secondary_gateway=${VM_IPV4_GATEWAY}" \
+            -e "secondary_mac=${VM_IPV4_MAC}" \
+            staging.yml
+
+      - name: Zusammenfassung
+        if: always()
+        run: |
+          {
+            echo "### Deploy nach OpenStack"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Auslöser | \`${{ github.event_name }}\` |"
+            echo "| Modus | \`${DEPLOY_MODE}\` |"
+            echo "| Commit | \`${GITHUB_SHA:0:7}\` |"
+            [ -n "$VM_IP" ] && echo "| VM | \`${VM_IP}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Läuft auch nach einem Fehlschlag. Der Runner ist self-hosted, sein
+      # Dateisystem überlebt den Job - liegen gebliebene Schlüssel wären
+      # also dauerhaft da.
+      - name: Aufräumen
+        if: always()
+        run: |
+          rm -f ~/.ssh/openstack-key ~/.ssh/openstack-key.pub
+          rm -f infrastructure/ansible/inventory.ini
+          echo "Schlüssel und Inventory entfernt."
