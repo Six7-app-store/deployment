@@ -6,7 +6,57 @@ dass die Codebasis dabei degradiert.
 
 Dieses Dokument beschreibt, wie das bei uns aufgebaut ist: wo was
 dokumentiert wird, welche Werkzeuge der Agent bekommt, und welche
-Anforderungen an ihn gestellt werden.
+Anforderungen an ihn gestellt werden. Das System, an dem er arbeitet,
+steht in [`architektur.md`](architektur.md).
+
+## Ist-Stand und Ziel
+
+Das Ziel ist nicht „der Agent macht alles", sondern: **der Mensch entscheidet
+noch über Merge und Produktion, alles davor läuft ohne ihn.** Aus einer
+Anforderung wird ein Feature, und wir sehen es uns am Ende an.
+
+Die Kette steht schon. Was fehlt, sind drei Handgriffe, nicht drei Bausteine.
+
+| Schritt | Heute | Ziel bis Projektende |
+|---|---|---|
+| Anforderung → `SPEC.md` | Mensch schreibt sie im Interview mit dem Agenten | Agent erzeugt sie aus der User Story, Mensch bestätigt |
+| Umsetzung | Agent; Hooks halten Lint und Typecheck grün | unverändert |
+| Verifikation | Stop-Hook lokal, Pipeline im Pull Request | unverändert |
+| Gegenprüfung | `/code-review` im frischen Kontext | unverändert |
+| Pull Request öffnen | Mensch | Agent |
+| **Merge** | **Mensch** | **Mensch — bleibt so** |
+| Staging-Deploy anstoßen | Mensch klickt in Forgejo | Agent stößt den Workflow an |
+| Nachweis, dass es läuft | Agent prüft lesend (`deployment-pruefen`) | unverändert |
+| **Produktion** | **Mensch** | **Mensch — bleibt so** |
+
+### Was dafür noch fehlt
+
+| Lücke | Aufwand |
+|---|---|
+| Forgejo-API-Token mit Recht auf `workflow_dispatch`, abgelegt außerhalb des Repositories | ein Handgriff in den Forgejo-Einstellungen |
+| `gh` installiert und angemeldet, damit der Agent den CI-Stand der Pull Requests lesen kann | eine Installation |
+| Ein Skill, der aus einer User Story eine `SPEC.md` erzeugt — nach demselben Muster wie die sieben vorhandenen | ein Arbeitstag |
+
+### Warum das im Projektrahmen umsetzbar ist
+
+Weil nichts davon neue Infrastruktur braucht. Die Pipeline läuft, der Runner
+läuft, die Secrets liegen, die Hooks greifen, sieben Skills sind im Einsatz.
+Die drei offenen Punkte sind ein Token, eine Installation und ein weiterer
+Skill desselben Formats.
+
+Der Staging-Workflow trägt die Absicherung bereits in sich: seine Eingabe
+`mode` steht standardmäßig auf `plan`, und ein `plan`-Lauf prüft Runner,
+Image, Checkout, alle sechs Secrets und eine echte Anmeldung an OpenStack —
+ohne irgendetwas zu ändern. Der Agent kann also erst prüfen und dann
+ausrollen, und ein Fehlgriff bleibt folgenlos.
+
+### Was bewusst außerhalb bleibt
+
+- **Produktions-Deployments.** Bleiben manuell, über die gesamte Projektlaufzeit.
+- **Merge ohne Menschen.** Der Pull Request ist der Punkt, an dem wir hinsehen.
+  Fällt er weg, fällt die Kontrolle weg.
+- **Der Agent ändert die Pipeline selbst.** Wer sein eigenes Prüfsystem
+  umschreiben darf, hat keines.
 
 ## Der Grundsatz: die CI ist das Rückgrat
 
@@ -195,21 +245,33 @@ Keine Server mit Schreibrechten auf Keycloak, Redis, RabbitMQ oder OpenStack,
 und keine, die `.env`, `*.pem`, Tokens oder Terraform-State an einen externen
 Dienst übertragen könnten.
 
-### Rückmeldung über das Deployment
+### Deployment: anstoßen und nachweisen
 
-Der Agent darf **lesen, ob ein Deployment funktioniert hat** — auslösen darf er
-es nicht.
+Der Agent darf **Staging ausrollen und prüfen, ob es funktioniert hat**.
+Produktion bleibt beim Menschen.
 
 | Erlaubt | Verboten |
 |---|---|
-| `/health` abfragen, Erreichbarkeit prüfen | Deploy auslösen |
-| Containerstatus und Logs lesen | `terraform apply` / `destroy` |
-| Pipeline-Ergebnis lesen | Rollback |
+| Staging-Workflow anstoßen (`mode: plan`, dann `apply`) | Produktions-Deployment |
+| `/health` abfragen, Erreichbarkeit über IPv4 und IPv6 prüfen | `terraform apply` / `destroy` von Hand |
+| Containerstatus und Logs lesen | Rollback und `forget_volume` |
+| Pipeline-Ergebnis lesen | Secrets lesen oder schreiben |
 
-Das ist die Antwort auf „Zugriff auf Tools zum Deployment", ohne die
-Deploy-Rechte herzugeben. Ein Agent, der deployen darf, braucht bei jedem
-Schritt eine Freigabe. Ein Agent, der das Ergebnis prüfen darf, arbeitet
-eigenständig und kann trotzdem nichts kaputtmachen.
+Die Grenze läuft nicht zwischen *lesen* und *schreiben*, sondern zwischen
+**dem Knopf, den die Pipeline anbietet** und **der Infrastruktur darunter**.
+Der Agent darf den Workflow starten; Terraform von Hand gegen OpenStack
+laufen zu lassen bleibt ihm verwehrt. Damit gilt für ihn genau dieselbe
+Regel wie für uns.
+
+Zwei Dinge machen das vertretbar. Erstens steht die Workflow-Eingabe `mode`
+standardmäßig auf `plan` — ein `plan`-Lauf prüft Runner, Image, Checkout,
+alle sechs Secrets und eine echte OpenStack-Anmeldung, ändert aber nichts.
+Der Agent prüft also erst und rollt dann aus. Zweitens deployt Staging nur,
+was schon in `main` steht, und dorthin kommt nichts ohne menschlichen Merge.
+
+Ein Agent, der auf das Ergebnis seiner eigenen Arbeit schauen kann, arbeitet
+eine Stufe eigenständiger: Er merkt selbst, dass ein Deployment rot ist,
+statt darauf zu warten, dass es jemand meldet.
 
 Konkret macht das der Skill `deployment-pruefen`: Health-Endpunkt,
 Statuscodes über IPv4 und IPv6 getrennt, Containerstatus, und für den

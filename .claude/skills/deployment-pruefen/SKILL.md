@@ -1,12 +1,11 @@
 ---
 name: deployment-pruefen
-description: Prüfen, ob ein Deployment durchgelaufen ist und die Instanz wirklich antwortet — lesend, ohne Deploy-Rechte. Aufruf mit dem Hostnamen als Argument.
+description: Nachweisen, ob ein Deployment durchgelaufen ist und die Instanz wirklich antwortet. Aufruf mit dem Hostnamen als Argument.
 ---
 
 # Deployment prüfen
 
-Prüft **lesend**, ob eine Umgebung läuft. Der Agent bekommt damit
-Rückmeldung über das Deployment, ohne es auslösen oder zurückrollen zu können.
+Weist nach, ob eine Umgebung läuft — mit Belegen, nicht mit Behauptungen.
 
 Aufruf: `/deployment-pruefen <hostname>` — ohne Argument wird die lokale
 Dev-Umgebung geprüft.
@@ -15,17 +14,21 @@ Dev-Umgebung geprüft.
 
 | Erlaubt | Verboten |
 |---|---|
-| Health-Endpunkt abfragen | Deploy auslösen |
-| Erreichbarkeit prüfen | `terraform apply` / `destroy` |
-| Containerstatus lesen | Rollback |
-| Pipeline-Ergebnis lesen | Secrets lesen oder schreiben |
+| Staging-Workflow anstoßen (`mode: plan`, dann `apply`) | Produktions-Deployment |
+| Health-Endpunkt abfragen | `terraform apply` / `destroy` von Hand |
+| Erreichbarkeit über IPv4 und IPv6 prüfen | Rollback und `forget_volume` |
+| Containerstatus und Logs lesen | Secrets lesen oder schreiben |
+| Pipeline-Ergebnis lesen | |
 
-Das ist kein Nebensatz, sondern der Grund, warum es diesen Skill überhaupt
-gibt. Ein Agent, der deployen darf, braucht bei jedem Schritt eine Freigabe.
-Ein Agent, der das Ergebnis *prüfen* darf, kann eigenständig arbeiten und
-trotzdem nichts kaputtmachen.
+Die Grenze läuft zwischen **dem Knopf, den die Pipeline anbietet** und **der
+Infrastruktur darunter**. Den Workflow starten: ja. Terraform von Hand gegen
+OpenStack: nein. Dieselbe Regel, die auch für Menschen im Team gilt.
 
-Deployments laufen ausschließlich über die Pipeline. Produktion bleibt manuell.
+**Immer zuerst `mode: plan`.** Der Lauf prüft Runner, Image, Checkout, alle
+sechs Secrets und eine echte OpenStack-Anmeldung, ändert aber nichts. Erwartet
+wird `0 to add, 0 to change, 0 to destroy` und **keine** Zeile mit
+`must be replaced`. Steht dort etwas anderes, ist das ein Befund für einen
+Menschen — nicht der Anlass, trotzdem `apply` zu fahren.
 
 ## Lokal (dev)
 

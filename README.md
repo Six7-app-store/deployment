@@ -9,9 +9,12 @@ Die Anwendung selbst liegt in eigenen Repositories (`backend`, `frontend`,
 `worker`). Hier wird nichts gebaut, was dort entsteht — hier wird es
 zusammengesetzt, konfiguriert und ausgerollt.
 
-## Setup-Anleitungen
+## Dokumentation
 
+- [Architektur: Self-Service-Portal und Moodle/LTI](docs/architektur.md)
+- [Harness für die agentenzentrierte Entwicklung](docs/harness.md)
 - [Lokales Dev Setup](docs/dev-setup.md)
+- [Moodle-Testinstanz für LTI](docs/moodle-lti-dev.md)
 - [Staging Setup](docs/staging-setup.md)
 - [Produktives Setup](docs/prod-setup.md)
 
@@ -68,7 +71,7 @@ deployment/
 ├── infrastructure/           # Terraform und Ansible
 │   ├── terraform/            # Modul und Umgebungen
 │   └── ansible/              # Playbooks für Staging und den Forge-Host
-├── docs/                     # die drei Setup-Anleitungen
+├── docs/                     # Architektur, Harness, Setup-Anleitungen, ADRs
 ├── .forgejo/workflows/       # der Deploy-Workflow, der tatsächlich läuft
 └── .github/workflows/        # das Gegenstück für GitHub, hier ohne Wirkung
 ```
