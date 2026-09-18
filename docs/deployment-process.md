@@ -334,7 +334,80 @@ Der übrige manuelle Rest ist entweder einmalig (DNS), eine bewusste Sperre
 
 ---
 
-## 11. Stand der Umsetzung
+## 11. Wie man den manuellen Schritt automatisieren würde
+
+Die naheliegende Rückfrage zu Abschnitt 6 lautet: *Wenn ohnehin in OpenStack
+ausgerollt wird — warum steht der Runner dann nicht einfach dort?* Die Frage ist
+berechtigt, und die Antwort ist keine Unmöglichkeit, sondern eine Abwägung.
+
+Es gibt drei Wege. Alle drei lösen das Netzproblem; sie unterscheiden sich
+darin, was sie dafür verlangen.
+
+### Weg 1 — Self-hosted Runner auf einer OpenStack-VM
+
+Eine kleine VM im selben Projekt, auf der GitHubs Runner-Agent läuft. Sie steht
+per Definition im richtigen Netz, ist immer an und hängt an keinem Laptop.
+
+| | |
+|---|---|
+| **Löst** | Das Netzproblem vollständig. Ein Merge könnte bis auf die VM durchlaufen. |
+| **Kostet** | Eine dauerhaft laufende VM aus dem Projekt-Quota, plus deren Pflege — Updates, Runner-Version, Zertifikate. |
+| **Problem** | Die Repositories sind **öffentlich**. Ein self-hosted Runner daran gibt jedem, der einen Pull Request öffnen kann, Codeausführung in einer Umgebung mit Produktionszugang. |
+
+Das Problem lässt sich eingrenzen, nicht beseitigen: Deploy-Jobs nur bei `push`
+auf `main` zulassen, Secrets an eine Environment mit Freigabe durch einen
+Reviewer binden, „Require approval for all external contributors" aktivieren.
+Wer die Repositories auf privat stellt, ist die Sorge ganz los — verliert aber
+die öffentliche Einsehbarkeit, die dieses Projekt ausdrücklich will.
+
+### Weg 2 — Eigener Forge-Host (Forgejo)
+
+Code bleibt öffentlich auf GitHub, Runner und Secrets liegen in einer selbst
+kontrollierten Forgejo-Instanz, die das Repository als Pull-Mirror bekommt.
+
+| | |
+|---|---|
+| **Löst** | Netzproblem *und* die Runner-Frage: Der Runner hängt an einer Instanz, deren Zugang das Team bestimmt. Fremde können dort keinen Pull Request öffnen. |
+| **Kostet** | Einen zweiten Forge-Host samt Betrieb — deutlich mehr als eine Runner-VM. |
+| **Anmerkung** | **Dieses Projekt hatte das bereits gebaut**, siehe [staging-setup.md](staging-setup.md). Der Deploy wurde allerdings auch dort von Hand gestartet; an dieser Stelle der Kette ändert der Umweg also nichts. |
+
+### Weg 3 — Umdrehen: die VM holt sich die Updates
+
+Statt von außen hineinzudeployen, schaut ein Agent auf der VM regelmäßig in der
+Registry nach und zieht neue Images selbst. Damit wird **keine** eingehende
+Verbindung gebraucht — das Netzproblem verschwindet, statt gelöst zu werden.
+
+| | |
+|---|---|
+| **Löst** | Das Netzproblem elegant und ohne zusätzliche Maschine. |
+| **Kostet** | Die Kontrolle. Es gibt kein Tor, an dem jemand zustimmt, keinen Lauf, den man nachlesen kann, und kein sauberes Zurück. |
+| **Grenze** | Es tauscht nur **Container** aus. Änderungen an Terraform oder Ansible — also an der Infrastruktur selbst — erfasst es nicht. Für die bräuchte es weiterhin einen der anderen Wege. |
+
+> Kurioserweise behauptete die frühere CI/CD-Dokumentation dieses Projekts,
+> genau das sei im Einsatz (Watchtower, Abfrage alle fünf Minuten, automatischer
+> Rollback). Im Stack war davon nie etwas vorhanden. Der Weg wäre gangbar — er
+> war nur nie gebaut.
+
+### Warum es trotzdem beim manuellen Schritt bleibt
+
+Für ein Studienprojekt mit öffentlichen Repositories und ohne dauerhaft
+betreuten Host wiegt der Gewinn den Preis nicht auf. Der gesparte Aufwand ist
+**ein Klick pro Deploy**; dagegen stehen eine weitere Maschine im Betrieb und
+eine Angriffsfläche, die man sich bewusst einhandelt.
+
+Umkehren würde die Entscheidung, sobald eine der drei Bedingungen eintritt:
+
+1. **Häufigere Deploys.** Ein manueller Schritt pro Woche ist unauffällig, einer
+   pro Stunde ist ein Ärgernis.
+2. **Die Repositories werden privat.** Dann entfällt das Hauptargument gegen
+   Weg 1, und eine Runner-VM ist schnell aufgesetzt.
+3. **Ein Host existiert ohnehin.** Läuft die Forgejo-Instanz aus Weg 2 wieder,
+   ist der Runner bereits da und der Deploy dort nur noch eine Frage des
+   Auslösers.
+
+---
+
+## 12. Stand der Umsetzung
 
 Die Repositories der Organisation `Six7-app-store` sind **Forks**. Bis zum
 2026-09-18 gab es dort keinen einzigen Workflow-Lauf, was zunächst nach einer
@@ -350,6 +423,26 @@ Pipelines.
   Runner nannte und jeden Push auf `main` rot gefärbt hätte.
 - Der manuelle Deploy ist als [Runbook](deploy-runbook.md) beschrieben.
 
+### Die Staging-Umgebung läuft
+
+Nachgeprüft am 2026-09-18 gegen die laufende Instanz:
+
+| Prüfung | Ergebnis |
+|---|---|
+| VM `staging-dhbw-appstore` | `ACTIVE`, seit 2026-09-09 |
+| Frontend | HTTP 200, `<title>Six7 Click'n'Deploy</title>` |
+| Backend `/api/health` | `{"status":"healthy","service":"backend-api","version":"1.0.0"}` |
+| Keycloak `/realms/dhbw` | HTTP 200, Public Key vorhanden |
+| TLS-Zertifikat | gültig bis 2027-03-27, ausgestellt über die GEANT-CA |
+
+> **Erreichbar ist die Umgebung nur über IPv6.** Die VM hat im `DHBWV6`-Netz
+> genau einen Port; dessen IPv4 `10.200.3.161` ist eine private NAT-Adresse und
+> von außen nicht routbar. Der DNS-Eintrag ist folgerichtig ein AAAA-Record.
+>
+> Das hat eine praktische Folge: Ein Arbeitsplatz ohne IPv6 im VPN-Tunnel
+> erreicht den Store nicht, obwohl er einwandfrei läuft. Wer eine Vorführung
+> plant, prüft das vorher — `curl -6` gegen den Hostnamen genügt.
+
 **Noch offen:**
 
 | Was | Wann nötig |
@@ -360,7 +453,7 @@ Pipelines.
 
 ---
 
-## 12. Weiterführend
+## 13. Weiterführend
 
 - [deploy-runbook.md](deploy-runbook.md) — der Deploy Schritt für Schritt, mit
   den Stolperstellen, die tatsächlich Zeit gekostet haben
