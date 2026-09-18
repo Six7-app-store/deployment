@@ -252,8 +252,10 @@ services:
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?KEYCLOAK_CLIENT_SECRET is required}
       KEYCLOAK_ENABLED: ${KEYCLOAK_ENABLED:-true}
 
-      # Git
-      GIT_ACCESS_TOKEN: ${GIT_ACCESS_TOKEN:?GIT_ACCESS_TOKEN is required}
+      # Git — optional since the GitHub App; still needed for GitLab repositories.
+      GIT_ACCESS_TOKEN: ${GIT_ACCESS_TOKEN:-}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
 
       # CORS
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
@@ -340,8 +342,10 @@ services:
       # Worker uses one schema per deployment (deployment_<uuid>).
       TFSTATE_DATABASE_URL: postgresql://${TFSTATE_DB_USER}:${TFSTATE_DB_PASSWORD}@postgres-tfstate:5432/${TFSTATE_DB_NAME}?sslmode=disable
 
-      # Git
-      GIT_ACCESS_TOKEN: ${GIT_ACCESS_TOKEN:?GIT_ACCESS_TOKEN is required}
+      # Git — optional since the GitHub App; still needed for GitLab repositories.
+      GIT_ACCESS_TOKEN: ${GIT_ACCESS_TOKEN:-}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
 
       # Application
       DEBUG: "False"

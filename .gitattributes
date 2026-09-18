@@ -1,0 +1,23 @@
+# Zeilenenden festnageln.
+#
+# Auf einem Windows-Arbeitsplatz wandelt Git beim Auschecken standardmäßig in
+# CRLF um. Für ein Shell-Skript, das anschließend in einem Linux-Container
+# läuft, ist das tödlich: Das Wagenrücklaufzeichen gehört dann zum Pfad in der
+# Shebang-Zeile, und der Start scheitert mit
+#
+#     /usr/bin/env: 'bash\r': No such file or directory
+#
+# Dasselbe gilt für alles andere, was innerhalb eines Containers oder auf der
+# VM gelesen wird — Ansible-Playbooks, Compose-Dateien, die Skripte des
+# Forge-Hosts.
+*.sh        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+Dockerfile* text eol=lf
+*.tf        text eol=lf
+*.j2        text eol=lf
+
+# Das Gegenstück: Eine Batch-Datei braucht CRLF. cmd.exe kommt mit reinen
+# LF-Zeilenenden bei mehrzeiligen Konstrukten durcheinander.
+*.cmd       text eol=crlf
+*.bat       text eol=crlf

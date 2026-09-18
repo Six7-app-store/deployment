@@ -211,9 +211,11 @@ services:
       CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-admin}@rabbitmq:5672/${RABBITMQ_VHOST:-/}
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       
-      # Git
+      # Git — the GitHub App is tried first; without it the backend uses the token.
       GIT_ACCESS_TOKEN: ${GIT_ACCESS_TOKEN:-}
-      
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+
       # Keycloak
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-dhbw}
@@ -320,8 +322,10 @@ services:
       # Worker uses one schema per deployment (deployment_<uuid>).
       TFSTATE_DATABASE_URL: postgresql://${TFSTATE_DB_USER:-terraform}:${TFSTATE_DB_PASSWORD:-terraform}@postgres-tfstate:5432/${TFSTATE_DB_NAME:-tfstate}?sslmode=disable
 
-      # Git
+      # Git — the GitHub App is tried first; without it the worker uses the token.
       GIT_ACCESS_TOKEN: ${GIT_ACCESS_TOKEN:-}
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
 
       # Application
       DEBUG: "True"
