@@ -39,10 +39,9 @@ module "vm" {
   # /var/lib/docker hold both databases, and a volume also survives a
   # replacement of the instance.
   #
-  # Held at 0 because the first attempt hung in "creating" and made every apply
-  # wait out its ten-minute timeout. Raise it once Cinder hands out volumes
-  # again.
-  docker_data_volume_size_gb = 0
+  # The root disk is 10 GB and the image store alone fills it. Moves together
+  # with docker_data_device in the playbook; both are 0 / "" or both are set.
+  docker_data_volume_size_gb = 50
 
   metadata = {
     env  = "staging"

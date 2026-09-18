@@ -67,13 +67,12 @@ Campusbereich zu.
 ## Schritt 1: Deploy auslösen
 
 Im Forgejo unter **Actions → CD - Staging Deployment (Forgejo) → Run workflow**.
-Es gibt drei Eingaben:
+Es gibt zwei Eingaben:
 
 | Eingabe | Bedeutung |
 |---|---|
 | `mode` | `plan` hält vor jeder Änderung an, `apply` rollt aus. Standard ist `plan`. |
 | `seed` | legt Seed-Nutzer, Kurse und Apps an. Nur bei leerer Datenbank nötig. |
-| `forget_volume` | Notausgang, siehe unten. Bleibt `false`. |
 
 Ein Lauf mit `plan` ist der übliche erste Schritt: er prüft Runner, Image,
 Checkout, alle Secrets und eine echte Anmeldung an OpenStack, ändert aber nichts.
@@ -148,9 +147,9 @@ die Entwicklungsumgebung.
 
 | Symptom | Ursache |
 |---|---|
-| `no space left on device` beim Caddy-Build | Die Root-Disk ist voll. Meist steckt der Platz in `/var/lib/containerd`, nicht in `/var/lib/docker` — containerd hält den Image-Store. |
+| `no space left on device` beim Caddy-Build | Die Root-Disk ist voll. Images und Container liegen auf dem Datenvolume (`/mnt/docker-data`), der Compiler arbeitet aber in `/tmp`, und `xcaddy` räumt seine Ordner nicht auf. |
 | Seed scheitert mit `Connection refused` auf `keycloak:8080` | Keycloak importiert bei leerer Datenbank erst den Realm und bindet den Listener zuletzt. Das Playbook wartet darauf; tritt es trotzdem auf, war die Wartezeit zu kurz. |
-| Terraform hängt zehn Minuten an einem Volume | Cinder hat es in `creating` stehen lassen. Ein solches Volume lässt sich nicht löschen, dafür braucht es den Betreiber. `forget_volume: true` nimmt es aus dem State, damit Deploys wieder durchlaufen — einmalig, danach zurück auf `false`. |
+| Terraform hängt zehn Minuten an einem Volume | Cinder hat es in `creating` stehen lassen. Ein solches Volume lässt sich nicht löschen, dafür braucht es den Betreiber. Den Lauf abbrechen, sonst entsteht bei jedem Versuch ein weiteres. |
 | `Artifact service responded with 500` | Der Trivy-Bericht wird nicht abgelegt. Bekannt, blockiert nichts. |
 | Jeder veröffentlichte Port läuft in einen Timeout, SSH funktioniert | Die Connection Marks fehlen. Siehe `infrastructure/README.md`, Abschnitt „Addressing". |
 
