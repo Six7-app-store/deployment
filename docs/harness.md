@@ -105,6 +105,117 @@ geladene Datei, sondern in eine Skill unter `.claude/skills/<name>/SKILL.md`.
 Die vollständige, jeweils gültige Liste steht in der `AGENTS.md` des
 betreffenden Repositories — nicht hier, damit es nur eine Quelle gibt.
 
+### Welchem Agenten? Die Werkzeugschichten
+
+Claude Code lädt Konfiguration aus mehreren Ebenen, spätere überschreiben
+frühere. Daraus ergibt sich die Trennung, nach der wir sortieren:
+
+| Schicht | Ort | Im Repo | Gilt für |
+|---|---|---|---|
+| Baseline | `AGENTS.md`, `CLAUDE.md` | ✅ | alle |
+| | `.claude/settings.json` (Hooks, Plugins) | ✅ | alle |
+| | `.claude/skills/<name>/SKILL.md` | ✅ | alle |
+| | `.mcp.json` | ✅ | alle |
+| Persönlich, projektbezogen | `.claude/settings.local.json` | ❌ gitignored | einer |
+| Persönlich, global | `~/.claude/` — Skills, Plugins, Modellwahl | ❌ | einer |
+
+Die Regel, die darüber entscheidet, wo etwas hingehört:
+
+> **Ein persönliches Werkzeug darf einen Entwickler schneller machen. Es darf
+> nie nötig sein, um ein korrektes Ergebnis zu erzeugen.**
+
+Sobald ein Ergebnis von einem Werkzeug abhängt, das nicht jeder hat, ist der
+Pull Request von jemand anderem nicht mehr gleichwertig prüfbar — und die CI,
+die für alle gleich ist, wäre nicht mehr die Wahrheit. Alles, was ein
+Arbeitsergebnis beeinflusst, gehört deshalb in die Baseline.
+
+Das gilt auch für scheinbar Harmloses: Modellwahl und Effort-Stufe stehen in
+`~/.claude/settings.json`. Zwei Personen mit demselben Prompt bekommen
+unterschiedliche Ergebnisse. Das ist hinnehmbar, solange die Gates entscheiden
+und nicht das Modell.
+
+### Skills
+
+Wissen, das **nur manchmal** zählt, gehört nicht in die immer geladene
+`AGENTS.md`. Die wird sonst zu lang, und der Agent ignoriert die Hälfte davon.
+Skills lädt er bei Bedarf.
+
+| Skill | Repo | Wofür |
+|---|---|---|
+| `neue-migration` | backend | Modelländerung → Migration → anwenden → rückwärts testen |
+| `neuer-endpoint` | backend | Router, Schema, CRUD, Berechtigung, Test, Frontend-Aufruf |
+| `lti-flow` | backend | Launch-Ablauf, Sitzungsmodell, Rollen, lokale Testfallen |
+| `neue-view` | frontend | View/Store/API-Tripel, Route, Container-Neustart |
+| `packer-template` | worker | Welches Layout ein App-Repo haben muss |
+| `adr-schreiben` | deployment | Wann fällig, Format, Nummernvergabe |
+| `deployment-pruefen` | deployment | Lesende Prüfung, ob eine Umgebung läuft |
+
+`neue-migration` zeigt das Prinzip am deutlichsten: Der Hook **verbietet**,
+bestehende Migrationen zu bearbeiten. Der Skill sagt, was man **stattdessen**
+tut. Ein Verbot ohne Alternative ist nur halb geholfen — der Agent weiß dann,
+dass er nicht darf, aber nicht, wie es richtig geht.
+
+**Skills schreiben wir selbst, für unseren Code.** Fertige Sammlungen aus dem
+Netz übernehmen wir nicht. Der Anlass war konkret: Auf einem unserer Rechner
+lag ein heruntergeladener Skill namens `backend-patterns`, der von Express,
+Next.js und TypeScript handelt. Unser Backend ist FastAPI mit SQLAlchemy. Er
+wäre nicht nutzlos gewesen, sondern hätte aktiv in die falsche Richtung
+gezogen. Bei allem aus fremder Quelle gilt: die `SKILL.md` ganz lesen und jedes
+mitgelieferte Skript prüfen, bevor es installiert wird.
+
+### MCP-Server
+
+Genommen, als `.mcp.json` im jeweiligen Repo:
+
+| Server | Repo | Wofür |
+|---|---|---|
+| `chrome-devtools` | frontend | Der Agent öffnet die App, klickt sich durch, liest die Konsole |
+| `context7` (als Plugin) | alle | Aktuelle Bibliotheksdoku statt Trainingswissen |
+
+`chrome-devtools` ist für den LTI-Launch der einzige Weg, das Ergebnis wirklich
+zu prüfen: ein Redirect über `host.docker.internal` lässt sich mit einem
+Unit-Test nicht nachstellen. `context7` zahlt sich vor allem bei `pylti1p3`
+aus — einer Nischenbibliothek, bei der ohne aktuelle Doku geraten wird.
+
+Wichtig beim Einrichten: In `.mcp.json` steht `npx -y chrome-devtools-mcp@latest`,
+nicht der absolute Pfad einer Maschine. Genau daran wäre es gescheitert — die
+persönliche Konfiguration, aus der wir es übernommen haben, zeigte auf ein
+`node_modules`-Verzeichnis unter einem bestimmten Benutzerprofil.
+
+**Geprüft und abgelehnt**, mit Begründung:
+
+| Server | Warum nicht |
+|---|---|
+| `postgres` | Der offizielle Server ist eingestellt und archiviert, mit einer SQL-Injection, die den Read-only-Schutz umgeht; die AWS-Variante hat CVE-2026-85787 mit demselben Effekt. Wir haben `make shell-db` — der Agent kommt über Bash an die Datenbank. Falls doch: nur mit eigener Datenbankrolle ohne Schreibrechte, denn der Query-Filter im Server ist eine Hürde, keine Grenze. |
+| `github` | Benchmarks zeigen den 4- bis 32-fachen Token-Verbrauch gegenüber der CLI, weil die Werkzeugschemata in jeder Anfrage mitfahren. Erst `gh` einrichten, das ist billiger und wird offiziell empfohlen. |
+| `playwright` | Überschneidet sich mit `chrome-devtools`. Zwei Browser-Werkzeuge nebeneinander heißen nur, dass der Agent bei jeder Aufgabe wählen muss. |
+| `filesystem`, `docker` | Doppelt. Claude Code hat Datei-Werkzeuge eingebaut, und die Container-Befehle stehen als `make`-Targets in `AGENTS.md`. |
+
+Keine Server mit Schreibrechten auf Keycloak, Redis, RabbitMQ oder OpenStack,
+und keine, die `.env`, `*.pem`, Tokens oder Terraform-State an einen externen
+Dienst übertragen könnten.
+
+### Rückmeldung über das Deployment
+
+Der Agent darf **lesen, ob ein Deployment funktioniert hat** — auslösen darf er
+es nicht.
+
+| Erlaubt | Verboten |
+|---|---|
+| `/health` abfragen, Erreichbarkeit prüfen | Deploy auslösen |
+| Containerstatus und Logs lesen | `terraform apply` / `destroy` |
+| Pipeline-Ergebnis lesen | Rollback |
+
+Das ist die Antwort auf „Zugriff auf Tools zum Deployment", ohne die
+Deploy-Rechte herzugeben. Ein Agent, der deployen darf, braucht bei jedem
+Schritt eine Freigabe. Ein Agent, der das Ergebnis prüfen darf, arbeitet
+eigenständig und kann trotzdem nichts kaputtmachen.
+
+Konkret macht das der Skill `deployment-pruefen`: Health-Endpunkt,
+Statuscodes über IPv4 und IPv6 getrennt, Containerstatus, und für den
+CI-Stand `gh run list`. Das Ergebnis wird als Beleg gemeldet — Kommando,
+Statuscode, Antwort — nicht als Behauptung „läuft".
+
 ## Deterministische Regeln: die Hooks
 
 Anweisungen in Markdown sind **beratend**. Ein Agent kann sie übersehen,
