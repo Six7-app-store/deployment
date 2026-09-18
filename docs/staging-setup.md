@@ -66,6 +66,12 @@ Campusbereich zu.
 
 ## Schritt 1: Deploy auslösen
 
+> Nach einem Merge auf `main` passiert das von selbst: Ist die CI grün, stößt
+> `trigger-staging-deploy.yml` den Lauf mit `mode=apply` an. Siehe
+> [deployment-process.md](deployment-process.md), Abschnitt 11. Der Weg unten
+> ist für alles andere — einen Plan ansehen, einen Lauf wiederholen, mit
+> Seed-Daten ausrollen.
+
 Im Forgejo unter **Actions → CD - Staging Deployment (Forgejo) → Run workflow**.
 Es gibt zwei Eingaben:
 

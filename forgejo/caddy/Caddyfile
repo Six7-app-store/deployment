@@ -41,3 +41,61 @@
 		max_size 512MB
 	}
 }
+
+# ----------------------------------------------------------------------
+# Der Deploy-Anstoss von aussen
+# ----------------------------------------------------------------------
+# 443 oben bleibt campus-only, per Security Group. Dieser Port ist der eine
+# Spalt nach draussen, damit ein GitHub-Runner nach einem Merge den
+# Staging-Deploy ausloesen kann - siehe docs/deployment-process.md, Abschnitt 11.
+#
+# Er ist bewusst eng: erlaubt sind drei Endpunkte an genau einem Repository,
+# alles andere bekommt 404 - auch die Anmeldeseite, auch git-over-HTTPS. Wer den
+# Port scannt, sieht eine Caddy-Instanz, die nichts preisgibt.
+#
+# Zwei Huerden, nicht eine. Der Header ist ein gemeinsames Geheimnis und wird
+# hier nur zeichenweise verglichen; er haelt Scanner fern, ist aber keine
+# Authentifizierung. Die macht Forgejo selbst ueber den Token im
+# Authorization-Header, der weiter hinten geprueft wird.
+{$FORGEJO_HOSTNAME}:{$DISPATCH_PORT} {
+	tls {
+		dns rfc2136 {
+			key_name {$DNS_TSIG_KEY_NAME}
+			key_alg {$DNS_TSIG_KEY_ALG}
+			key {$DNS_TSIG_KEY}
+			server {$DNS_SERVER}
+		}
+	}
+
+	# Den Deploy starten.
+	@dispatch {
+		method POST
+		path /api/v1/repos/{$FORGEJO_DEPLOY_REPO}/actions/workflows/*/dispatches
+		header X-Deploy-Auth {$FORGEJO_DISPATCH_AUTH}
+	}
+
+	# Den Pull-Mirror sofort nachziehen. Ohne diesen Aufruf laeuft der Deploy
+	# unter Umstaenden noch mit dem Stand von vor dem Merge: Forgejo holt sich
+	# den Mirror in seinem eigenen Takt, nicht beim Push.
+	@sync {
+		method POST
+		path /api/v1/repos/{$FORGEJO_DEPLOY_REPO}/mirror-sync
+		header X-Deploy-Auth {$FORGEJO_DISPATCH_AUTH}
+	}
+
+	# Nachsehen, welchen Commit der Mirror inzwischen hat. Der Ausloeser wartet
+	# damit, bis der eigene Commit angekommen ist, bevor er den Deploy startet.
+	@branch {
+		method GET
+		path /api/v1/repos/{$FORGEJO_DEPLOY_REPO}/branches/*
+		header X-Deploy-Auth {$FORGEJO_DISPATCH_AUTH}
+	}
+
+	reverse_proxy @dispatch forgejo:3000
+	reverse_proxy @sync forgejo:3000
+	reverse_proxy @branch forgejo:3000
+
+	# Alles andere. 404 statt 403, damit die Antwort nicht verraet, dass es hier
+	# ueberhaupt etwas zu treffen gibt.
+	respond 404
+}

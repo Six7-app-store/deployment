@@ -328,6 +328,35 @@
         chdir: "{{ project_root }}"
       changed_when: false
 
+    # Same reasoning as the TLS check above, but with a sharper edge: the
+    # dispatch port is open to the internet, and the Caddy block behind it
+    # matches on `header X-Deploy-Auth {$FORGEJO_DISPATCH_AUTH}`. An empty value
+    # there does not fail closed - it turns into a matcher that an attacker
+    # satisfies with an empty header. The same goes for FORGEJO_DEPLOY_REPO: an
+    # empty value collapses the path matcher to a prefix that covers every
+    # repository on the instance.
+    #
+    # So either both are set, or the port must not be published at all.
+    - name: Ensure the dispatch variables are present
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          missing=""
+          for v in FORGEJO_DEPLOY_REPO FORGEJO_DISPATCH_AUTH; do
+            val=$(grep -E "^${v}=" .env | head -n1 | cut -d= -f2- | tr -d '"'"'"'\r')
+            [ -z "$val" ] && missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "Missing or empty in .env:$missing" >&2
+            echo "These guard the internet-facing dispatch port. Set them, or" >&2
+            echo "close the port with dispatch_port_enabled = false in" >&2
+            echo "envs/forgejo and drop the port mapping from the compose file." >&2
+            exit 1
+          fi
+        executable: /bin/bash
+        chdir: "{{ project_root }}"
+      changed_when: false
+
     - name: Validate the compose configuration
       ansible.builtin.command:
         cmd: docker compose --profile tls config -q

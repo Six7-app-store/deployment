@@ -1,10 +1,18 @@
 # Deploy-Runbook — den Store von Hand ausrollen
 
-Diese Anleitung bringt eine Codeänderung auf die Staging-VM. Sie wird von
-einem Menschen ausgeführt, nicht von einer Pipeline — warum, steht in
-[deployment-process.md](deployment-process.md), Abschnitt 6, kurz gefasst: Die
-OpenStack-API der DHBW ist von außen nicht erreichbar, GitHubs Runner können
-also nicht ausrollen.
+Diese Anleitung bringt eine Codeänderung auf die Staging-VM — von Hand, Schritt
+für Schritt.
+
+**Der übliche Weg ist das nicht mehr.** Dieselben Schritte führt der Workflow
+[`CD - Staging Deployment`](../.forgejo/workflows/staging.yml) auf dem
+Forgejo-Runner aus; ein Deploy ist dort ein Knopfdruck. Dieses Runbook ist der
+Rückfallweg — für den Fall, dass der Forge-Host steht, und als Nachschlagewerk
+dafür, was der Workflow eigentlich tut.
+
+Über GitHub Actions läuft der Deploy in keinem Fall: Die OpenStack-API der DHBW
+ist von außen nicht erreichbar, ein gehosteter Runner kommt also gar nicht hin.
+Die Begründung samt Messwerten steht in
+[deployment-process.md](deployment-process.md), Abschnitt 6.
 
 Ein vollständiger Durchlauf dauert etwa **fünf bis zehn Minuten**.
 

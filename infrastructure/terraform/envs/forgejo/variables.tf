@@ -57,6 +57,33 @@ variable "web_source_cidr_ipv6" {
   }
 }
 
+# THE DISPATCH PORT
+# The one port on this host that is open to the internet, so a GitHub runner
+# can trigger a staging deploy after a merge. Set dispatch_port_enabled = false
+# to close it again; the trigger then stops working and deploys go back to
+# being started by hand.
+#
+# What is behind it is not Forgejo, but a Caddy site block that proxies three
+# endpoints of one repository and answers 404 to everything else — see
+# forgejo/caddy/Caddyfile. Opening this port without that block in place would
+# expose the whole forge.
+variable "dispatch_port" {
+  description = "TCP port for the deploy-dispatch endpoint, open to the internet."
+  type        = number
+  default     = 8443
+
+  validation {
+    condition     = var.dispatch_port > 1024 && var.dispatch_port < 65536
+    error_message = "dispatch_port must be between 1025 and 65535."
+  }
+}
+
+variable "dispatch_port_enabled" {
+  description = "Whether to open the dispatch port at all."
+  type        = bool
+  default     = true
+}
+
 # NETWORK
 #
 # connect_via selects one of three ways to reach the host — IPv4 or IPv6, with

@@ -70,6 +70,14 @@ ACME_EMAIL=<contact address>
 DNS_TSIG_KEY_NAME=<from step 2>
 DNS_TSIG_KEY=<from step 2>
 FORGEJO_RUNNER_TOKEN=                # leave empty, script 2 issues one
+
+# These guard the dispatch port, which lets a merge on GitHub trigger a deploy
+# by itself - see docs/deployment-process.md, Abschnitt 11. Script 2 stops if
+# either is empty: an empty value does not disable the endpoint, it widens it.
+# To do without the trigger, close the port (dispatch_port_enabled = false in
+# envs/forgejo) and drop the mapping from docker-compose.yml.
+FORGEJO_DEPLOY_REPO=<org>/deployment
+FORGEJO_DISPATCH_AUTH=<openssl rand -hex 32>
 ```
 
 `FORGEJO_ROOT_URL` has to be right before the first start: Forgejo stores it in

@@ -1,0 +1,132 @@
+name: CD - Staging-Deploy anstossen
+
+# Schliesst die Luecke zwischen Merge und Staging: sobald die Infrastruktur-QA
+# auf `main` durch ist, startet dieser Workflow den Deploy auf dem
+# Forgejo-Runner im Campusnetz.
+#
+# Warum ueber Forgejo und nicht hier: Die OpenStack-API der DHBW ist von aussen
+# nicht erreichbar, ein GitHub-Runner kommt gar nicht erst hin. Der Forge-Host
+# steht im richtigen Netz. Die ganze Begruendung samt Messwerten steht in
+# docs/deployment-process.md, Abschnitt 6 und 11.
+#
+# Dieser Job traegt KEINE Zugangsdaten zu OpenStack, keinen SSH-Schluessel und
+# keine .env. Er kennt nur die Adresse des Forge-Hosts und zwei Token. Alles
+# Weitere liegt ausschliesslich in Forgejo.
+#
+# UNTERSCHIED ZU DEN DREI APP-REPOSITORIES
+# Dort genuegt ein Dispatch: ein neues Backend-Image aendert nichts an den
+# Dateien, die der Runner ausfuehrt. Hier schon - der Runner arbeitet mit genau
+# diesem Repository, und zwar ueber einen Pull-Mirror, der sich den Stand in
+# seinem eigenen Takt holt. Ohne den Sync-Schritt unten wuerde der Deploy
+# womoeglich noch die Playbooks von vor dem Merge ausfuehren und trotzdem gruen
+# melden. Deshalb: Mirror anstossen, auf den eigenen Commit warten, erst dann
+# deployen.
+
+on:
+  workflow_run:
+    workflows: ["CI - Infrastructure QA"]
+    types: [completed]
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    name: "Deploy anstossen"
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      BASE_URL: ${{ secrets.FORGEJO_BASE_URL }}
+      REPO: ${{ secrets.FORGEJO_DEPLOY_REPO }}
+      TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+      AUTH: ${{ secrets.FORGEJO_DISPATCH_AUTH }}
+      # Der Commit, auf dem die QA gruen war - und damit der Stand, den der
+      # Mirror haben muss, bevor der Deploy starten darf.
+      WANT_SHA: ${{ github.event.workflow_run.head_sha }}
+
+    steps:
+      - name: Konfiguration pruefen
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -z "${BASE_URL:-}" ] && missing="$missing FORGEJO_BASE_URL"
+          [ -z "${REPO:-}" ]     && missing="$missing FORGEJO_DEPLOY_REPO"
+          [ -z "${TOKEN:-}" ]    && missing="$missing FORGEJO_TOKEN"
+          [ -z "${AUTH:-}" ]     && missing="$missing FORGEJO_DISPATCH_AUTH"
+          if [ -n "$missing" ]; then
+            echo "::error::Fehlende Repository-Secrets:$missing" >&2
+            echo "Anleitung: docs/deployment-process.md, Abschnitt 11." >&2
+            exit 1
+          fi
+
+      - name: Pull-Mirror nachziehen
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            --retry 3 --retry-connrefused --retry-delay 5 --max-time 30 \
+            -X POST \
+            -H "Authorization: token $TOKEN" \
+            -H "X-Deploy-Auth: $AUTH" \
+            "$BASE_URL/api/v1/repos/$REPO/mirror-sync")
+
+          case "$code" in
+            20*) echo "Mirror-Sync angestossen (HTTP $code)." ;;
+            404) echo "::error::HTTP 404 - Caddy laesst /mirror-sync nicht durch oder X-Deploy-Auth stimmt nicht." >&2; exit 1 ;;
+            401|403) echo "::error::HTTP $code - der Forgejo-Token hat keine Schreibrechte am Repository." >&2; exit 1 ;;
+            000) echo "::error::Keine Verbindung - Port zu, Host aus oder Zertifikat abgelaufen." >&2; exit 1 ;;
+            *) echo "::error::Unerwartete Antwort HTTP $code." >&2; exit 1 ;;
+          esac
+
+      - name: Warten, bis der Mirror den Commit hat
+        run: |
+          set -euo pipefail
+          echo "Erwartet: $WANT_SHA"
+          # 30 x 10s = 5 Minuten. Der Sync oben ist angestossen, nicht
+          # abgeschlossen - Forgejo holt im Hintergrund.
+          for i in $(seq 1 30); do
+            have=$(curl -sS --max-time 20 \
+              -H "Authorization: token $TOKEN" \
+              -H "X-Deploy-Auth: $AUTH" \
+              "$BASE_URL/api/v1/repos/$REPO/branches/main" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"]["id"])' 2>/dev/null || echo "")
+
+            if [ "$have" = "$WANT_SHA" ]; then
+              echo "Mirror ist auf dem Stand (Versuch $i)."
+              exit 0
+            fi
+            echo "Versuch $i: Mirror steht auf ${have:-unbekannt}, warte."
+            sleep 10
+          done
+
+          echo "::error::Der Mirror hat $WANT_SHA nach 5 Minuten nicht." >&2
+          echo "Ein Deploy jetzt wuerde den alten Stand ausrollen und trotzdem gruen melden." >&2
+          echo "Nachsehen: Forgejo -> Repository -> Settings -> Mirror-Einstellungen." >&2
+          exit 1
+
+      - name: Deploy auf dem Forgejo-Runner starten
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            --retry 3 --retry-connrefused --retry-delay 5 --max-time 30 \
+            -X POST \
+            -H "Authorization: token $TOKEN" \
+            -H "X-Deploy-Auth: $AUTH" \
+            -H "Content-Type: application/json" \
+            -d '{"ref":"main","inputs":{"mode":"apply","seed":"false"}}' \
+            "$BASE_URL/api/v1/repos/$REPO/actions/workflows/staging.yml/dispatches")
+
+          case "$code" in
+            20*) echo "Deploy angestossen (HTTP $code)." ;;
+            404) echo "::error::HTTP 404 - Caddy laesst den Pfad nicht durch oder X-Deploy-Auth stimmt nicht." >&2; exit 1 ;;
+            401|403) echo "::error::HTTP $code - der Forgejo-Token ist abgelaufen oder hat keine Rechte am Repository." >&2; exit 1 ;;
+            000) echo "::error::Keine Verbindung - Port zu, Host aus oder Zertifikat abgelaufen." >&2; exit 1 ;;
+            *) echo "::error::Unerwartete Antwort HTTP $code." >&2; exit 1 ;;
+          esac
+
+          echo "Der Lauf selbst steht in Forgejo unter Actions - dieser Job wartet nicht darauf."

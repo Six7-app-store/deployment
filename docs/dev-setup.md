@@ -10,7 +10,7 @@ Der App Store ist ein Web-System, in dem Studierende und Dozierende vorgefertigt
 | Docker Compose | v2 (`docker compose`, nicht `docker-compose`) | Über Docker Desktop bereits dabei |
 | Git | 2.x | |
 | Python 3 | 3.11+ | Wird einmalig zum Generieren des Fernet-Keys gebraucht |
-| GNU Make | Pflicht | Alle Schritte sind als `make`-Targets ausgelegt — wer kein Make hat, kann die zugrunde liegenden Befehle direkt aus dem [Makefile](./Makefile) ablesen |
+| GNU Make | Pflicht | Alle Schritte sind als `make`-Targets ausgelegt — wer kein Make hat, kann die zugrunde liegenden Befehle direkt aus dem [Makefile](../Makefile) ablesen |
 | Freie Ports | 5173, 8000, 8080, 5432, 5672, 15672, 6379, 5050, 55433 | Bei Konflikt den entsprechenden Port in der `.env` überschreiben (z. B. `KEYCLOAK_PORT=8180`) — die zugehörige `VITE_*_URL` ebenfalls anpassen |
 
 

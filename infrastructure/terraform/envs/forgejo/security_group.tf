@@ -1,9 +1,21 @@
 # Security group for the Forgejo host.
 #
-# Nothing here is open to the internet. Unlike staging, which serves a public
-# application, this host is internal infrastructure: only the three maintainers
-# and the runner ever need to reach it, and all of them arrive from the campus
-# network or over VPN.
+# Unlike staging, which serves a public application, this host is internal
+# infrastructure: the maintainers and the runner reach it from the campus
+# network or over VPN, and 22, 80 and 443 are restricted accordingly.
+#
+# ONE EXCEPTION, ADDED DELIBERATELY
+# var.dispatch_port (default 8443) is open to the internet, because a
+# GitHub-hosted runner has to reach it to trigger a staging deploy after a
+# merge — see docs/deployment-process.md, Abschnitt 11. What answers there is
+# not Forgejo itself but a Caddy site block that forwards three endpoints of
+# one repository and returns 404 for everything else, including the login page
+# and git-over-HTTPS (forgejo/caddy/Caddyfile).
+#
+# The two belong together: opening this port while that block is missing or
+# misconfigured puts the entire forge on the internet. If the Caddyfile changes,
+# check this file, and the other way round. Setting dispatch_port_enabled =
+# false closes the port; deploys then go back to being started by hand.
 #
 # THE ONE THING THIS COSTS
 # Caddy cannot use the ACME http-01 or tls-alpn-01 challenge on this host —
@@ -102,6 +114,34 @@ resource "openstack_networking_secgroup_rule_v2" "https_v6" {
   port_range_max    = 443
   remote_ip_prefix  = var.web_source_cidr_ipv6
   description       = "HTTPS - the Forgejo web UI (campus IPv6)"
+}
+
+# See the header. Open to the world on purpose; the narrowing happens in Caddy,
+# one layer up.
+resource "openstack_networking_secgroup_rule_v2" "dispatch" {
+  count = var.dispatch_port_enabled ? 1 : 0
+
+  security_group_id = openstack_networking_secgroup_v2.forgejo_vm.id
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = var.dispatch_port
+  port_range_max    = var.dispatch_port
+  remote_ip_prefix  = "0.0.0.0/0"
+  description       = "Deploy dispatch - reached by GitHub Actions, filtered by Caddy"
+}
+
+resource "openstack_networking_secgroup_rule_v2" "dispatch_v6" {
+  count = var.dispatch_port_enabled ? 1 : 0
+
+  security_group_id = openstack_networking_secgroup_v2.forgejo_vm.id
+  direction         = "ingress"
+  ethertype         = "IPv6"
+  protocol          = "tcp"
+  port_range_min    = var.dispatch_port
+  port_range_max    = var.dispatch_port
+  remote_ip_prefix  = "::/0"
+  description       = "Deploy dispatch - reached by GitHub Actions, filtered by Caddy"
 }
 
 # ICMPv6 is not optional the way ICMP is on IPv4: Path MTU Discovery relies on

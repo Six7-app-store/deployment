@@ -16,6 +16,8 @@
 Dockerfile* text eol=lf
 *.tf        text eol=lf
 *.j2        text eol=lf
+# Wird im Container gelesen, hat aber keine Endung, die oben greift.
+Caddyfile   text eol=lf
 
 # Das Gegenstück: Eine Batch-Datei braucht CRLF. cmd.exe kommt mit reinen
 # LF-Zeilenenden bei mehrzeiligen Konstrukten durcheinander.

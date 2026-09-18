@@ -6,7 +6,13 @@
 # definition stays publicly reviewable, and Forgejo contributes only the runner
 # and the secrets.
 #
-# Differences from .github/workflows/staging.yml, all forced by Forgejo:
+# This is the only workflow that deploys. GitHub Actions in this repo checks the
+# Terraform and Ansible definitions (.github/workflows/infra-qa.yml) but never
+# runs them against OpenStack — a GitHub-hosted runner cannot reach the API. The
+# same steps by hand: docs/deploy-runbook.md.
+#
+# Four things differ from how the equivalent would look on GitHub, all forced by
+# Forgejo:
 #   - runs-on: deploy         (label of the Forgejo runner, not `self-hosted`)
 #   - no permissions: block   (Forgejo has no GITHUB_TOKEN permission model)
 #   - no upload-sarif         (Forgejo has no Security tab; SARIF becomes an artifact)

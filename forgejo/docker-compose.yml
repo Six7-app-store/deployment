@@ -102,9 +102,22 @@ services:
       DNS_TSIG_KEY_ALG: ${DNS_TSIG_KEY_ALG:-hmac-sha512}
       DNS_TSIG_KEY: ${DNS_TSIG_KEY:-}
       DNS_SERVER: ${DNS_SERVER:-ns.cloud-ns.dhbw-mannheim.de.:53}
+      # Der schmale Port fuer den Deploy-Anstoss von GitHub. Anders als 80 und
+      # 443 ist er in der Security Group nach draussen offen, deshalb laesst
+      # der zugehoerige Block im Caddyfile nur drei Endpunkte an einem
+      # Repository durch und verlangt zusaetzlich den Header unten.
+      DISPATCH_PORT: ${DISPATCH_PORT:-8443}
+      # owner/repo in Forgejo, z. B. six7/deployment. Steht im Pfad-Matcher:
+      # jedes andere Repository ist ueber diesen Port nicht erreichbar.
+      FORGEJO_DEPLOY_REPO: ${FORGEJO_DEPLOY_REPO:-}
+      # Gemeinsames Geheimnis, das der ausloesende GitHub-Workflow als
+      # X-Deploy-Auth mitschickt. Haelt Scanner fern; die eigentliche
+      # Authentifizierung macht Forgejo ueber den Token im Authorization-Header.
+      FORGEJO_DISPATCH_AUTH: ${FORGEJO_DISPATCH_AUTH:-}
     ports:
       - "80:80"
       - "443:443"
+      - "${DISPATCH_PORT:-8443}:${DISPATCH_PORT:-8443}"
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       # Issued certificates and the ACME account key. Losing this volume means
