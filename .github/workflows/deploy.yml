@@ -43,6 +43,12 @@ name: CD - Deploy to OpenStack
 on:
   push:
     branches: [main]
+  # Nur damit der `qa`-Job vor einem Merge läuft. Der `deploy`-Job
+  # schließt `pull_request` in seiner eigenen Bedingung ausdrücklich aus
+  # — ein Pull Request erreicht den self-hosted Runner also nicht, auch
+  # nicht aus einem Fork.
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       mode:
