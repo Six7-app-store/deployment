@@ -1,0 +1,32 @@
+{
+  "enabledPlugins": {
+    "context7@claude-plugins-official": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "P=$(command -v python || command -v python3); [ -n \"$P\" ] && \"$P\" .claude/hooks/agent_guard.py pre; exit 0",
+            "timeout": 15,
+            "statusMessage": "Secret-Schutz"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v terraform >/dev/null 2>&1 || exit 0; terraform fmt -check -recursive infrastructure/terraform >/dev/null 2>&1 || printf '%s' '{\"decision\":\"block\",\"reason\":\"Terraform ist nicht formatiert. Die Pipeline bricht darauf ab. Beheben: terraform fmt -recursive infrastructure/terraform\"}'; exit 0",
+            "timeout": 60,
+            "statusMessage": "terraform fmt"
+          }
+        ]
+      }
+    ]
+  }
+}
