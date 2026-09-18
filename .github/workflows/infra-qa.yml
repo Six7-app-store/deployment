@@ -1,0 +1,122 @@
+# Qualitätsprüfung der Infrastruktur-Definitionen.
+#
+# ----------------------------------------------------------------------
+# Warum hier nicht ausgerollt wird
+# ----------------------------------------------------------------------
+# Ein GitHub-gehosteter Runner erreicht die OpenStack-API der DHBW nicht.
+# Nachgemessen am 2026-09-18 von einem Runner mit der öffentlichen IP
+# 145.132.101.182 aus:
+#
+#   DNS newstack.dhbw.cloud  -> 141.72.5.140   (löst öffentlich auf)
+#   https://...:5000/v3      -> 000 TIMEOUT    (Keystone)
+#   https://...:443/         -> 000 TIMEOUT    (Horizon)
+#
+# Der Name ist öffentlich, das Netz ist es nicht. Ein gehosteter Runner
+# kann also grundsätzlich nicht deployen, unabhängig davon, welche
+# Zugangsdaten er hätte.
+#
+# Automatisieren ließe sich der Deploy nur mit einem self-hosted Runner
+# im Campusnetz. Dagegen spricht mehr als der Aufwand: dieses Repository
+# ist öffentlich, und GitHub rät von self-hosted Runnern an öffentlichen
+# Repositories ausdrücklich ab — wer einen Pull Request öffnen kann,
+# bekommt sonst eine Ausführungsumgebung mit Produktionszugang.
+#
+# Deshalb bleibt das Ausrollen ein bewusst manueller Schritt, ausgeführt
+# von einem Menschen im VPN. Die Anleitung dazu: docs/deploy-runbook.md
+#
+# Was sich ohne OpenStack prüfen lässt, wird hier geprüft — und zwar bei
+# jedem Push und jedem Pull Request, damit ein Fehler in Terraform oder
+# Ansible auffällt, bevor jemand ihn auf die VM trägt.
+name: CI - Infrastructure QA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  qa:
+    name: "🔍 Terraform, Ansible, IaC-Scan"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform Format
+        run: terraform fmt -check -recursive infrastructure/terraform
+
+      # -backend=false: Der echte State liegt in Postgres, das ohne
+      # Credentials und ohne DHBW-Netz nicht erreichbar ist. Für eine
+      # reine Syntax- und Typprüfung braucht es ihn nicht.
+      - name: Terraform Validate
+        run: |
+          for env in infrastructure/terraform/envs/*/; do
+            echo "--- $env"
+            terraform -chdir="$env" init -backend=false -input=false
+            terraform -chdir="$env" validate
+          done
+
+      - name: Ansible installieren
+        run: pipx install ansible-core
+
+      # --syntax-check löst `roles:` wirklich auf und scheitert an einer
+      # fehlenden Galaxy-Rolle, obwohl es nichts ausführt. `roles_external`
+      # steht bereits im roles_path aus ansible.cfg.
+      - name: Galaxy-Abhängigkeiten installieren
+        working-directory: infrastructure/ansible
+        run: |
+          ansible-galaxy role install -r requirements.yml -p roles_external
+          ansible-galaxy collection install -r requirements.yml
+
+      - name: Ansible Syntax Check
+        working-directory: infrastructure/ansible
+        run: |
+          # Ein Inventory mit einem Platzhalter-Host genügt; --syntax-check
+          # verbindet sich nicht, will aber ein auflösbares Ziel.
+          printf '[docker_vm]\nplaceholder ansible_host=203.0.113.1\n' > inventory.syntax.ini
+          ansible-playbook -i inventory.syntax.ini --syntax-check staging.yml
+          rm -f inventory.syntax.ini
+
+      - name: Ansible Lint
+        continue-on-error: true
+        run: |
+          pipx install ansible-lint
+          ansible-lint infrastructure/ansible/staging.yml || true
+
+      # Nicht blockierend: ein IaC-Befund soll die Arbeit nicht anhalten.
+      # Sichtbar bleibt er trotzdem, über den Security-Tab.
+      - name: Trivy IaC-Scan
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: infrastructure/terraform
+          severity: HIGH,CRITICAL
+
+      - name: Trivy IaC-Scan (SARIF)
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: infrastructure/terraform
+          severity: HIGH,CRITICAL
+          format: sarif
+          output: trivy-iac.sarif
+
+      - name: SARIF in den Security-Tab
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-iac.sarif
+          category: trivy-iac

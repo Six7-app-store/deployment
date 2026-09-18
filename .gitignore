@@ -19,3 +19,7 @@ __pycache__/
 # `terraform plan -out=tfplan` in the deploy workflow.
 tfplan
 *.pem
+
+# Zugangsdaten fuer den lokalen Deploy (deploy.cmd). Enthaelt
+# Produktionszugaenge - darf niemals ins Repository.
+deploy.local.env
