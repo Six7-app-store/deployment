@@ -71,6 +71,10 @@
     # überstehen müssen. mangle verwaltet Docker nicht, es kollidiert also
     # nichts mit dessen Ketten.
     - name: Connmark-Skript installieren
+      # Wie beim Netplan-Task darueber: ohne zweites Interface gibt es
+      # kein secondary_ipv4, und die Vorlage unten liesse sich nicht
+      # aufloesen.
+      when: secondary_mac | default('') | length > 0
       ansible.builtin.copy:
         dest: /usr/local/sbin/secondary-ipv4-marks.sh
         owner: root
@@ -107,6 +111,10 @@
       tags: [network]
 
     - name: Unit installieren, die die Marken beim Booten neu setzt
+      # Wie beim Netplan-Task darueber: ohne zweites Interface gibt es
+      # kein secondary_ipv4, und die Vorlage unten liesse sich nicht
+      # aufloesen.
+      when: secondary_mac | default('') | length > 0
       ansible.builtin.copy:
         dest: /etc/systemd/system/secondary-ipv4-marks.service
         owner: root
@@ -317,7 +325,26 @@
     # ihn über den Reload-Schritt am Playbook-Ende neu — validiert und ohne
     # Unterbrechung, statt den Container wegzuwerfen.
 
-    # Ohne Anmeldung: die Images der Organisation sind öffentlich.
+    # Die Images liegen in einem privaten GHCR-Namespace (IMAGE_NAMESPACE in
+    # der .env), deshalb braucht der Pull eine Anmeldung. Token und Benutzer
+    # werden in der Rezept-Shell aus der .env auf der VM gelesen - wie beim
+    # Keycloak-Schritt am Playbook-Ende. So steht das Token weder in einer
+    # Ansible-Variable noch auf der Kommandozeile, und --password-stdin haelt
+    # es aus der Prozessliste heraus.
+    - name: An GHCR anmelden
+      ansible.builtin.shell:
+        cmd: |
+          set -eu
+          set -a; . ./.env; set +a
+          if [ -z "${GIT_ACCESS_TOKEN:-}" ]; then
+            echo "GIT_ACCESS_TOKEN fehlt in der .env - private Images sind nicht ziehbar" >&2
+            exit 1
+          fi
+          printf '%s' "$GIT_ACCESS_TOKEN"             | docker login ghcr.io --username "${GIT_USER:-x-access-token}" --password-stdin
+        chdir: "{{ project_root }}"
+        executable: /bin/bash
+      changed_when: true
+
     - name: Pull alle Images
       ansible.builtin.shell:
         # --ignore-buildable überspringt Dienste mit build:-Abschnitt. Ohne das
@@ -330,13 +357,6 @@
       changed_when: true
       async: 600
       poll: 30
-
-    # Räumt Zugangsdaten weg, die frühere Läufe mit GHCR-Anmeldung hinterlassen
-    # haben. Ohne Anmeldung entsteht die Datei nicht mehr neu.
-    - name: Zugangsdaten aus dem Root-Store entfernen
-      ansible.builtin.file:
-        path: /root/.docker/config.json
-        state: absent
 
     # Validiert die zusammengesetzte Konfiguration, bevor das Modul übernimmt.
     # Der Schritt existiert nur wegen der Diagnose: docker_compose_v2 ruft
@@ -379,6 +399,14 @@
         chdir: "{{ project_root }}"
       register: compose_output
       changed_when: true
+
+    # Erst jetzt aufraeumen, nicht schon nach dem Pull: `up -d` kann ein Image
+    # nachladen, das der Pull uebersprungen hat, und braucht die Anmeldung dann
+    # noch. Das Token soll aber nicht dauerhaft im Root-Store der VM liegen.
+    - name: Zugangsdaten aus dem Root-Store entfernen
+      ansible.builtin.file:
+        path: /root/.docker/config.json
+        state: absent
 
     # `up -d --build` baut Caddy neu, ersetzt den Container aber nicht, wenn
     # sich nur die Image-ID geändert hat: Compose entscheidet darüber anhand der

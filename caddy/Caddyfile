@@ -44,7 +44,16 @@
 	# paths it owns have to be routed before the SPA catch-all below swallows
 	# them. reverse_proxy sets X-Forwarded-Proto itself, which is what
 	# KC_PROXY=edge relies on to build HTTPS redirect URIs.
-	@keycloak path /realms/* /resources/* /admin/* /js/*
+	# /admin/* darf NICHT pauschal an Keycloak gehen: die SPA hat mit
+	# /admin/apps eine eigene Route unter diesem Praefix, und Keycloak
+	# beantwortete sie mit 405 - die Admin-Seite der Anwendung war damit
+	# nicht erreichbar. Geroutet werden nur die beiden Praefixe, die
+	# Keycloak tatsaechlich besitzt: die Konsole unter /admin/master/*
+	# und die Admin-REST-API unter /admin/realms/*.
+	#
+	# Die Konsole wird dadurch direkt unter /admin/master/console/
+	# aufgerufen; ein blankes /admin oder /admin/ gehoert der SPA.
+	@keycloak path /realms/* /resources/* /admin/master/* /admin/realms/* /js/*
 	handle @keycloak {
 		reverse_proxy keycloak:8080
 	}
