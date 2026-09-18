@@ -9,6 +9,12 @@ Die Anwendung selbst liegt in eigenen Repositories (`backend`, `frontend`,
 `worker`). Hier wird nichts gebaut, was dort entsteht — hier wird es
 zusammengesetzt, konfiguriert und ausgerollt.
 
+## Der Prozess
+
+- [Deploymentprozess](docs/deployment-process.md) — was nach einer Codeänderung
+  passiert, bis sie live ist, und welche Schritte dabei automatisch bzw. von
+  Hand erfolgen
+
 ## Setup-Anleitungen
 
 - [Lokales Dev Setup](docs/dev-setup.md)
