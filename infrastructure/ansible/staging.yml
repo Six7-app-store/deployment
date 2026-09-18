@@ -15,7 +15,13 @@
     seed_data: false
     # Muss zu docker_data_volume_size_gb in envs/staging passen: "" solange dort
     # 0 steht, /dev/vdb sobald wieder ein Volume angelegt wird.
-    docker_data_device: "/dev/vdb"
+    #
+    # Steht seit ADR-0004 auf "": die VM laeuft auf einem Flavor mit 50 GB
+    # Systemplatte, ein Cinder-Volume gibt es nicht mehr. Alle Volume-Schritte
+    # unten haengen an `docker_data_device | length > 0` und werden damit
+    # uebersprungen; die Docker-Daten bleiben unter /var/lib/docker auf der
+    # Systemplatte.
+    docker_data_device: ""
     # Installiert den Timer, der neue Images aus GHCR selbst nachzieht. Damit
     # aktualisiert sich Staging nach einem Merge auf main ohne Deploy.
     # Auf false setzen, um ihn wieder abzuschalten - die Tasks am Playbook-Ende
