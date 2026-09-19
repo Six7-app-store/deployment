@@ -178,7 +178,19 @@ jobs:
             echo "Keine alte VM im State - nichts zu sichern."
             exit 0
           fi
-          mkdir -p /var/lib/caddy-backup
+          # sudo, weil der Runner unter /var/lib nichts anlegen darf. Ohne das
+          # scheiterte der Schritt an `mkdir: Permission denied` - und weil er
+          # continue-on-error traegt, blieb das unbemerkt: der Deploy lief
+          # gruen weiter, die Sicherung entstand nie, das Zurueckspielen wurde
+          # jedes Mal uebersprungen und jeder Neuaufbau bestellte ein frisches
+          # Zertifikat. Genau das, was dieser Schritt verhindern soll.
+          #
+          # Einmal anlegen und uebereignen; danach ist es ein gewoehnliches
+          # Verzeichnis des Runner-Nutzers. Dieselbe Bauart wie /var/lib/tf-state.
+          if [ ! -d /var/lib/caddy-backup ]; then
+            sudo mkdir -p /var/lib/caddy-backup
+            sudo chown "$(id -u):$(id -g)" /var/lib/caddy-backup
+          fi
           # In eine Nebendatei schreiben und erst bei Erfolg umbenennen. Sonst
           # ueberschreibt ein fehlgeschlagener Versuch eine brauchbare
           # Sicherung mit einer leeren Datei.
@@ -194,6 +206,10 @@ jobs:
             echo "Gesichert: $(du -h /var/lib/caddy-backup/caddy_data.tgz | cut -f1)"
           else
             rm -f /var/lib/caddy-backup/caddy_data.tgz.neu
+            # Als Annotation, nicht als blosse Zeile im Log. Ein stiller
+            # Fehlschlag hier kostet beim naechsten Mal eine ACME-Bestellung,
+            # und die kann minutenlang haengen.
+            echo "::warning::Kein Caddy-Zertifikat gesichert - der Neuaufbau bestellt ein frisches."
             echo "Nichts gesichert - vorhandene Sicherung bleibt unangetastet."
           fi
 

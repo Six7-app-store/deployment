@@ -558,6 +558,51 @@
         exit 1
       changed_when: false
 
+    # -------------------------------------------------------------------
+    # Keycloak: HTTPS-Zwang fuer den Master-Realm aufheben
+    # -------------------------------------------------------------------
+    # Keycloaks Vorgabe sslRequired=external laesst HTTP nur von Adressen zu,
+    # die Java als "site local" einstuft. Das sind 10.x, 172.16.x, 192.168.x -
+    # und bei IPv6 nur das laengst abgeschaffte fec0::/10. Der ULA-Bereich
+    # fd00::/8, den Docker mit enable_ipv6 vergibt, gehoert NICHT dazu.
+    #
+    # Seit das Backend Keycloak ueber IPv6 erreicht, haelt Keycloak es also
+    # fuer einen Anrufer aus dem oeffentlichen Netz und antwortet auf jede
+    # Admin-Anfrage mit 403 "HTTPS required". Das trifft nicht nur den Seed:
+    # jede Benutzeranlage zur Laufzeit geht denselben Weg.
+    #
+    # Statt die Adressvergabe danach auszurichten, wie eine Java-Bibliothek
+    # Adressen einordnet, wird hier ausgesprochen, was ohnehin gilt: zwischen
+    # zwei Containern desselben Netzes braucht es kein TLS. Von aussen ist
+    # Keycloak nur ueber Caddy erreichbar, und der spricht HTTPS.
+    #
+    # kcadm laeuft IM Container gegen localhost - Loopback laesst Keycloak
+    # immer durch, unabhaengig von sslRequired. Sonst waere das ein Henne-Ei-
+    # Problem: die Einstellung aendern zu wollen scheitert an der Einstellung.
+    - name: Master-Realm - HTTPS-Zwang im Containernetz aufheben
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          set -a; . ./.env; set +a
+          kc() {
+            docker compose -f docker-compose.staging.yml exec -T keycloak               /opt/keycloak/bin/kcadm.sh "$@"
+          }
+          # Der Admin-Endpunkt ist ein paar Sekunden nach dem Socket noch
+          # nicht bereit; die Anmeldung wird deshalb wiederholt.
+          for versuch in $(seq 1 30); do
+            if kc config credentials --server http://localhost:8080                  --realm master --user "$KEYCLOAK_ADMIN_USER"                  --password "$KEYCLOAK_ADMIN_PASSWORD" >/dev/null 2>&1; then
+              kc update realms/master -s sslRequired=NONE
+              echo "sslRequired=NONE gesetzt (Versuch $versuch)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "kcadm konnte sich nach 150 Sekunden nicht anmelden" >&2
+          exit 1
+        executable: /bin/bash
+        chdir: "{{ project_root }}"
+      changed_when: true
+
     # Seeding läuft nach den Migrationen, weil das Skript in die Tabellen
     # schreibt, die dort erst entstehen. Es legt Keycloak-Benutzer an (Profs,
     # Studierende, ein Admin — alle mit Passwort 1234) und füllt Kurse, Apps
