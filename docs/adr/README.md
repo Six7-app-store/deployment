@@ -57,3 +57,6 @@ Das ist Teil der Definition of Done in den `AGENTS.md` aller vier Repos.
 | [0004](0004-staging-kommt-ohne-cinder-volume-aus.md) | Staging kommt ohne Cinder-Volume aus | Angenommen |
 | [0005](0005-tfstate-der-app-deployments-gehoert-von-der-staging-vm-herunter.md) | Der Terraform-State der App-Deployments gehört von der Staging-VM herunter | Angenommen |
 | [0006](0006-auch-die-anwendungsdaten-gehoeren-von-der-staging-vm-herunter.md) | Auch die Anwendungsdaten gehören von der Staging-VM herunter | Angenommen |
+| [0007](0007-protokoll-statt-type-im-account-vertrag.md) | Das Zugangsprotokoll ist ein eigenes Feld, kein Wert in `type` | Angenommen |
+| [0008](0008-studiengruppe-aus-moodle-kurs-anlegen.md) | Eine Studiengruppe entsteht auf Knopfdruck aus einem Moodle-Kurs | Vorschlag |
+| [0009](0009-deep-link-bindet-an-app.md) | Eine deep-verlinkte Moodle-Aktivität bindet an eine App, nicht an eine Umgebung | Vorschlag |
