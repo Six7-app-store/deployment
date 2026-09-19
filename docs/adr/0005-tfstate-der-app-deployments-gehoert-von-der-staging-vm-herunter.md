@@ -1,6 +1,6 @@
 # 0005 — Der Terraform-State der App-Deployments gehört von der Staging-VM herunter
 
-**Status:** Vorschlag
+**Status:** Angenommen
 **Datum:** 19.09.2026
 **Beteiligt:** Projektteam
 
@@ -14,7 +14,7 @@ Datenbank, ein Schema je Deployment:
 deployment_8462675e_a4a5_409f_97f0_545208213d15 | states
 deployment_7bafc1b3_9242_40fb_9eba_c0e75972f710 | states
 deployment_26ac076d_1925_4aec_9a83_245b0b5eaee8 | states
-   … am 19.09.2026 insgesamt acht Schemata
+   … am 19.09.2026 insgesamt zehn Schemata
 ```
 
 Diese Datenbank ist der Container `postgres-tfstate` aus
@@ -55,16 +55,32 @@ Der Umfang wächst mit der Nutzung. Bei drei VMs ist das Aufräumen von Hand
 lästig; bei einem Kurs mit zwölf Studierenden ist es eine halbe Stunde
 Handarbeit — und die Gewissheit, dass irgendwann eine VM übersehen wird.
 
+Entscheidend ist aber nicht das Aufräumen, sondern der Neuaufbau. Wer die
+verlorenen Deployments wiederherstellen will, muss sie neu ausrollen:
+
+| App-Art | Dauer je Deployment |
+|---|---|
+| Ubuntu-App | 3 bis 5 Minuten |
+| Windows-App | 30 bis 60 Minuten, zuzüglich Packer-Build bei neuem Commit |
+
+Solange nur Linux-Apps liefen, war ein Merge ärgerlich. Mit der Windows-App
+legt er einen laufenden Kurs für eine Dreiviertelstunde still.
+
 ## Entscheidung
 
-Wir holen `postgres-tfstate` von der Staging-VM herunter, auf einen Host, den
-der Staging-Deploy nicht verwaltet.
+Wir betreiben die Terraform-State-Datenbank auf der Runner-VM, außerhalb des
+Staging-Stacks.
 
-> **Dieses ADR ist ein Vorschlag, keine getroffene Entscheidung.** Es ist
-> geschrieben, damit die Abwägung vor dem Umbau dokumentiert ist und nicht
-> danach. Wer sich dagegen entscheidet, ersetzt es durch ein ADR, das den
-> Verbleib begründet — die Zirkularität bleibt dann eine bewusst getragene
-> Schwäche und keine übersehene.
+Konkret: Postgres 16 direkt über `apt` auf `github-runner`, lauschend auf
+`10.200.1.55` und `localhost`, erreichbar allein aus `10.200.0.0/19` über die
+Security Group `tfstate-db`. Der Container `postgres-tfstate` entfällt aus
+`docker-compose.staging.yml`; der Worker verbindet sich über
+`TFSTATE_DB_HOST` aus der `.env`.
+
+Die Runner-VM ist damit zum zweiten Mal der Ort, an dem Zustand liegt, der
+einen Neuaufbau überstehen muss — beim Staging-State hat ADR-0003 dieselbe
+Wahl getroffen. Das ist bewusst dieselbe Maschine und nicht eine dritte: eine
+weitere VM wäre sauberer getrennt, aber niemand betreibt sie.
 
 ## Konsequenzen
 
@@ -92,6 +108,14 @@ der Staging-Deploy nicht verwaltet.
   ist sie die einzige Kopie von etwas Wichtigem.
 - Die Verbindungszeichenfolge muss in die `.env` der Staging-VM und dort
   gepflegt werden. Ein falscher Wert fällt erst beim nächsten Deployment auf.
+- **Die Runner-VM trägt jetzt zwei Rollen.** Sie führt den Staging-Deploy aus
+  *und* hält den Zustand der Plattform. Fällt sie aus, steht beides. Das ist der
+  bewusst eingegangene Preis dafür, keine dritte Maschine zu betreiben — die
+  Last ist gering (die States sind wenige hundert Kilobyte, Packer-Builds laufen
+  auf dem Worker, nicht hier), das Ausfallrisiko bleibt.
+- **Die Adresse `10.200.1.55` ist per DHCP vergeben.** Wird die Runner-VM je neu
+  gebaut, ändert sie sich, und `TFSTATE_DB_HOST` muss nachgezogen werden. Die
+  VM steht nicht in Terraform, ein Neubau ist also ohnehin Handarbeit.
 
 ## Verworfene Alternativen
 
@@ -108,13 +132,6 @@ Repository ableitbar ist und Terraform wie Ansible bei jedem Merge tatsächlich
 laufen. Das Problem gegen diesen Nutzen einzutauschen, ist der schlechtere
 Handel — zumal es an anderer Stelle lösbar ist.
 
-**Postgres auf die Runner-VM.** Naheliegend, weil diese Maschine bereits
-dauerhaft ist und schon den Staging-State trägt. Sie hat aber 1 vCPU und 2 GB
-RAM und führt darauf Terraform, Ansible und den Actions-Runner aus; ein
-Packer-Build lastet sie zeitweise voll aus. Postgres daneben zu stellen macht
-sie zum einzigen Punkt, an dem sowohl die Plattform als auch ihre Verwaltung
-hängen. Bleibt als pragmatische Zwischenlösung brauchbar, nicht als Ziel.
-
 **Eine eigene kleine VM nur für den State.** Sauber getrennt und
 ressourcenseitig unkritisch — `gp1.small` genügt. Kostet eine weitere Maschine,
 die jemand betreiben, aktualisieren und sichern muss, und für die es bisher
@@ -123,9 +140,9 @@ höchsten Betriebsaufwand.
 
 **Ein verwalteter Datenbankdienst der DHBW.** Nähme den Betrieb ab. Ob es einen
 gibt, der für dieses Projekt nutzbar ist, wurde nicht erfragt; bekannt ist nur
-Compute, Netz und Block Storage über Horizon. Vor einem Umbau wäre das die
-erste Frage an die Betreuung — sie kostet eine Mail und könnte alle anderen
-Alternativen erübrigen.
+Compute, Netz und Block Storage über Horizon. Nicht weiterverfolgt, weil die
+Antwort vor der Abgabe nicht abzuwarten war — bleibt die naheliegendste
+Verbesserung, falls die Plattform über das Projekt hinaus bestehen soll.
 
 **Den State in die App-Repositories legen**, wie es Terraform-Anfänger oft tun.
 Scheidet aus: Der State enthält die Passwörter der Studierenden im Klartext, und
