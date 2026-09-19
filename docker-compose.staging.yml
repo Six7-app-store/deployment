@@ -108,7 +108,10 @@ services:
       KC_PROXY: "edge"
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
-    depends_on:
+    # Kein depends_on mehr: die einzige Abhaengigkeit war
+    # keycloak-postgres, und die Datenbank liegt seit ADR-0006 ausserhalb
+    # dieser Compose-Datei. Ein leerer depends_on-Block ist ungueltig -
+    # Compose lehnt ihn ab mit "depends_on must be a array".
     networks:
       - keycloak-network
       - backend-network
