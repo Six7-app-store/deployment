@@ -46,6 +46,11 @@ services:
       MOODLE_HOST: ${MOODLE_HOSTNAME:?MOODLE_HOSTNAME is required}
       MOODLE_REVERSEPROXY: "yes"
       MOODLE_SSLPROXY: "yes"
+    # Nur an die Loopback-Adresse gebunden. Von aussen fuehrt der Weg
+    # ausschliesslich ueber Caddy; das hier ist der Port, an dem das Playbook
+    # prueft, ob die Erstinstallation durch ist.
+    ports:
+      - "127.0.0.1:8080:8080"
     volumes:
       - moodle_data:/bitnami/moodle
       - moodle_datadir:/bitnami/moodledata

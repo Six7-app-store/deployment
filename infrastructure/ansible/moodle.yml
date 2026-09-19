@@ -32,6 +32,7 @@
         - { src: "../../docker-compose.moodle-infra.yml", dest: "docker-compose.moodle-infra.yml" }
         - { src: "../../moodle/Caddyfile", dest: "moodle/Caddyfile" }
         - { src: "../../caddy/Dockerfile", dest: "caddy/Dockerfile" }
+        - { src: "../../moodle/cli/register_lti_tool.php", dest: "moodle/cli/register_lti_tool.php" }
 
     # MOODLE_ENV_FILE kommt als Secret aus dem Workflow. Rechte 0600, weil
     # darin das Administratorpasswort und der TSIG-Schluessel stehen.
@@ -66,7 +67,7 @@
     - name: Registrierungsskript in den Container legen
       ansible.builtin.command:
         cmd: >-
-          docker cp {{ project_root }}/cli/register_lti_tool.php
+          docker cp {{ project_root }}/moodle/cli/register_lti_tool.php
           moodle:/opt/bitnami/moodle/local_register_lti_tool.php
       changed_when: true
       when: moodle_bereit.status | default(0) in [200, 303]
