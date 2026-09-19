@@ -157,6 +157,46 @@ jobs:
           terraform init
           terraform validate
 
+      # Ohne diesen Schritt fordert Caddy nach jedem Neuaufbau ein neues
+      # Zertifikat an: sein Datenverzeichnis liegt in einem Docker-Volume auf
+      # der VM, und die ist gleich weg. Das kostet jedes Mal einen
+      # ACME-Durchlauf, der erfahrungsgemaess beim ersten Versuch haengt.
+      #
+      # Die Sicherung landet auf der Runner-VM, also ausserhalb - dieselbe
+      # Ueberlegung wie beim Terraform-State in ADR-0003.
+      #
+      # continue-on-error, weil ein fehlender Vorgaenger kein Fehler ist: beim
+      # allerersten Lauf gibt es keine alte VM, und ein neues Zertifikat
+      # anzufordern ist dann richtig.
+      - name: Caddy-Zertifikat der alten VM sichern
+        continue-on-error: true
+        working-directory: infrastructure/terraform/envs/staging
+        run: |
+          set -uo pipefail
+          alt=$(terraform output -raw vm_ip 2>/dev/null || true)
+          if [ -z "$alt" ]; then
+            echo "Keine alte VM im State - nichts zu sichern."
+            exit 0
+          fi
+          mkdir -p /var/lib/caddy-backup
+          # In eine Nebendatei schreiben und erst bei Erfolg umbenennen. Sonst
+          # ueberschreibt ein fehlgeschlagener Versuch eine brauchbare
+          # Sicherung mit einer leeren Datei.
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 \
+              -i ~/.ssh/openstack-key "ubuntu@$alt" \
+            'sudo docker run --rm -v app_caddy_data:/d alpine tar czf - -C /d .' \
+            > /var/lib/caddy-backup/caddy_data.tgz.neu 2>/dev/null || true
+
+          if [ -s /var/lib/caddy-backup/caddy_data.tgz.neu ]; then
+            mv /var/lib/caddy-backup/caddy_data.tgz.neu \
+               /var/lib/caddy-backup/caddy_data.tgz
+            echo "Gesichert: $(du -h /var/lib/caddy-backup/caddy_data.tgz | cut -f1)"
+          else
+            rm -f /var/lib/caddy-backup/caddy_data.tgz.neu
+            echo "Nichts gesichert - vorhandene Sicherung bleibt unangetastet."
+          fi
+
       # Der eigentliche Punkt dieses Workflows: die alte VM verschwindet
       # vollstaendig, bevor die neue entsteht. Kein In-place-Update, keine
       # Reste aus frueheren Laeufen.

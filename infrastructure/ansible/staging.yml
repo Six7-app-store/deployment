@@ -406,6 +406,52 @@
     #
     # `up -d --build` baut und ersetzt in einem Zug, also bleibt kein Container
     # auf einem entsorgten Image zurück.
+    # -------------------------------------------------------------------
+    # Zertifikat aus der Sicherung zurueckspielen
+    # -------------------------------------------------------------------
+    # Muss vor dem Start laufen: findet Caddy sein Zertifikat beim Hochfahren
+    # vor, unterbleibt der ACME-Durchlauf ganz. Danach waere es zu spaet, die
+    # Bestellung liefe schon.
+    #
+    # Die Sicherung legt der Workflow vor dem destroy auf der Runner-VM ab -
+    # also auf dem Ansible-Controller, weshalb der stat-Schritt dorthin
+    # delegiert wird.
+    - name: Gesichertes Caddy-Datenverzeichnis vorhanden?
+      ansible.builtin.stat:
+        path: /var/lib/caddy-backup/caddy_data.tgz
+      delegate_to: localhost
+      become: false
+      register: caddy_sicherung
+      tags: [tls]
+
+    - name: Sicherung auf die VM legen
+      ansible.builtin.copy:
+        src: /var/lib/caddy-backup/caddy_data.tgz
+        dest: /tmp/caddy_data.tgz
+        mode: '0600'
+      when: caddy_sicherung.stat.exists
+      tags: [tls]
+
+    # Das Volume wird angelegt, bevor compose es tut - sonst gaebe es nichts,
+    # wohinein zu entpacken waere. `docker volume create` ist idempotent.
+    - name: Zertifikat in das Caddy-Volume zurueckspielen
+      ansible.builtin.shell:
+        cmd: >-
+          docker volume create app_caddy_data >/dev/null &&
+          docker run --rm -v app_caddy_data:/d
+          -v /tmp/caddy_data.tgz:/sicherung.tgz:ro
+          alpine tar xzf /sicherung.tgz -C /d
+      when: caddy_sicherung.stat.exists
+      changed_when: true
+      tags: [tls]
+
+    - name: Sicherung von der VM entfernen
+      ansible.builtin.file:
+        path: /tmp/caddy_data.tgz
+        state: absent
+      when: caddy_sicherung.stat.exists
+      tags: [tls]
+
     - name: Start the application with Docker Compose
       ansible.builtin.command:
         cmd: docker compose -f docker-compose.staging.yml up -d --build
