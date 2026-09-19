@@ -77,6 +77,6 @@
       ansible.builtin.command:
         cmd: >-
           docker cp {{ project_root }}/moodle/cli/register_lti_tool.php
-          moodle:/opt/bitnami/moodle/local_register_lti_tool.php
+          moodle:/var/www/html/local_register_lti_tool.php
       changed_when: true
       when: moodle_bereit.status | default(0) in [200, 303]

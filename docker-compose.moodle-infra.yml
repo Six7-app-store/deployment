@@ -26,34 +26,49 @@ services:
     restart: unless-stopped
 
   moodle:
-    image: bitnami/moodle:4.5
+    # Dasselbe Image wie die lokale Testinstanz (moodle-lti-dev.md). bitnami
+    # stand hier zuerst, existiert auf Docker Hub aber nicht mehr - der Pull
+    # scheiterte mit "not found". erseco hat zudem den Vorzug, dass die
+    # LTI-Anbindung genau gegen dieses Image entwickelt wurde.
+    image: erseco/alpine-moodle:v5.2.2
     container_name: moodle
     environment:
-      MOODLE_DATABASE_TYPE: pgsql
-      MOODLE_DATABASE_HOST: postgres
-      MOODLE_DATABASE_PORT_NUMBER: 5432
-      MOODLE_DATABASE_USER: ${MOODLE_DB_USER}
-      MOODLE_DATABASE_PASSWORD: ${MOODLE_DB_PASSWORD}
-      MOODLE_DATABASE_NAME: ${MOODLE_DB_NAME}
+      # Wird zu $CFG->wwwroot und damit zum iss-Claim jedes id_token. Muss
+      # exakt dem LTI_PLATFORM_ISSUER des App Stores entsprechen, sonst wird
+      # jeder Launch abgewiesen. https, weil Caddy davor steht.
+      SITE_URL: https://${MOODLE_HOSTNAME:?MOODLE_HOSTNAME is required}
+
       MOODLE_USERNAME: ${MOODLE_ADMIN_USER:?MOODLE_ADMIN_USER is required}
       MOODLE_PASSWORD: ${MOODLE_ADMIN_PASSWORD:?MOODLE_ADMIN_PASSWORD is required}
       MOODLE_EMAIL: ${MOODLE_ADMIN_EMAIL:?MOODLE_ADMIN_EMAIL is required}
-      MOODLE_SITE_NAME: ${MOODLE_SITE_NAME:-DHBW App Store Moodle}
-      # Muss exakt der oeffentliche Hostname sein. Moodle schreibt diesen Wert
-      # als wwwroot in die Konfiguration, und genau dieser Wert erscheint als
-      # iss-Claim in jedem LTI-Token. Steht hier etwas anderes als in
-      # LTI_PLATFORM_ISSUER des App Stores, wird jeder Launch abgewiesen.
-      MOODLE_HOST: ${MOODLE_HOSTNAME:?MOODLE_HOSTNAME is required}
-      MOODLE_REVERSEPROXY: "yes"
-      MOODLE_SSLPROXY: "yes"
+      MOODLE_SITENAME: ${MOODLE_SITE_NAME:-DHBW App Store Moodle}
+      MOODLE_LANGUAGE: de
+
+      DB_TYPE: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${MOODLE_DB_NAME}
+      DB_USER: ${MOODLE_DB_USER}
+      DB_PASS: ${MOODLE_DB_PASSWORD}
+
+      # Anders als lokal steht hier TLS davor, also beides auf true.
+      REVERSEPROXY: "true"
+      SSLPROXY: "true"
+      AUTO_UPDATE_MOODLE: "false"
     # Nur an die Loopback-Adresse gebunden. Von aussen fuehrt der Weg
     # ausschliesslich ueber Caddy; das hier ist der Port, an dem das Playbook
     # prueft, ob die Erstinstallation durch ist.
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
-      - moodle_data:/bitnami/moodle
-      - moodle_datadir:/bitnami/moodledata
+      - moodle_html:/var/www/html
+      - moodle_datadir:/var/www/moodledata
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/login/index.php || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 600s
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,7 +108,7 @@ networks:
 
 volumes:
   moodle_db:
-  moodle_data:
+  moodle_html:
   moodle_datadir:
   caddy_data:
   caddy_config:

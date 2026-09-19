@@ -4,15 +4,21 @@ Der App Store bindet sich über LTI 1.3 an Moodle an. Diese Seite beschreibt die
 Moodle-Instanz, die dafür betrieben wird — nicht die lokale Testumgebung, die
 steht in [moodle-lti-dev.md](moodle-lti-dev.md).
 
-## Warum nicht `moodle-docker`
+## Das Image
 
-`moodle-docker` ist die Entwicklungsumgebung von moodlehq. Sie bindet einen
-Moodle-Quellcodebaum von der Platte ein (`MOODLE_DOCKER_WWWROOT`) und bringt
-Selenium, Mailpit und `exttests` mit — sinnvoll, um Moodle selbst zu testen,
-untauglich als Server.
+Hier läuft `erseco/alpine-moodle:v5.2.2` — dasselbe Image wie die lokale
+Testinstanz. Es ist fertig installiert und konfiguriert sich beim ersten Start
+aus Umgebungsvariablen.
 
-Hier läuft stattdessen `bitnami/moodle`: fertig installiert, konfiguriert sich
-beim ersten Start aus Umgebungsvariablen.
+Zwei Bewerber schieden aus. `moodle-docker` von moodlehq ist eine
+Entwicklungsumgebung: sie bindet einen Quellcodebaum von der Platte ein
+(`MOODLE_DOCKER_WWWROOT`) und bringt Selenium, Mailpit und `exttests` mit —
+sinnvoll, um Moodle selbst zu testen, untauglich als Server. `bitnami/moodle`
+stand zuerst hier, existiert auf Docker Hub aber nicht mehr; der Pull scheitert
+mit `not found`, nur ein eingefrorenes `bitnamilegacy` ist geblieben.
+
+Dass es jetzt dasselbe Image wie lokal ist, hat einen Nebennutzen: Die
+LTI-Anbindung wurde gegen genau diesen Moodle-Stand entwickelt.
 
 ## Warum feste Infrastruktur und keine App
 
@@ -31,7 +37,7 @@ moodle.<zone>.users.dhbw.site
         │
      Caddy ──── TLS über dns-01, wie beim App Store
         │
-     Moodle (bitnami/moodle:4.5, Port 8080)
+     Moodle (erseco/alpine-moodle:v5.2.2, Port 8080)
         │
      Postgres 16
 ```
@@ -75,7 +81,7 @@ installiert Moodle und legt die Datenbank an.
 **4. Werkzeug registrieren:**
 
 ```bash
-docker exec moodle php /opt/bitnami/moodle/local_register_lti_tool.php \
+docker exec moodle php /var/www/html/local_register_lti_tool.php \
     --appstore=https://appstore.<zone>.users.dhbw.site
 ```
 
@@ -98,7 +104,7 @@ der Ursache.
 **Geschrieben, nicht erprobt.** Terraform, Compose und Playbook sind formal
 geprüft (`fmt`, YAML), aber nie ausgeführt worden. Offen ist insbesondere:
 
-- ob `bitnami/moodle:4.5` hinter Caddy ohne weitere Anpassung läuft
+- ob `erseco/alpine-moodle:v5.2.2` hinter Caddy ohne weitere Anpassung läuft
 - ob `lti_add_type` in Moodle 4.5 die hier gesetzten Felder erwartet
 Die Endpunkte des App Stores sind dagegen geprüft: `/lti/login` (OIDC-Start,
 `api_route` für GET und POST), `/lti/launch` und `/lti/jwks` existieren genau

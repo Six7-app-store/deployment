@@ -5,7 +5,7 @@
  *
  * Aufruf im Container:
  *
- *   docker exec moodle php /opt/bitnami/moodle/local_register_lti_tool.php \
+ *   docker exec moodle php /var/www/html/local_register_lti_tool.php \
  *       --appstore=https://appstore.<zone>.users.dhbw.site
  *
  * Warum ein Skript und nicht die Oberflaeche: Die Registrierung von Hand
