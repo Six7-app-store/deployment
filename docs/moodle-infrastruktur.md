@@ -60,37 +60,149 @@ offen, nicht nur dem Campusnetz. Das ist nötig, weil Moodle von außen erreichb
 sein muss — sowohl für Lehrende als auch für den App Store, der bei jedem Launch
 Moodles JWKS und Token abruft. SSH bleibt auf dem Campus beschränkt.
 
-## Die Anbindung herstellen
+## Ausrollen
 
-Die Reihenfolge ist zwingend: Moodle muss stehen, bevor es die Werte ausstellen
-kann, die der App Store braucht.
+Zwei Schichten: Terraform legt in OpenStack eine VM an, auf dieser VM laufen
+drei Container über Docker Compose. Kein Kubernetes.
 
-**1. Moodle ausrollen**
-
-```bash
-cd infrastructure/terraform/envs/moodle
-terraform init && terraform apply
+```
+OpenStack ── Terraform ── VM `moodle`
+                             └── docker compose -f docker-compose.moodle-infra.yml
+                                     moodle · postgres · caddy
 ```
 
-**2. AAAA-Eintrag setzen** auf die Adresse aus `terraform output vm_ip`. Ohne
-DNS-Namen kein Zertifikat, und ohne HTTPS kein LTI.
+**Alles läuft von der Runner-VM aus**, nicht vom Arbeitsrechner. Die
+OpenStack-API der DHBW ist von außerhalb des Campusnetzes nicht erreichbar, und
+der Terraform-State liegt ohnehin dort (ADR-0002, ADR-0003).
 
-**3. Playbook laufen lassen.** Der erste Start dauert einige Minuten — Bitnami
-installiert Moodle und legt die Datenbank an.
+Es gibt **keinen Workflow** dafür. Das passt zu einer Instanz, die bewusst
+stehen bleibt — aber es heißt, dass die folgenden Schritte von Hand kommen.
 
-**4. Werkzeug registrieren:**
+### 0. Auf die Runner-VM und Arbeitskopie holen
 
 ```bash
-docker exec moodle php /var/www/html/local_register_lti_tool.php \
-    --appstore=https://appstore.<zone>.users.dhbw.site
+ssh -i <deploy-key> ubuntu@2001:7c0:1b20:c913:1::3f0
+git clone --branch main https://github.com/Six7-app-store/deployment.git ~/moodle-deploy
+sudo mkdir -p /var/lib/tf-state/moodle && sudo chown ubuntu:ubuntu /var/lib/tf-state/moodle
 ```
 
-Das Skript legt den App Store als externes LTI-1.3-Werkzeug an und gibt die
-sieben Zeilen aus, die in dessen `.env` gehören. Es ist idempotent: ein bereits
-registriertes Werkzeug mit derselben Basis-URL wird nur ausgelesen.
+### 1. Zugangsdaten hinlegen
 
-**5. Die Ausgabe in `STAGING_ENV_FILE` übernehmen** und den App Store neu
-ausrollen.
+Drei Dateien, alle `chmod 600`, alle nach getaner Arbeit mit `shred -u`
+entfernen — die Runner-VM ist dauerhaft und wird von mehreren Leuten benutzt:
+
+| Datei | Inhalt | Quelle |
+|---|---|---|
+| `moodle.env` | die `.env` des Compose-Stacks | Secret `MOODLE_ENV_FILE` |
+| `os.env` | `export OS_*=…` | `secrets/os-env.sh` |
+| `openstack-deploy` | privater SSH-Schlüssel | Secret `SSH_PRIVATE_KEY` |
+
+Terraform braucht den **öffentlichen** Schlüssel, abgeleitet statt separat
+gepflegt — zwei Werte, die zusammenpassen müssen, sind zwei Werte, die
+auseinanderlaufen können:
+
+```bash
+ssh-keygen -y -f openstack-deploy > deploy.pub
+```
+
+### 2. VM anlegen
+
+```bash
+. ~/moodle-deploy/os.env
+cd ~/moodle-deploy/infrastructure/terraform/envs/moodle
+terraform init -input=false
+terraform plan -input=false -out=moodle.plan -var "ssh_public_key=$(cat ~/moodle-deploy/deploy.pub)"
+terraform apply -input=false moodle.plan
+```
+
+Erst planen, dann anwenden. **Im Plan muss `0 to destroy` stehen** — diese VM
+soll überleben, und ein `destroy` hier nähme Moodles Kursdaten mit, die auf der
+Instanzplatte liegen. Ergebnis ist `vm_ip`.
+
+### 3. AAAA-Eintrag setzen
+
+Ohne DNS-Namen kein Zertifikat, ohne HTTPS kein LTI. Derselbe TSIG-Schlüssel
+wie beim App Store, und derselbe, den Caddy gleich für die `dns-01`-Prüfung
+benutzt — er darf nachweislich auch `AAAA` schreiben.
+
+Die Zone wird **erfragt, nicht geraten**: ein falscher `zone`-Eintrag lässt
+`nsupdate` mit `NOTZONE` scheitern, und das sieht aus wie ein Rechteproblem.
+
+```bash
+zone=$(dig +noall +authority +answer SOA "$hostname" @"$nshost" -p "$nsport"        | awk '$4=="SOA"{print $1; exit}')
+nsupdate -k "$keyfile" <<UPDATE
+server $nshost $nsport
+zone $zone
+update delete $hostname. AAAA
+update add $hostname. 60 AAAA $vm_ip
+send
+UPDATE
+```
+
+Der Schlüssel geht über eine **Datei**, nicht über `-y`: die Kommandozeile wäre
+auf dieser dauerhaften Maschine für jeden sichtbar, der zur selben Zeit `ps`
+aufruft. Der Workflow des App Stores macht es genauso.
+
+### 4. Playbook laufen lassen
+
+```bash
+ansible-galaxy role install geerlingguy.docker
+cat > ~/moodle-deploy/inv/hosts.yml <<EOS
+all:
+  children:
+    moodle_vm:
+      hosts:
+        moodle:
+          ansible_host: <vm_ip>
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: /home/ubuntu/moodle-deploy/openstack-deploy
+EOS
+
+export MOODLE_ENV_FILE="$(cat ~/moodle-deploy/moodle.env)"
+ansible-playbook -i inv/hosts.yml infrastructure/ansible/moodle.yml
+```
+
+Das Playbook wartet bis zu 15 Minuten auf Moodles Erstinstallation und bricht
+ab, wenn sie nicht kommt. Der Hostname muss zu diesem Zeitpunkt bereits
+aufgelöst werden, sonst holt Caddy kein Zertifikat.
+
+### 5. Werkzeug registrieren
+
+```bash
+docker exec moodle php /var/www/html/local_register_lti_tool.php     --appstore=https://appstore.<zone>.users.dhbw.site
+```
+
+Gibt die sieben Zeilen aus, die in die `.env` des App Stores gehören.
+Idempotent: ein bereits registriertes Werkzeug wird nur ausgelesen.
+
+### 6. Secret setzen und App Store neu ausrollen
+
+Neben den sieben Zeilen braucht `STAGING_ENV_FILE` noch zwei Werte, die Moodle
+**nicht** ausstellt und die man leicht übersieht:
+
+```bash
+# Der private Schlüssel dieses Tools. Die öffentliche Hälfte leitet das
+# Backend beim Start daraus ab und serviert sie unter /lti/jwks - dort holt
+# Moodle sie bei jedem Launch.
+python -c "import base64;from cryptography.hazmat.primitives import serialization as s;from cryptography.hazmat.primitives.asymmetric import rsa;k=rsa.generate_private_key(public_exponent=65537,key_size=2048);print(base64.b64encode(k.private_bytes(s.Encoding.PEM,s.PrivateFormat.PKCS8,s.NoEncryption())).decode())"
+# LTI_SESSION_SECRET: 48 zufällige Zeichen.
+```
+
+```bash
+gh secret set STAGING_ENV_FILE < secrets/staging.env
+```
+
+Wirksam wird es erst beim nächsten Deploy nach `main` — und der reißt Staging
+für rund zehn Minuten ab.
+
+### 7. Aufräumen
+
+```bash
+shred -u ~/moodle-deploy/os.env ~/moodle-deploy/openstack-deploy ~/moodle-deploy/deploy.pub
+```
+
+`moodle.env` darf bleiben, wenn Wiederholungen anstehen — sonst mit weg. Es
+steht ohnehin im Secret `MOODLE_ENV_FILE`.
 
 ## Warum ein Skript statt der Oberfläche
 

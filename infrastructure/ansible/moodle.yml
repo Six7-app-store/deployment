@@ -59,24 +59,29 @@
         chdir: "{{ project_root }}"
       changed_when: true
 
-    # Der erste Start dauert lange: Bitnami installiert Moodle, legt die
+    # Der erste Start dauert lange: das Image installiert Moodle, legt die
     # Datenbank an und fuehrt die Migrationen aus. Vor dem Ende davon hat eine
     # LTI-Registrierung keinen Sinn.
+    #
+    # Kein failed_when: false. Das stand hier einmal und hat den ersten Lauf
+    # gruen gemeldet, obwohl Moodle fuenfzehn Minuten lang nicht geantwortet
+    # hatte - der Container lief in einer Neustartschleife. Ein Deploy, der
+    # Erfolg meldet und keinen hatte, ist schlimmer als einer, der abbricht.
     - name: Auf Moodle warten
       ansible.builtin.uri:
-        url: "http://localhost:8080/login/index.php"
+        url: "http://127.0.0.1:8080/login/index.php"
         status_code: [200, 303]
       register: moodle_bereit
       retries: 60
       delay: 15
-      until: moodle_bereit.status in [200, 303]
-      delegate_to: "{{ inventory_hostname }}"
-      failed_when: false
+      until: moodle_bereit.status | default(0) in [200, 303]
 
+    # Ohne when: der vorige Schritt bricht bereits ab, wenn Moodle nicht
+    # erreichbar ist. Eine zweite Bedingung wuerde diesen Schritt nur still
+    # ueberspringen lassen, falls die erste je wieder aufgeweicht wird.
     - name: Registrierungsskript in den Container legen
       ansible.builtin.command:
         cmd: >-
           docker cp {{ project_root }}/moodle/cli/register_lti_tool.php
           moodle:/var/www/html/local_register_lti_tool.php
       changed_when: true
-      when: moodle_bereit.status | default(0) in [200, 303]
