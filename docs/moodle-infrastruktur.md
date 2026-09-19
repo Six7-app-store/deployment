@@ -95,9 +95,9 @@ geprüft (`fmt`, YAML), aber nie ausgeführt worden. Offen ist insbesondere:
 
 - ob `bitnami/moodle:4.5` hinter Caddy ohne weitere Anpassung läuft
 - ob `lti_add_type` in Moodle 4.5 die hier gesetzten Felder erwartet
-- ob die Endpunkte des App Stores (`/lti/login`, `/lti/launch`, `/lti/jwks`)
-  genau so heißen, wie das Skript sie einträgt — das gehört gegen
-  `backend/app/routers/lti.py` geprüft
+Die Endpunkte des App Stores sind dagegen geprüft: `/lti/login` (OIDC-Start,
+`api_route` für GET und POST), `/lti/launch` und `/lti/jwks` existieren genau
+so, wie das Skript sie einträgt.
 
 **Das `MOODLE_ENV_FILE`-Secret existiert noch nicht.** Es braucht
 `MOODLE_DB_USER`, `MOODLE_DB_PASSWORD`, `MOODLE_DB_NAME`, `MOODLE_ADMIN_USER`,
