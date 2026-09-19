@@ -20,6 +20,9 @@
 
 define('CLI_SCRIPT', true);
 require(__DIR__ . '/config.php');
+// Beides, nicht nur locallib: lti_get_lti_types() steht in lib.php,
+// lti_add_type() und lti_get_type() in locallib.php.
+require_once($CFG->dirroot . '/mod/lti/lib.php');
 require_once($CFG->dirroot . '/mod/lti/locallib.php');
 require_once($CFG->libdir . '/clilib.php');
 
