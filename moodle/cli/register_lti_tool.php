@@ -82,6 +82,41 @@ if ($vorhanden) {
     cli_writeln("Werkzeug angelegt (id={$typid}).");
 }
 
+// Zwei Dienste, die lti_add_type() nicht von selbst einschaltet und ohne die
+// je eine Haelfte der Anbindung still nichts tut:
+//
+//   ltiservice_memberships  Moodle gibt die Teilnehmerliste eines Kurses
+//                           heraus (NRPS). Fehlt sie, kommt im Launch kein
+//                           namesroleservice-Claim an, und "Studiengruppe aus
+//                           Moodle anlegen" scheitert mit lti_nrps_unavailable.
+//   contentitem             Moodle fragt beim Anlegen einer Aktivitaet, worauf
+//                           sie zeigen soll (Deep Linking). Fehlt es, gibt es
+//                           keinen Knopf "Inhalt auswaehlen" und jede
+//                           Aktivitaet bleibt ungebunden.
+//
+// Bewusst hier und nicht nur im Anlege-Zweig: ein Werkzeug, das vor dieser
+// Aenderung registriert wurde, soll die Dienste durch einen erneuten Aufruf
+// bekommen. Sonst muesste man sie auf jeder bestehenden Instanz von Hand
+// nachklicken -- genau die Handarbeit, die dieses Skript vermeiden soll.
+$dienste = ['ltiservice_memberships' => '1', 'contentitem' => '1'];
+foreach ($dienste as $name => $wert) {
+    $zeile = $DB->get_record('lti_types_config', ['typeid' => $typid, 'name' => $name]);
+    if ($zeile) {
+        if ($zeile->value !== $wert) {
+            $zeile->value = $wert;
+            $DB->update_record('lti_types_config', $zeile);
+            cli_writeln("Dienst {$name} eingeschaltet.");
+        }
+    } else {
+        $DB->insert_record('lti_types_config', (object) [
+            'typeid' => $typid,
+            'name'   => $name,
+            'value'  => $wert,
+        ]);
+        cli_writeln("Dienst {$name} eingeschaltet.");
+    }
+}
+
 $typ = lti_get_type($typid);
 $deployment = $typid;  // Moodle benutzt die Typ-ID als deployment_id.
 

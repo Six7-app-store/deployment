@@ -15,6 +15,7 @@ zusammengesetzt, konfiguriert und ausgerollt.
 - [Harness für die agentenzentrierte Entwicklung](docs/harness.md)
 - [Lokales Dev Setup](docs/dev-setup.md)
 - [Moodle-Testinstanz für LTI](docs/moodle-lti-dev.md)
+- [Moodle für die Staging-Vorführung herrichten](docs/moodle-staging-demo.md)
 - [Staging Setup](docs/staging-setup.md)
 - [Produktives Setup](docs/prod-setup.md)
 
