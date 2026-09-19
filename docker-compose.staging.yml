@@ -2,7 +2,7 @@
 # Staging stack — STANDALONE, GHCR-pulled, version-pinnable.
 #
 # Pulls pre-built images from GHCR and runs the full stack:
-# postgres (app DB), postgres-tfstate (Terraform state), keycloak
+# postgres (app DB), keycloak - der Terraform-State liegt ausserhalb (ADR-0005)
 # (+ its postgres), rabbitmq, redis, backend, worker, frontend,
 # caddy (TLS reverse proxy).
 #
@@ -79,31 +79,24 @@ services:
   # the backend's data, only its own state store. One schema per
   # deployment (`deployment_<uuid>`) keeps the locking/state surface
   # tight. Not exposed on the host — internal to worker-network.
-  postgres-tfstate:
-    image: postgres:16-alpine
-    container_name: postgres-tfstate-prod
-    environment:
-      POSTGRES_USER: ${TFSTATE_DB_USER:?TFSTATE_DB_USER is required}
-      POSTGRES_PASSWORD: ${TFSTATE_DB_PASSWORD:?TFSTATE_DB_PASSWORD is required}
-      POSTGRES_DB: ${TFSTATE_DB_NAME:?TFSTATE_DB_NAME is required}
-    volumes:
-      - postgres_tfstate_prod_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${TFSTATE_DB_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - worker-network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 256M
+  # postgres-tfstate stand hier und laeuft jetzt ausserhalb dieser VM.
+  #
+  # Der Grund steht in ADR-0005: die Datenbank hielt den Terraform-State
+  # jedes App-Deployments - und damit die einzige Kenntnis davon, welche VMs
+  # die Plattform angelegt hat, samt der Passwoerter der Studierenden. Sie
+  # lief dabei auf der VM, die der Staging-Deploy selbst verwaltet. Seit
+  # ADR-0003 reisst jeder Merge diese VM ab, seit ADR-0004 gibt es kein
+  # Volume mehr, das etwas hinuebertraegt.
+  #
+  # Ein Merge loeschte damit das Gedaechtnis der Plattform. Die App-VMs
+  # liefen weiter - sie stehen in einem anderen State als envs/staging und
+  # werden vom destroy nicht angesprochen -, waren aber nicht mehr
+  # verwaltbar. Bei Linux-Apps hiess das ein paar Minuten Neuaufbau, bei
+  # Windows-Apps 30 bis 60 Minuten je Deployment.
+  #
+  # Die Datenbank laeuft jetzt auf der Runner-VM, die dieses Terraform nicht
+  # verwaltet - dieselbe Ueberlegung wie beim Staging-State in ADR-0003.
+  # Adresse und Zugang kommen ueber TFSTATE_DB_HOST aus der .env.
 
   # ----------------------------------------------------------------
   # Keycloak database
@@ -340,7 +333,12 @@ services:
 
       # Terraform pg backend — isolated DB, NOT the application DB.
       # Worker uses one schema per deployment (deployment_<uuid>).
-      TFSTATE_DATABASE_URL: postgresql://${TFSTATE_DB_USER}:${TFSTATE_DB_PASSWORD}@postgres-tfstate:5432/${TFSTATE_DB_NAME}?sslmode=disable
+      # Zeigt auf die Datenbank ausserhalb dieser VM, siehe ADR-0005.
+      # TFSTATE_DB_HOST gehoert in die .env; der Default ist die Runner-VM
+      # im Projektnetz. Faellt der Host weg, kann der Worker weder anlegen
+      # noch loeschen - das ist der Preis der Auslagerung und steht so auch
+      # im ADR.
+      TFSTATE_DATABASE_URL: postgresql://${TFSTATE_DB_USER}:${TFSTATE_DB_PASSWORD}@${TFSTATE_DB_HOST:-10.200.1.55}:${TFSTATE_DB_PORT:-5432}/${TFSTATE_DB_NAME}?sslmode=disable
 
       # Git — optional since the GitHub App; still needed for GitLab repositories.
       GIT_ACCESS_TOKEN: ${GIT_ACCESS_TOKEN:-}
@@ -355,8 +353,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      postgres-tfstate:
-        condition: service_healthy
+      # Kein depends_on fuer den Terraform-State mehr: die Datenbank liegt
+      # ausserhalb dieser Compose-Datei und kann von hier aus nicht
+      # abgewartet werden. Ist sie nicht erreichbar, scheitert das erste
+      # Deployment mit einem Verbindungsfehler statt beim Start.
     volumes:
       - worker_git_repos:/tmp/repos
     networks:
@@ -474,8 +474,6 @@ services:
 # ----------------------------------------------------------------
 volumes:
   postgres_prod_data:
-    driver: local
-  postgres_tfstate_prod_data:
     driver: local
   keycloak_postgres_prod_data:
     driver: local

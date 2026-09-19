@@ -68,6 +68,40 @@ ssh ubuntu@2001:7c0:1b20:c913:1::3f0 \
   'cat /var/lib/tf-state/staging/terraform.tfstate' > tfstate-sicherung.json
 ```
 
+## Die Terraform-State-Datenbank
+
+Seit [ADR-0005](adr/0005-tfstate-der-app-deployments-gehoert-von-der-staging-vm-herunter.md)
+läuft auf dieser VM zusätzlich Postgres. Es hält den Terraform-State **jedes
+App-Deployments** — und damit die einzige Kenntnis darüber, welche VMs die
+Plattform angelegt hat, samt der Passwörter der Studierenden.
+
+| | |
+|---|---|
+| Version | PostgreSQL 16, über `apt` |
+| Lauscht auf | `10.200.1.55` und `localhost`, Port 5432 |
+| Datenbank | `tfstate`, Eigentümer `terraform` |
+| Erreichbar aus | `10.200.0.0/19`, Security Group `tfstate-db` |
+| Konfiguration | `/etc/postgresql/16/main/` |
+
+Der Worker auf der Staging-VM verbindet sich über `TFSTATE_DB_HOST` aus der
+`.env`. **Die Adresse ist per DHCP vergeben** — wird diese VM je neu gebaut,
+muss der Wert nachgezogen werden.
+
+**Diese Datenbank ist die zweite Stelle auf dieser Maschine, deren Verlust
+teuer ist.** Beim Terraform-State von Staging geht es um eine VM; hier um jedes
+laufende Deployment. Ein verlorenes Windows-Deployment kostet 30 bis 60 Minuten
+Neuaufbau je Studierendem. Sichern:
+
+```bash
+ssh ubuntu@2001:7c0:1b20:c913:1::3f0   'sudo -u postgres pg_dump -d tfstate --no-owner --no-acl' > tfstate-sicherung.sql
+```
+
+Nachsehen, was drinsteht:
+
+```bash
+sudo -u postgres psql -d tfstate -c   "SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'deployment_%';"
+```
+
 ## Nachsehen, ob er läuft
 
 In GitHub: **Settings → Actions → Runners** am `deployment`-Repository, oder:
