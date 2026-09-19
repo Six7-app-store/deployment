@@ -42,34 +42,14 @@ services:
   # ----------------------------------------------------------------
   # PostgreSQL Database (application)
   # ----------------------------------------------------------------
-  postgres:
-    image: postgres:16-alpine
-    container_name: postgres-prod
-    environment:
-      POSTGRES_USER: ${DB_USER:?DB_USER is required}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      POSTGRES_DB: ${DB_NAME:?DB_NAME is required}
-    volumes:
-      - postgres_prod_data:/var/lib/postgresql/data
-    ports:
-      - "${DB_PORT:-5432}:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - backend-network
-      - worker-network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
+  # postgres (Anwendungsdaten) und keycloak-postgres liegen seit ADR-0006
+  # ausserhalb dieser VM, auf derselben Maschine wie der Terraform-State.
+  #
+  # Der Grund ist derselbe wie in ADR-0005, nur teurer: hier stehen die
+  # Deployments, Benutzer, Kurse und Zugangsdaten. Am 19.09.2026 hat ein
+  # Merge sie geloescht - die Windows-VMs liefen weiter, aber die
+  # Oberflaeche kannte sie nicht mehr, obwohl ihre Terraform-States
+  # gerettet waren.
 
   # ----------------------------------------------------------------
   # PostgreSQL Database (Terraform Remote State)
@@ -101,24 +81,6 @@ services:
   # ----------------------------------------------------------------
   # Keycloak database
   # ----------------------------------------------------------------
-  keycloak-postgres:
-    image: postgres:16-alpine
-    container_name: keycloak-postgres-prod
-    environment:
-      POSTGRES_USER: ${KEYCLOAK_DB_USER:?KEYCLOAK_DB_USER is required}
-      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?KEYCLOAK_DB_PASSWORD is required}
-      POSTGRES_DB: ${KEYCLOAK_DB_NAME:?KEYCLOAK_DB_NAME is required}
-    volumes:
-      - keycloak_postgres_prod_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${KEYCLOAK_DB_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - keycloak-network
-    restart: unless-stopped
-
   # ----------------------------------------------------------------
   # Keycloak (Identity Provider)
   # ----------------------------------------------------------------
@@ -134,7 +96,7 @@ services:
     command: ["start-dev", "--import-realm"]
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/${KEYCLOAK_DB_NAME}
+      KC_DB_URL: jdbc:postgresql://${KEYCLOAK_DB_HOST:-10.200.1.55}:${KEYCLOAK_DB_PORT:-5432}/${KEYCLOAK_DB_NAME}
       KC_DB_USERNAME: ${KEYCLOAK_DB_USER}
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER:?KEYCLOAK_ADMIN_USER is required}
@@ -147,8 +109,6 @@ services:
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
     depends_on:
-      keycloak-postgres:
-        condition: service_healthy
     networks:
       - keycloak-network
       - backend-network
@@ -226,7 +186,7 @@ services:
     command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--proxy-headers", "--forwarded-allow-ips", "*"]
     environment:
       # Database
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST:-10.200.1.55}:${DB_PORT:-5432}/${DB_NAME}
 
       # Security
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
@@ -281,8 +241,6 @@ services:
       WORKERS: ${BACKEND_WORKERS:-4}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
-      postgres:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       redis:
@@ -473,10 +431,6 @@ services:
 # Volumes
 # ----------------------------------------------------------------
 volumes:
-  postgres_prod_data:
-    driver: local
-  keycloak_postgres_prod_data:
-    driver: local
   rabbitmq_prod_data:
     driver: local
   redis_prod_data:
