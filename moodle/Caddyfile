@@ -16,10 +16,19 @@
 		}
 	}
 
-	# Moodle laeuft im Bitnami-Image auf 8080. X-Forwarded-Proto ist nicht
-	# optional: ohne den Kopf baut Moodle alle Links mit http:// und der
-	# LTI-Launch scheitert am Mixed-Content-Schutz des Browsers.
+	# X-Forwarded-Proto ist nicht optional: ohne den Kopf baut Moodle alle
+	# Links mit http:// und der LTI-Launch scheitert am Mixed-Content-Schutz
+	# des Browsers.
+	#
+	# Der Host-Kopf muss dagegen auf den INTERNEN Namen zeigen, nicht auf den
+	# oeffentlichen. Das ist keine Feinheit: Moodle wirft mit reverseproxy=true
+	# einen Fehler, sobald der empfangene Host dem wwwroot gleicht
+	# (lib/setuplib.php, 'reverseproxyabused'). Caddy reicht den Host von sich
+	# aus durch, also muss er hier ausdruecklich ueberschrieben werden - sonst
+	# antwortet jede Seite mit 500, waehrend der Container direkt befragt
+	# einwandfrei laeuft.
 	reverse_proxy moodle:8080 {
+		header_up Host moodle:8080
 		header_up X-Forwarded-Proto https
 	}
 }
