@@ -15,17 +15,17 @@ Das Ziel ist nicht „der Agent macht alles", sondern: **der Mensch entscheidet
 noch über Merge und Produktion, alles davor läuft ohne ihn.** Aus einer
 Anforderung wird ein Feature, und wir sehen es uns am Ende an.
 
-Die Kette steht schon. Was fehlt, sind drei Handgriffe, nicht drei Bausteine.
+Die Kette steht schon. Was fehlt, sind zwei Handgriffe, nicht zwei Bausteine.
 
 | Schritt | Heute | Ziel bis Projektende |
 |---|---|---|
 | Anforderung → `SPEC.md` | Mensch schreibt sie im Interview mit dem Agenten | Agent erzeugt sie aus der User Story, Mensch bestätigt |
 | Umsetzung | Agent; Hooks halten Lint und Typecheck grün | unverändert |
 | Verifikation | Stop-Hook lokal, Pipeline im Pull Request | unverändert |
-| Gegenprüfung | `/code-review` im frischen Kontext | unverändert |
+| Gegenprüfung | `/code-review` im frischen Kontext, `pr-review` gegen die DoD | unverändert |
 | Pull Request öffnen | Mensch | Agent |
 | **Merge** | **Mensch** | **Mensch — bleibt so** |
-| Staging-Deploy anstoßen | Mensch klickt in Forgejo | Agent stößt den Workflow an |
+| Staging-Deploy anstoßen | läuft bei jedem Merge auf `main` von selbst | unverändert |
 | Nachweis, dass es läuft | Agent prüft lesend (`deployment-pruefen`) | unverändert |
 | **Produktion** | **Mensch** | **Mensch — bleibt so** |
 
@@ -33,22 +33,20 @@ Die Kette steht schon. Was fehlt, sind drei Handgriffe, nicht drei Bausteine.
 
 | Lücke | Aufwand |
 |---|---|
-| Forgejo-API-Token mit Recht auf `workflow_dispatch`, abgelegt außerhalb des Repositories | ein Handgriff in den Forgejo-Einstellungen |
 | `gh` installiert und angemeldet, damit der Agent den CI-Stand der Pull Requests lesen kann | eine Installation |
-| Ein Skill, der aus einer User Story eine `SPEC.md` erzeugt — nach demselben Muster wie die sieben vorhandenen | ein Arbeitstag |
+| Ein Skill, der aus einer User Story eine `SPEC.md` erzeugt — nach demselben Muster wie die acht vorhandenen | ein Arbeitstag |
 
 ### Warum das im Projektrahmen umsetzbar ist
 
 Weil nichts davon neue Infrastruktur braucht. Die Pipeline läuft, der Runner
-läuft, die Secrets liegen, die Hooks greifen, sieben Skills sind im Einsatz.
-Die drei offenen Punkte sind ein Token, eine Installation und ein weiterer
-Skill desselben Formats.
+läuft, die Secrets liegen, die Hooks greifen, acht Skills sind im Einsatz.
+Die zwei offenen Punkte sind eine Installation und ein weiterer Skill
+desselben Formats.
 
-Der Staging-Workflow trägt die Absicherung bereits in sich: seine Eingabe
-`mode` steht standardmäßig auf `plan`, und ein `plan`-Lauf prüft Runner,
-Image, Checkout, alle sechs Secrets und eine echte Anmeldung an OpenStack —
-ohne irgendetwas zu ändern. Der Agent kann also erst prüfen und dann
-ausrollen, und ein Fehlgriff bleibt folgenlos.
+Den Punkt „Staging-Deploy anstoßen" hat der Umbau vom 19.09.2026 erledigt,
+bevor er eine Lücke werden konnte: Staging baut sich seit `52d931f` bei jedem
+Merge auf `main` selbst neu auf (ADR 0003). Angestoßen werden muss nichts mehr.
+Ein Token für den früheren Forgejo-Workflow braucht es damit auch nicht.
 
 ### Was bewusst außerhalb bleibt
 
@@ -81,7 +79,7 @@ im Pull Request rot wird.
 | Befehle, Konventionen, Tabu-Zonen je Repo | `AGENTS.md` im Repo-Wurzelverzeichnis | Agenten lesen die nächstgelegene Datei im Verzeichnisbaum. Vier Repos, vier Dateien. |
 | Claude-spezifischer Einstieg | `CLAUDE.md` mit `@AGENTS.md` | Einzeiler, der die eine Wahrheit importiert |
 | Architekturentscheidungen | `deployment/docs/adr/` | Eine Entscheidung je Datei, unveränderlich, fortlaufend nummeriert |
-| Deterministische Regeln | `.claude/settings.json` + `.claude/hooks/` je Repo | Was garantiert passieren muss, gehört nicht in Prosa |
+| Deterministische Regeln | `deployment/harness/`, verteilt nach `.claude/` je Repo | Was garantiert passieren muss, gehört nicht in Prosa |
 | Setup, Betrieb, Troubleshooting | `deployment/docs/*.md` | Für Menschen wie für Agenten dieselbe Quelle |
 
 ### Warum AGENTS.md und nicht nur CLAUDE.md
@@ -150,7 +148,7 @@ geladene Datei, sondern in eine Skill unter `.claude/skills/<name>/SKILL.md`.
 | Qualitätssicherung (Frontend) | vitest, vue-tsc | `docker exec frontend-dev sh -lc 'cd /app && npx vitest --run'` |
 | Qualitätssicherung (IaC) | terraform fmt, Trivy | in der Pipeline |
 | Gegenprüfung | `/code-review` | Subagent in frischem Kontext, sieht nur den Diff |
-| Deployment | Forgejo-Workflow | `workflow_dispatch` auf Staging |
+| Deployment | GitHub Actions, self-hosted Runner | automatisch bei Merge auf `main`; von Hand `gh workflow run staging.yml` |
 
 Die vollständige, jeweils gültige Liste steht in der `AGENTS.md` des
 betreffenden Repositories — nicht hier, damit es nur eine Quelle gibt.
@@ -163,8 +161,9 @@ frühere. Daraus ergibt sich die Trennung, nach der wir sortieren:
 | Schicht | Ort | Im Repo | Gilt für |
 |---|---|---|---|
 | Baseline | `AGENTS.md`, `CLAUDE.md` | ✅ | alle |
-| | `.claude/settings.json` (Hooks, Plugins) | ✅ | alle |
+| | `.claude/settings.json` (Hooks, Berechtigungen, Plugins) | ✅ erzeugt | alle |
 | | `.claude/skills/<name>/SKILL.md` | ✅ | alle |
+| | `.claude/hooks/agent_guard.py` | ✅ erzeugt | alle |
 | | `.mcp.json` | ✅ | alle |
 | Persönlich, projektbezogen | `.claude/settings.local.json` | ❌ gitignored | einer |
 | Persönlich, global | `~/.claude/` — Skills, Plugins, Modellwahl | ❌ | einer |
@@ -199,6 +198,7 @@ Skills lädt er bei Bedarf.
 | `packer-template` | worker | Welches Layout ein App-Repo haben muss |
 | `adr-schreiben` | deployment | Wann fällig, Format, Nummernvergabe |
 | `deployment-pruefen` | deployment | Lesende Prüfung, ob eine Umgebung läuft |
+| `pr-review` | alle (geteilt) | Diff gegen die Definition of Done des betroffenen Repos |
 
 `neue-migration` zeigt das Prinzip am deutlichsten: Der Hook **verbietet**,
 bestehende Migrationen zu bearbeiten. Der Skill sagt, was man **stattdessen**
@@ -252,7 +252,7 @@ Produktion bleibt beim Menschen.
 
 | Erlaubt | Verboten |
 |---|---|
-| Staging-Workflow anstoßen (`mode: plan`, dann `apply`) | Produktions-Deployment |
+| Staging-Workflow von Hand anstoßen — nach Rückfrage | Produktions-Deployment |
 | `/health` abfragen, Erreichbarkeit über IPv4 und IPv6 prüfen | `terraform apply` / `destroy` von Hand |
 | Containerstatus und Logs lesen | `deploy.cmd` / `scripts/deploy.sh` von Hand |
 | Pipeline-Ergebnis lesen | Secrets lesen oder schreiben |
@@ -263,17 +263,22 @@ Der Agent darf den Workflow starten; Terraform von Hand gegen OpenStack
 laufen zu lassen bleibt ihm verwehrt. Damit gilt für ihn genau dieselbe
 Regel wie für uns.
 
-Seit dem 18.09.2026 gibt es dafür einen zweiten Weg: `deploy.cmd` bzw.
-`scripts/deploy.sh` rollen von einem Entwicklerrechner aus aus, weil ein
-GitHub-gehosteter Runner die OpenStack-API der DHBW nicht erreicht. Dieser
-Weg ist für den Agenten **verschlossen** — er ist genau die Infrastruktur
-unter dem Knopf. Was der Agent darf, ist der Forgejo-Workflow.
+Daneben gibt es `deploy.cmd` bzw. `scripts/deploy.sh`, die von einem
+Entwicklerrechner im VPN ausrollen. Dieser Weg ist für den Agenten
+**verschlossen** — er ist genau die Infrastruktur unter dem Knopf. Was der
+Agent darf, ist der GitHub-Workflow.
 
-Zwei Dinge machen das vertretbar. Erstens steht die Workflow-Eingabe `mode`
-standardmäßig auf `plan` — ein `plan`-Lauf prüft Runner, Image, Checkout,
-alle sechs Secrets und eine echte OpenStack-Anmeldung, ändert aber nichts.
-Der Agent prüft also erst und rollt dann aus. Zweitens deployt Staging nur,
-was schon in `main` steht, und dorthin kommt nichts ohne menschlichen Merge.
+**Achtung, seit dem 19.09.2026 anders:** Die frühere Eingabe `mode` mit
+Default `plan` gibt es nicht mehr. Der heutige Workflow kennt `recreate`
+(Default **true**, fährt `terraform destroy` und baut neu) und `seed`. Einen
+Trockenlauf gibt es nicht — jeder Lauf verändert etwas.
+
+Vertretbar bleibt es aus zwei anderen Gründen. Erstens ist Staging bewusst
+wegwerfbar: es wird ohnehin bei jedem Merge neu gebaut (ADR 0003), ein
+zusätzlicher Lauf zerstört also nichts, was nicht ohnehin verginge. Zweitens
+deployt Staging nur, was schon in `main` steht, und dorthin kommt nichts ohne
+menschlichen Merge. Dazu kommt das Gate im Harness: `gh workflow run` steht in
+`permissions.ask`, ein Mensch bestätigt jeden Lauf von Hand.
 
 Ein Agent, der auf das Ergebnis seiner eigenen Arbeit schauen kann, arbeitet
 eine Stufe eigenständiger: Er merkt selbst, dass ein Deployment rot ist,
@@ -293,15 +298,15 @@ laufen, ob der Agent daran denkt oder nicht.
 Deshalb gilt: Was garantiert passieren muss, wird ein Hook. Was Kontext
 ist, bleibt Prosa.
 
-| Repo | Ereignis | Wirkung |
-|---|---|---|
-| backend | `PreToolUse` auf Edit/Write | Blockt Änderungen an **bestehenden** Alembic-Migrationen; neue bleiben erlaubt |
-| backend | `PostToolUse` auf Edit/Write | `ruff --fix` auf die geänderte Datei |
-| backend | `Stop` | Turn-Ende blockiert, solange `ruff check` rot ist |
-| worker | `PostToolUse` / `Stop` | dasselbe mit ruff, black und isort |
-| frontend | `Stop` | Turn-Ende blockiert, solange `vue-tsc` rot ist |
-| deployment | `PreToolUse` auf Edit/Write | Blockt Schreibzugriffe auf `.env` und `*.pem`; `.env.example` bleibt erlaubt |
-| deployment | `Stop` | Turn-Ende blockiert, solange Terraform unformatiert ist |
+Seit der Vereinheitlichung ist es **ein** Skript für alle vier Repos; es
+leitet die geltende Regel aus dem Pfad der bearbeiteten Datei ab.
+
+| Ereignis | Wirkung |
+|---|---|
+| `PreToolUse` auf Edit/Write | Blockt Schreibzugriffe auf `.env`, `*.pem`, `*.key` — in **allen** Repos, nicht nur in deployment. `.env.example` bleibt erlaubt |
+| `PreToolUse` auf Edit/Write | Blockt Änderungen an **bestehenden** Alembic-Migrationen; neue bleiben erlaubt |
+| `PostToolUse` auf Edit/Write | backend: `ruff --fix`. worker: ruff, black, isort. `*.tf`: `terraform fmt`. frontend: bewusst nichts |
+| `Stop` | Turn-Ende blockiert, solange das Gate des Repos rot ist: ruff (backend), ruff/black/isort (worker), `vue-tsc` (frontend), `terraform fmt -check` (deployment) |
 
 Die Skripte liegen als lesbare Python-Dateien unter `.claude/hooks/`, nicht
 als Einzeiler im JSON. Sie sind damit im Pull Request review-fähig und
@@ -324,6 +329,36 @@ wäre nach einer halben Stunde abgeschaltet. Deshalb die Aufteilung:
 Lint und Formatierung kosten Sekunden und gehören an den Turn. Tests,
 Coverage und Security-Scan kosten Minuten und gehören in den Pull Request,
 wo Wartezeit nichts blockiert.
+
+### Die harte Ebene: Berechtigungen
+
+Hooks sind deterministisch, aber sie sind Code, den wir selbst schreiben —
+und sie laufen fail-open. Für die Dinge, die unter keinen Umständen passieren
+dürfen, ist das zu weich. Deshalb liegt darunter noch eine Ebene, die Claude
+Code selbst durchsetzt: der `permissions`-Block in `.claude/settings.json`.
+
+| Ebene | Wirkung | Wenn sie ausfällt |
+|---|---|---|
+| `AGENTS.md` | beratend | Der Agent macht es trotzdem |
+| Hook | deterministisch, aber fail-open | Kein Docker → Hook schweigt |
+| `permissions.deny` | hart, vor jedem Werkzeugaufruf | Der Aufruf findet nicht statt |
+
+Was hart gesperrt ist: Lesen **und** Schreiben von `.env`, `*.pem`, `*.key`
+und `clouds.yaml`; `git push --force` und jeder Push auf `main`;
+`gh pr merge`; `make prod*` und Compose gegen die Prod- und Staging-Stacks;
+`deploy.cmd` und `scripts/deploy.sh`; `terraform apply|destroy|state|import`;
+`docker system prune`, `docker volume rm`, `rm -rf`. Dazu `docker exec
+<container> env`, weil die Secret-Sperre sonst über den Container zu umgehen
+wäre.
+
+Was nachfragt statt zu sperren: jeder `git push`, `git reset --hard`,
+`git rebase`, `terraform plan`, `gh workflow run`, `docker compose down`,
+die zurücksetzenden `make`-Targets.
+
+Das **Lesen** der Secrets mitzusperren ist der Punkt, der vorher fehlte. Ein
+Hook auf `Edit|Write` verhindert nur das Schreiben; gelesen wandert der
+Inhalt in den Kontext und damit an die API. `.claudeignore` ist dafür nicht
+geeignet — es hat dokumentierte Umgehungen, `permissions.deny` nicht.
 
 ## Anforderungen an den Agenten
 
@@ -378,7 +413,7 @@ User Story
    └─ Pipeline                     lint → test → coverage → security
             │                              → build → image-scan
             │
-            └─ main  ──►  Staging-Deploy (Terraform + Ansible, Forgejo-Runner)
+            └─ main  ──►  Staging-Deploy (Terraform + Ansible, self-hosted Runner)
 ```
 
 Eine brauchbare `SPEC.md` ist selbsttragend: sie benennt die beteiligten
@@ -407,13 +442,33 @@ Einbau nicht sofort rot steht. Nach dem ersten vollständigen
 Coverage-Lauf gehören sie auf knapp unter den tatsächlichen Wert gezogen.
 Ab da gilt: nur hoch, nie runter.
 
-## Einschränkung: wo die Hooks greifen
+## Wo die Hooks greifen
 
-`.claude/settings.json` wird aus dem Verzeichnis geladen, in dem die
-Sitzung startet. Die Hooks greifen also nur, wenn Claude Code **im
-jeweiligen Repository** gestartet wird — nicht im übergeordneten
-Arbeitsverzeichnis, das alle vier enthält.
+`.claude/settings.json` wird aus dem Verzeichnis geladen, in dem die Sitzung
+startet — plus `~/.claude`. Unterverzeichnisse werden **nicht** gescannt.
 
-Das ist kein Nachteil, sondern passt zur Struktur: dieselbe Regel sorgt
-dafür, dass die nächstgelegene `AGENTS.md` gilt. Wer am Backend arbeitet,
-startet im Backend.
+Bis zur Vereinheitlichung war das die ganze Wahrheit, mit der Begründung: wer
+am Backend arbeitet, startet im Backend. In der Praxis stimmte das nicht. Alle
+vier Repos liegen bei jedem von uns in einem gemeinsamen Arbeitsordner, weil
+sie nur zusammen laufen, und eine Sitzung, die dort startet, lief ohne Hooks
+und ohne deny-Regeln — ohne dass etwas darauf hingewiesen hätte.
+
+Deshalb liegt der Harness jetzt kanonisch in `deployment/harness/` und wird
+von dort verteilt: in die vier Repos **und** in den Arbeitsordner darüber.
+
+```bash
+make harness-sync     # verteilen, nach jedem git pull
+make harness-check    # nur prüfen, Exit 1 bei Drift
+make harness-test     # Tests des Hook-Helfers
+```
+
+Der Hook leitet das zuständige Repo aus dem Pfad der bearbeiteten Datei ab,
+nicht aus dem Arbeitsverzeichnis. Dieselbe Regel gilt damit aus beiden
+Startpunkten. Startet die Sitzung im Arbeitsordner, prüft das Stop-Gate nur
+die Repos mit uncommitteten Änderungen — sonst kostet jedes Turn-Ende einen
+Durchlauf über alle vier.
+
+Der zweite Grund für die eine Quelle: vorher lag in drei Repos eine eigene
+Kopie von `agent_guard.py`, und die drei waren bereits auseinandergedriftet.
+Getrennte Repositories können einander nichts mitgeben — ein Skript kann es.
+Details in `harness/README.md`.

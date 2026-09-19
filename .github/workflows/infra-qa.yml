@@ -15,14 +15,22 @@
 # kann also grundsätzlich nicht deployen, unabhängig davon, welche
 # Zugangsdaten er hätte.
 #
-# Automatisieren ließe sich der Deploy nur mit einem self-hosted Runner
-# im Campusnetz. Dagegen spricht mehr als der Aufwand: dieses Repository
-# ist öffentlich, und GitHub rät von self-hosted Runnern an öffentlichen
-# Repositories ausdrücklich ab — wer einen Pull Request öffnen kann,
-# bekommt sonst eine Ausführungsumgebung mit Produktionszugang.
+# Automatisieren ließ sich der Deploy deshalb nur mit einem self-hosted
+# Runner im Campusnetz. Genau den gibt es seit 52d931f: die VM
+# `github-runner` fährt `.github/workflows/staging.yml` (ADR 0002).
 #
-# Deshalb bleibt das Ausrollen ein bewusst manueller Schritt, ausgeführt
-# von einem Menschen im VPN. Die Anleitung dazu: docs/deploy-runbook.md
+# Der Einwand dagegen bleibt richtig und ist dort entschärft, nicht
+# entfallen: dieses Repository ist öffentlich, und GitHub rät von
+# self-hosted Runnern an öffentlichen Repositories ab, weil jeder mit
+# einem Fork-Pull-Request sonst eine Ausführungsumgebung mit
+# Produktionszugang bekäme. Der Staging-Workflow hat deshalb **keinen**
+# `pull_request`-Trigger — nur `push` auf main, `repository_dispatch`
+# und `workflow_dispatch`, und die kann ein Außenstehender nicht
+# auslösen. Wer dort einen PR-Trigger ergänzt, hebt das auf.
+#
+# Dieser Workflow hier deployt weiterhin nicht. Er prüft nur. Der
+# manuelle Weg von einem Rechner im VPN bleibt daneben bestehen:
+# docs/deploy-runbook.md
 #
 # Was sich ohne OpenStack prüfen lässt, wird hier geprüft — und zwar bei
 # jedem Push und jedem Pull Request, damit ein Fehler in Terraform oder
@@ -41,6 +49,18 @@ permissions:
   security-events: write
 
 jobs:
+  # Der Hook-Helfer entscheidet ueber Secrets, Migrationen und das
+  # Turn-Ende. Ein Fehler darin faellt sonst erst auf, wenn ein Agent
+  # mitten in einer Aufgabe haengt.
+  harness:
+    name: "🪝 Claude-Harness"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hook-Tests
+        run: python harness/test_agent_guard.py
+
   qa:
     name: "🔍 Terraform, Ansible, IaC-Scan"
     runs-on: ubuntu-latest
