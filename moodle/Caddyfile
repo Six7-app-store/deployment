@@ -1,0 +1,34 @@
+# Reverse Proxy und TLS fuer die Moodle-Instanz. Aufbau wie beim App Store.
+{
+	acme_ca {$ACME_CA_URL}
+	email {$ACME_EMAIL}
+}
+
+{$APP_HOSTNAME} {
+	# dns-01, weil die CA diesen Host nicht von aussen erreichen kann - die
+	# Begruendung steht ausfuehrlich in caddy/Caddyfile des App Stores.
+	tls {
+		dns rfc2136 {
+			key_name {$DNS_TSIG_KEY_NAME}
+			key_alg {$DNS_TSIG_KEY_ALG}
+			key {$DNS_TSIG_KEY}
+			server {$DNS_SERVER}
+		}
+	}
+
+	# X-Forwarded-Proto ist nicht optional: ohne den Kopf baut Moodle alle
+	# Links mit http:// und der LTI-Launch scheitert am Mixed-Content-Schutz
+	# des Browsers.
+	#
+	# Der Host-Kopf muss dagegen auf den INTERNEN Namen zeigen, nicht auf den
+	# oeffentlichen. Das ist keine Feinheit: Moodle wirft mit reverseproxy=true
+	# einen Fehler, sobald der empfangene Host dem wwwroot gleicht
+	# (lib/setuplib.php, 'reverseproxyabused'). Caddy reicht den Host von sich
+	# aus durch, also muss er hier ausdruecklich ueberschrieben werden - sonst
+	# antwortet jede Seite mit 500, waehrend der Container direkt befragt
+	# einwandfrei laeuft.
+	reverse_proxy moodle:8080 {
+		header_up Host moodle:8080
+		header_up X-Forwarded-Proto https
+	}
+}

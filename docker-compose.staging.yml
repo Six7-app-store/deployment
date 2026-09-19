@@ -230,6 +230,39 @@ services:
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Click-n-Deploy}
 
+      # LTI 1.3 - Moodle ist die Platform, dieser App Store das Tool.
+      #
+      # Alle Werte haben einen Standard, keiner ist erzwungen: LTI_ENABLED
+      # ist der Kippschalter, und ist er aus, antworten die /lti-Endpunkte
+      # mit 503, ohne dass sonst etwas anders laeuft. Ein Stack ohne
+      # registriertes Moodle startet damit unveraendert.
+      #
+      # Die sechs Registrierungswerte stellt Moodle aus - siehe
+      # docs/moodle-infrastruktur.md und moodle/cli/register_lti_tool.php.
+      LTI_ENABLED: ${LTI_ENABLED:-false}
+      LTI_PLATFORM_ISSUER: ${LTI_PLATFORM_ISSUER:-}
+      LTI_CLIENT_ID: ${LTI_CLIENT_ID:-}
+      LTI_DEPLOYMENT_ID: ${LTI_DEPLOYMENT_ID:-}
+      LTI_JWKS_URL: ${LTI_JWKS_URL:-}
+      LTI_AUTH_LOGIN_URL: ${LTI_AUTH_LOGIN_URL:-}
+      LTI_TOKEN_URL: ${LTI_TOKEN_URL:-}
+
+      # Der private Schluessel dieses Tools und das Geheimnis der eigenen
+      # Session. Beide gehoeren in die .env, nicht hierher.
+      LTI_PRIVATE_KEY_B64: ${LTI_PRIVATE_KEY_B64:-}
+      LTI_SESSION_SECRET: ${LTI_SESSION_SECRET:-}
+
+      # Eigene Redis-Datenbank, nicht die von Celery: hier liegen state
+      # und nonce zwischen Login und Launch.
+      LTI_REDIS_URL: ${LTI_REDIS_URL:-redis://redis:6379/1}
+
+      # Zielseiten im Frontend. Die Standardwerte in config.py zeigen auf
+      # localhost:5173 - auf Staging waere das die Maschine des Nutzers.
+      LTI_LAUNCH_REDIRECT_URL: ${LTI_LAUNCH_REDIRECT_URL:-${APP_BASE_URL}/lti/callback}
+      LTI_LINK_REDIRECT_URL: ${LTI_LINK_REDIRECT_URL:-${APP_BASE_URL}/lti/link}
+
+      LTI_TRUST_INSTRUCTOR_ROLE: ${LTI_TRUST_INSTRUCTOR_ROLE:-false}
+
       # Public base URL of the frontend, used in owner-summary mails
       # to deep-link back to the deployment detail page.
       APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL is required}
