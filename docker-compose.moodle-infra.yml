@@ -1,0 +1,114 @@
+# Moodle als LTI-Plattform fuer den App Store.
+#
+# Bewusst NICHT moodle-docker: das ist die Entwicklungsumgebung von moodlehq,
+# sie bindet einen Moodle-Quellcodebaum von der Platte ein und bringt Selenium,
+# Mailpit und exttests mit. Fuer einen Server ist das der falsche Ausgangspunkt.
+#
+# Stattdessen das Bitnami-Image: es bringt Moodle fertig installiert mit und
+# konfiguriert sich beim ersten Start aus Umgebungsvariablen.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: moodle-postgres
+    environment:
+      POSTGRES_USER: ${MOODLE_DB_USER:?MOODLE_DB_USER is required}
+      POSTGRES_PASSWORD: ${MOODLE_DB_PASSWORD:?MOODLE_DB_PASSWORD is required}
+      POSTGRES_DB: ${MOODLE_DB_NAME:?MOODLE_DB_NAME is required}
+    volumes:
+      - moodle_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MOODLE_DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [moodle]
+    restart: unless-stopped
+
+  moodle:
+    # Dasselbe Image wie die lokale Testinstanz (moodle-lti-dev.md). bitnami
+    # stand hier zuerst, existiert auf Docker Hub aber nicht mehr - der Pull
+    # scheiterte mit "not found". erseco hat zudem den Vorzug, dass die
+    # LTI-Anbindung genau gegen dieses Image entwickelt wurde.
+    image: erseco/alpine-moodle:v5.2.2
+    container_name: moodle
+    environment:
+      # Wird zu $CFG->wwwroot und damit zum iss-Claim jedes id_token. Muss
+      # exakt dem LTI_PLATFORM_ISSUER des App Stores entsprechen, sonst wird
+      # jeder Launch abgewiesen. https, weil Caddy davor steht.
+      SITE_URL: https://${MOODLE_HOSTNAME:?MOODLE_HOSTNAME is required}
+
+      MOODLE_USERNAME: ${MOODLE_ADMIN_USER:?MOODLE_ADMIN_USER is required}
+      MOODLE_PASSWORD: ${MOODLE_ADMIN_PASSWORD:?MOODLE_ADMIN_PASSWORD is required}
+      MOODLE_EMAIL: ${MOODLE_ADMIN_EMAIL:?MOODLE_ADMIN_EMAIL is required}
+      MOODLE_SITENAME: ${MOODLE_SITE_NAME:-DHBW App Store Moodle}
+      MOODLE_LANGUAGE: de
+
+      DB_TYPE: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${MOODLE_DB_NAME}
+      DB_USER: ${MOODLE_DB_USER}
+      DB_PASS: ${MOODLE_DB_PASSWORD}
+
+      # Anders als lokal steht hier TLS davor, also beides auf true.
+      REVERSEPROXY: "true"
+      SSLPROXY: "true"
+      AUTO_UPDATE_MOODLE: "false"
+    # Nur an die Loopback-Adresse gebunden. Von aussen fuehrt der Weg
+    # ausschliesslich ueber Caddy; das hier ist der Port, an dem das Playbook
+    # prueft, ob die Erstinstallation durch ist.
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - moodle_html:/var/www/html
+      - moodle_datadir:/var/www/moodledata
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/login/index.php || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 600s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [moodle]
+    restart: unless-stopped
+
+  # Dasselbe Bauprinzip wie beim App Store: Caddy holt das Zertifikat ueber
+  # dns-01 bei der DHBW-CA. Der Weg ueber DNS ist hier wie dort noetig, weil
+  # die CA den Host nicht von aussen erreichen kann.
+  caddy:
+    build:
+      context: ./caddy
+    image: appstore-caddy:rfc2136
+    container_name: moodle-caddy
+    environment:
+      APP_HOSTNAME: ${MOODLE_HOSTNAME}
+      ACME_CA_URL: ${ACME_CA_URL:-https://certificates.dhbw.cloud/directory}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+      DNS_TSIG_KEY_NAME: ${DNS_TSIG_KEY_NAME:?DNS_TSIG_KEY_NAME is required}
+      DNS_TSIG_KEY_ALG: ${DNS_TSIG_KEY_ALG:-hmac-sha512}
+      DNS_TSIG_KEY: ${DNS_TSIG_KEY:?DNS_TSIG_KEY is required}
+      DNS_SERVER: ${DNS_SERVER:-ns.cloud-ns.dhbw-mannheim.de.:53}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./moodle/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [moodle]
+    networks: [moodle]
+    restart: unless-stopped
+
+networks:
+  moodle:
+    driver: bridge
+
+volumes:
+  moodle_db:
+  moodle_html:
+  moodle_datadir:
+  caddy_data:
+  caddy_config:
