@@ -48,19 +48,10 @@ permissions:
   contents: read
   security-events: write
 
+# Der Claude-Harness wird nicht hier geprueft, sondern in
+# harness-check.yml: dieser Workflow laeuft nur auf `main`, der Harness
+# wird aber auf `develop` entwickelt.
 jobs:
-  # Der Hook-Helfer entscheidet ueber Secrets, Migrationen und das
-  # Turn-Ende. Ein Fehler darin faellt sonst erst auf, wenn ein Agent
-  # mitten in einer Aufgabe haengt.
-  harness:
-    name: "🪝 Claude-Harness"
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - name: Hook-Tests
-        run: python harness/test_agent_guard.py
-
   qa:
     name: "🔍 Terraform, Ansible, IaC-Scan"
     runs-on: ubuntu-latest

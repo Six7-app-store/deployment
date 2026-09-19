@@ -10,7 +10,13 @@
     "wortweise ab Kommandoanfang; ' *' am Ende deckt auch das nackte",
     "Kommando ab, '*' ohne Leerzeichen setzt das Wort nur fort.",
     "",
-    "Was hier NICHT steht, fragt nach — das ist der gewollte Normalfall."
+    "Was hier NICHT steht, fragt nach — das ist der gewollte Normalfall.",
+    "",
+    "Die Bash-Regeln gegen Secret-Zugriffe sind die zweite Reihe, nicht die",
+    "erste. Ein Muster ueber Leseprogramme ist nicht zu gewinnen: head, sed,",
+    "awk, base64 und ein Dreizeiler in python tun dasselbe wie cat. Die erste",
+    "Reihe ist der PreToolUse-Hook auf Bash, der das Argument prueft statt das",
+    "Programm — und dass Bash ohnehin nachfragt, solange nichts erlaubt ist."
   ],
 
   "permissions": {
@@ -63,7 +69,13 @@
       "Bash(docker exec backend-dev printenv *)",
       "Bash(docker exec worker-dev env *)",
       "Bash(docker exec worker-dev printenv *)",
-      "Bash(docker exec backend-dev alembic downgrade base *)"
+      "Bash(docker exec backend-dev alembic downgrade base *)",
+
+      "Bash(cat .env)",
+      "Bash(cat *.pem)",
+      "Bash(cat *.key)",
+      "Bash(docker compose config *)",
+      "Bash(docker-compose config *)"
     ],
 
     "ask": [

@@ -1,0 +1,49 @@
+# Prüft den Claude-Harness in diesem Repository: die Logik des Hook-Helfers
+# und ob die verteilten Kopien noch zur Quelle unter harness/ passen.
+#
+# Warum eine eigene Datei und kein Job in infra-qa.yml: die läuft nur bei
+# Push und Pull Request auf `main`. Der Harness wird aber auf `develop`
+# entwickelt — ein Job dort wäre genau in dem Moment blind, in dem er
+# gebraucht wird. Das ist beim ersten Anlauf passiert: die Änderung lag auf
+# `develop`, geprüft wurde nie.
+#
+# Die drei anderen Repositories haben eine gleichnamige Datei, die diese
+# Quelle klont und ihre eigenen Kopien dagegen hält.
+name: CI - Claude-Harness
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  harness:
+    name: "🪝 Hook-Logik und Kopien"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      # Ein Fehler im Hook-Helfer faellt sonst erst auf, wenn ein Agent
+      # mitten in einer Aufgabe haengt — und das sieht aus wie ein Fehler
+      # des Agenten, nicht wie einer der Konfiguration.
+      - name: Hook-Tests
+        run: python harness/test_agent_guard.py
+
+      # Deckt ab, was die Tests nicht sehen: settings.json und die geteilten
+      # Skills. Ziele ohne .claude werden uebersprungen — hier ist nur
+      # dieses Repository ausgecheckt, der Arbeitsordner darueber existiert
+      # im Runner nicht.
+      - name: Kopien gegen die Quelle
+        run: python harness/sync.py --check
+
+      - name: Hinweis bei Abweichung
+        if: failure()
+        run: |
+          echo "::error::Hook-Tests rot oder die Kopien weichen von harness/ ab."
+          echo "Beheben: 'make harness-sync' fahren und die erzeugten Dateien"
+          echo "mitcommitten. Aenderungen gehoeren in harness/, nie in eine Kopie."

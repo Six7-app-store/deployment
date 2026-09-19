@@ -45,7 +45,7 @@ Skript schreibt nur, was sich unterscheidet, und ist gefahrlos wiederholbar.
 ## Testen
 
 ```bash
-make harness-test     # 24 Tests, nur Standardbibliothek, ohne Docker
+make harness-test     # 30 Tests, nur Standardbibliothek, ohne Docker
 ```
 
 Geprüft wird die Entscheidungslogik: Secret-Erkennung, Repo-Zuordnung,
@@ -57,7 +57,15 @@ fällt damit auf, nicht erst im nächsten Agentenlauf.
 Derselbe Lauf hängt als eigener Job `harness` in
 `.github/workflows/infra-qa.yml`. Dort ist nur `deployment` ausgecheckt;
 der Kopien-Test prüft deshalb, was vorhanden ist, und wertet fehlende
-Nachbarrepos nicht als Fehler.
+Nachbarrepos nicht als Fehler. Aus demselben Grund überspringt
+`sync.py --check` Ziele ohne `.claude` statt sie als Abweichung zu melden.
+
+Die drei anderen Repositories prüfen ihre eigenen Kopien selbst: jedes hat
+ein `.github/workflows/harness-check.yml`, das dieses Repository klont und
+den Hook-Helfer sowie die geteilten Skills dagegen hält. Verglichen wird
+gegen den gleichnamigen Branch, falls es ihn hier gibt, sonst gegen den
+Standardbranch — sonst wäre jede Harness-Änderung so lange rot, bis sie in
+beiden Repositories denselben Weg gegangen ist.
 
 ## Voraussetzung: Git Bash
 
