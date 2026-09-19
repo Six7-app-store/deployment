@@ -101,19 +101,35 @@ der Ursache.
 
 ## Stand
 
-**Geschrieben, nicht erprobt.** Terraform, Compose und Playbook sind formal
-geprüft (`fmt`, YAML), aber nie ausgeführt worden. Offen ist insbesondere:
+**Ausgerollt und geprueft am 19.09.2026.** Die Instanz laeuft unter
+`moodle.s241699-at-student-dhbw-mannheim-de.users.dhbw.site` auf der VM
+`2001:7c0:1b20:c913:1::43a`, mit Zertifikat der DHBW-CA. Login, `/mod/lti/certs.php`
+und die Registrierung sind von aussen erreichbar; das Registrierungsskript legt
+beim ersten Lauf an und liest beim zweiten nur aus.
 
-- ob `erseco/alpine-moodle:v5.2.2` hinter Caddy ohne weitere Anpassung läuft
-- ob `lti_add_type` in Moodle 4.5 die hier gesetzten Felder erwartet
-Die Endpunkte des App Stores sind dagegen geprüft: `/lti/login` (OIDC-Start,
-`api_route` für GET und POST), `/lti/launch` und `/lti/jwks` existieren genau
-so, wie das Skript sie einträgt.
+`STAGING_ENV_FILE` und `MOODLE_ENV_FILE` sind gesetzt. Wirksam wird die
+Anbindung mit dem naechsten Deploy nach `main`.
 
-**Das `MOODLE_ENV_FILE`-Secret existiert noch nicht.** Es braucht
-`MOODLE_DB_USER`, `MOODLE_DB_PASSWORD`, `MOODLE_DB_NAME`, `MOODLE_ADMIN_USER`,
-`MOODLE_ADMIN_PASSWORD`, `MOODLE_ADMIN_EMAIL`, `MOODLE_HOSTNAME`, `ACME_EMAIL`
-und die drei `DNS_TSIG_*`-Werte aus `staging.env`.
+### Was beim ersten Ausrollen nicht funktionierte
 
-**Es gibt keinen Workflow dafür.** Moodle wird derzeit von Hand ausgerollt — was
-zu einer Instanz passt, die bewusst stehen bleibt.
+Fuenf Dinge, die die Datei vorher anders beschrieb, als die Wirklichkeit es
+zuliess — hier festgehalten, weil jedes davon beim naechsten Aufbau sonst
+wiederkommt:
+
+| | |
+|---|---|
+| `bitnami/moodle` | existiert auf Docker Hub nicht mehr, der Pull endet auf `not found` |
+| `MOODLE_SITENAME` mit Leerzeichen | das Entrypoint reicht den Wert unquotiert an Moodles Installations-CLI weiter, jedes Wort wird ein eigenes Argument, `config.php` entsteht nie |
+| durchgereichter `Host`-Kopf | Moodle wirft mit `reverseproxy=true` `reverseproxyabused`, sobald der empfangene Host dem `wwwroot` gleicht. Der Proxy muss den **internen** Namen senden |
+| `lti_get_lti_types()` | steht in `mod/lti/lib.php`, nicht in `locallib.php` |
+| Idempotenzpruefung | `lti_add_type()` speichert `lti_toolurl` als `baseurl`, nicht die uebergebene Basis — der Vergleich traf nie zu, jeder Lauf legte eine neue Registrierung mit neuer `client_id` an |
+
+### Kein Workflow
+
+Moodle wird von Hand ausgerollt — was zu einer Instanz passt, die bewusst
+stehen bleibt. Der Weg dorthin steht oben unter *Die Anbindung herstellen*.
+
+### Keine Sicherung
+
+Die Kursdaten liegen auf der Instanzplatte, ohne Cinder-Volume und ohne
+Sicherung. Fuer ein Mock-Moodle vertretbar; fuer alles andere nicht.
