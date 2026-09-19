@@ -1,4 +1,4 @@
-# 0002 — Das Zugangsprotokoll ist ein eigenes Feld, kein Wert in `type`
+# 0007 — Das Zugangsprotokoll ist ein eigenes Feld, kein Wert in `type`
 
 **Status:** Angenommen
 **Datum:** 19.09.2026
