@@ -549,6 +549,58 @@
       register: caddy_reload
       changed_when: caddy_reload.rc == 0
 
+    # -------------------------------------------------------------------
+    # TLS-Zertifikat erzwingen
+    # -------------------------------------------------------------------
+    # Ohne diesen Abschnitt meldet der Deploy Erfolg, waehrend die Seite
+    # nicht aufrufbar ist: Caddy nimmt Verbindungen auf 443 an, kann sie
+    # aber nicht verschluesseln, solange kein Zertifikat vorliegt. Der
+    # Browser bekommt dann einen TLS-Fehler statt einer Seite.
+    #
+    # Der Fall tritt bei jedem Neuaufbau auf, weil Caddys Datenverzeichnis
+    # mit der alten VM verschwindet und die ACME-Bestellung neu laufen muss.
+    # Am 19.09.2026 dreimal beobachtet: der erste Versuch blieb bei
+    # "finalizing order" stehen - einmal ueber sieben Minuten -, ein
+    # Neustart des Containers loeste ihn, und der zweite Versuch war in
+    # zehn Sekunden durch. Die CA bestaetigt die Bestellung offenbar, meldet
+    # es Caddy aber nicht; der Neustart verwirft den haengenden Auftrag und
+    # stellt einen neuen.
+    #
+    # Der Neustart laeuft bedingungslos statt nur bei haengender Bestellung.
+    # Er kostet wenige Sekunden, und in allen bisher beobachteten Faellen
+    # war er ohnehin noetig - eine Fallunterscheidung waere mehr Logik fuer
+    # weniger Verlaesslichkeit.
+    - name: Caddy neu starten, damit die ACME-Bestellung frisch laeuft
+      ansible.builtin.command:
+        cmd: docker restart caddy-prod
+      changed_when: true
+      tags: [tls]
+
+    - name: Auf das TLS-Zertifikat warten
+      ansible.builtin.command:
+        cmd: >-
+          docker exec caddy-prod
+          sh -c 'ls /data/caddy/certificates/*/*/*.crt 2>/dev/null | head -1'
+      register: cert_datei
+      changed_when: false
+      failed_when: false
+      retries: 18
+      delay: 10
+      until: cert_datei.stdout | length > 0
+      tags: [tls]
+
+    # Bleibt es nach drei Minuten aus, ist es nicht mehr die haengende
+    # Bestellung, sondern etwas anderes - TSIG-Schluessel, DNS oder die CA
+    # selbst. Dann soll der Deploy rot sein und nicht gruen mit
+    # unerreichbarer Seite.
+    - name: Abbrechen, wenn kein Zertifikat zustande kommt
+      ansible.builtin.fail:
+        msg: >-
+          Caddy hat nach dem Neustart kein Zertifikat erhalten.
+          Ursache im Log suchen: docker logs caddy-prod | grep acme
+      when: cert_datei.stdout | length == 0
+      tags: [tls]
+
     # `compose_output` ist jetzt die Ausgabe des up-Befehls, nicht mehr die
     # Zustandsstruktur des Moduls. Für die Übersicht am Ende fragt dieser
     # Schritt den Zustand deshalb selbst ab.
