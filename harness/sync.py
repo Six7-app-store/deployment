@@ -37,22 +37,31 @@ REPOS = ("backend", "frontend", "worker", "deployment")
 # Welche Hook-Modi ein Ziel braucht. `lint` steht nur dort, wo es etwas tut —
 # ein Prozessstart pro Edit für einen No-Op ist verschenkte Zeit.
 HOOK_MODES = {
-    "_root": ("pre", "lint", "stop"),
-    "backend": ("pre", "lint", "stop"),
-    "worker": ("pre", "lint", "stop"),
-    "deployment": ("pre", "lint", "stop"),
-    "frontend": ("pre", "stop"),
+    "_root": ("pre", "bash", "lint", "stop"),
+    "backend": ("pre", "bash", "lint", "stop"),
+    "worker": ("pre", "bash", "lint", "stop"),
+    "deployment": ("pre", "bash", "lint", "stop"),
+    "frontend": ("pre", "bash", "stop"),
 }
 
 STATUS = {
     "pre": "Secret- und Migrationsschutz",
+    "bash": "Secret-Schutz (Shell)",
     "lint": "Auto-Format",
     "stop": "Qualitaets-Gate",
 }
 
-EVENT = {"pre": "PreToolUse", "lint": "PostToolUse", "stop": "Stop"}
+EVENT = {
+    "pre": "PreToolUse",
+    "bash": "PreToolUse",
+    "lint": "PostToolUse",
+    "stop": "Stop",
+}
 
-TIMEOUT = {"pre": 15, "lint": 90, "stop": 300}
+# Ohne matcher laeuft ein Hook zu jedem Werkzeug — `stop` hat deshalb keinen.
+MATCHER = {"pre": "Edit|Write", "bash": "Bash", "lint": "Edit|Write"}
+
+TIMEOUT = {"pre": 15, "bash": 15, "lint": 90, "stop": 300}
 
 
 def hook_entry(mode: str) -> dict:
@@ -78,8 +87,8 @@ def hook_entry(mode: str) -> dict:
             }
         ]
     }
-    if mode != "stop":
-        entry["matcher"] = "Edit|Write"
+    if mode in MATCHER:
+        entry["matcher"] = MATCHER[mode]
     return entry
 
 
@@ -153,8 +162,17 @@ def copy_tree(source: str, destination: str, check: bool, changed: list) -> None
                 )
 
 
-def sync_target(target: str, base: str, check: bool, changed: list) -> None:
+def sync_target(target: str, base: str, check: bool, changed: list) -> bool:
+    """Ein Ziel abgleichen. Gibt zurueck, ob es ueberhaupt geprueft wurde.
+
+    Beim Pruefen werden Ziele ohne `.claude` uebersprungen statt als
+    Abweichung gemeldet: in der CI ist nur ein Repository ausgecheckt, und
+    der Arbeitsordner darueber existiert dort gar nicht. Beim Verteilen
+    wird ein fehlendes `.claude` dagegen angelegt.
+    """
     claude = os.path.join(base, ".claude")
+    if check and not os.path.isdir(claude):
+        return False
 
     with open(os.path.join(HARNESS, "agent_guard.py"), encoding="utf-8") as handle:
         write_if_changed(
@@ -187,19 +205,25 @@ def sync_target(target: str, base: str, check: bool, changed: list) -> None:
             write_if_changed(
                 os.path.join(base, "CLAUDE.md"), handle.read(), check, changed
             )
+    return True
 
 
 def main() -> int:
     check = "--check" in sys.argv
     changed = []
 
-    sync_target("_root", ROOT, check, changed)
+    geprueft = 0
+    geprueft += sync_target("_root", ROOT, check, changed)
     for repo in REPOS:
         base = os.path.join(ROOT, repo)
         if not os.path.isdir(base):
             print(f"! {repo} fehlt in {ROOT} — uebersprungen")
             continue
-        sync_target(repo, base, check, changed)
+        geprueft += sync_target(repo, base, check, changed)
+
+    if check and not geprueft:
+        print("Kein einziges Ziel mit .claude gefunden — nichts geprueft.")
+        return 1
 
     if not changed:
         print("Harness aktuell.")

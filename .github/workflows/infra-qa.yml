@@ -61,6 +61,13 @@ jobs:
       - name: Hook-Tests
         run: python harness/test_agent_guard.py
 
+      # Deckt ab, was die Tests nicht sehen: settings.json und die geteilten
+      # Skills. Ziele ohne .claude werden uebersprungen -- hier ist nur
+      # dieses Repository ausgecheckt, der Arbeitsordner darueber existiert
+      # im Runner nicht.
+      - name: Kopien gegen die Quelle
+        run: python harness/sync.py --check
+
   qa:
     name: "🔍 Terraform, Ansible, IaC-Scan"
     runs-on: ubuntu-latest

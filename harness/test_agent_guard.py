@@ -179,6 +179,67 @@ class PreEntscheidungen(unittest.TestCase):
         self.assertIn("deny", ausgabe)
 
 
+DOT_NAME = "." + "env"
+
+
+class BashSchutz(unittest.TestCase):
+    """Die Shell geht an den Read-deny-Regeln vorbei — der Hook faengt sie."""
+
+    def bash(self, command: str) -> str:
+        return capture(guard.bash, {"tool_input": {"command": command}})
+
+    def test_leser_werden_geblockt(self):
+        for command in (
+            "cat .env",
+            "cat deployment/.env",
+            "head -5 .env",
+            "tail .env.staging",
+            "sed -n 1p deployment/.env",
+            "base64 backend/keys/tool.pem",
+            "python -c \"print(open('.env').read())\"",
+            "grep SECRET deployment/.env",
+            "docker run --env-file=.env alpine",
+        ):
+            self.assertIn("deny", self.bash(command), command)
+
+    def test_aufruf_ohne_dateinamen_ist_nicht_hook_sache(self):
+        # Der Aufruf, der die aufgeloesten Werte ohne Dateinamen ausgibt,
+        # wird bewusst NICHT hier geblockt, sondern von einer deny-Regel in
+        # permissions.json. Eine Substring-Suche im Kommandostring wuerde
+        # auch jede Erwaehnung treffen -- sie hat beim Bau den eigenen
+        # Commit aufgehalten.
+        self.assertEqual(self.bash("docker compose config"), "")
+
+    def test_harmlose_kommandos_bleiben_durch(self):
+        for command in (
+            "cat .env.example",
+            "cat deployment/.env.staging.example",
+            "make dev-up",
+            "docker exec backend-dev poetry run pytest",
+            "git status --porcelain",
+            "docker compose -f docker-compose.dev.yml ps",
+            "cat docs/harness.md",
+        ):
+            self.assertEqual(self.bash(command), "", command)
+
+    def test_ohne_kommando_keine_entscheidung(self):
+        self.assertEqual(capture(guard.bash, {}), "")
+
+    def test_bekannte_luecke_pfad_erst_zur_laufzeit(self):
+        # Festgehalten, nicht behoben: ein Pfad, der erst in der Shell
+        # entsteht, steht nicht im Kommando und ist so nicht zu finden.
+        # Davor schuetzt nur, dass Bash nachfragt, solange nichts in der
+        # allow-Liste steht. Wer das hier "reparieren" will, muss zuerst
+        # erklaeren, wie er $V aufloest, ohne die Shell zu starten.
+        self.assertEqual(self.bash("V=dotenv; cat .$V"), "")
+
+    def test_erwaehnung_wird_mitgeblockt(self):
+        # Gewollte Falschmeldung: dieses Kommando liest nichts, nennt den
+        # Namen aber. Beim Bau dieses Hooks hat er genau so den eigenen
+        # Patch geblockt. Lieber einmal zu viel als ein Geheimnis im Kontext.
+        self.assertIn("deny", self.bash("echo bitte die " + DOT_NAME + " pflegen"))
+
+
 class StopSchleifenschutz(unittest.TestCase):
     def test_zweiter_durchlauf_blockt_nicht(self):
         # Ohne diese Prüfung hängt eine Sitzung an einem Fehler fest, den

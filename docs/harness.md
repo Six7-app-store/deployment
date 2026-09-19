@@ -227,10 +227,17 @@ zu prüfen: ein Redirect über `host.docker.internal` lässt sich mit einem
 Unit-Test nicht nachstellen. `context7` zahlt sich vor allem bei `pylti1p3`
 aus — einer Nischenbibliothek, bei der ohne aktuelle Doku geraten wird.
 
-Wichtig beim Einrichten: In `.mcp.json` steht `npx -y chrome-devtools-mcp@latest`,
+Wichtig beim Einrichten: In `.mcp.json` steht `npx -y chrome-devtools-mcp@1.9.0`,
 nicht der absolute Pfad einer Maschine. Genau daran wäre es gescheitert — die
 persönliche Konfiguration, aus der wir es übernommen haben, zeigte auf ein
 `node_modules`-Verzeichnis unter einem bestimmten Benutzerprofil.
+
+Die Version ist festgenagelt und nicht `@latest`. `npx` löst bei **jedem**
+Serverstart neu auf, nicht erst nach einem Release über Nacht — zwei Leute
+können am selben Tag unterschiedliche Versionen fahren. Das verstößt gegen
+die Regel eine Ebene höher: ein Werkzeug darf nie nötig sein, um ein
+korrektes Ergebnis zu erzeugen, und erst recht nicht in wechselnder
+Fassung. Aktualisiert wird bewusst, in einem Commit.
 
 **Geprüft und abgelehnt**, mit Begründung:
 
@@ -305,6 +312,7 @@ leitet die geltende Regel aus dem Pfad der bearbeiteten Datei ab.
 |---|---|
 | `PreToolUse` auf Edit/Write | Blockt Schreibzugriffe auf `.env`, `*.pem`, `*.key` — in **allen** Repos, nicht nur in deployment. `.env.example` bleibt erlaubt |
 | `PreToolUse` auf Edit/Write | Blockt Änderungen an **bestehenden** Alembic-Migrationen; neue bleiben erlaubt |
+| `PreToolUse` auf Bash | Blockt Kommandos, die eine Geheimnisdatei lesen würden. Die deny-Regeln greifen am Read-Werkzeug, eine Shell geht daran vorbei |
 | `PostToolUse` auf Edit/Write | backend: `ruff --fix`. worker: ruff, black, isort. `*.tf`: `terraform fmt`. frontend: bewusst nichts |
 | `Stop` | Turn-Ende blockiert, solange das Gate des Repos rot ist: ruff (backend), ruff/black/isort (worker), `vue-tsc` (frontend), `terraform fmt -check` (deployment) |
 
@@ -359,6 +367,24 @@ Das **Lesen** der Secrets mitzusperren ist der Punkt, der vorher fehlte. Ein
 Hook auf `Edit|Write` verhindert nur das Schreiben; gelesen wandert der
 Inhalt in den Kontext und damit an die API. `.claudeignore` ist dafür nicht
 geeignet — es hat dokumentierte Umgehungen, `permissions.deny` nicht.
+
+**Und die Shell geht auch daran vorbei.** Eine `Read`-Regel gilt für das
+Lese-Werkzeug, nicht für ein Kommando in Bash. Das schließt kein Muster über
+Programmnamen: wer `cat` sperrt, hat `head`, `sed`, `awk`, `base64` und einen
+Dreizeiler in python nicht gesperrt. Deshalb prüft ein PreToolUse-Hook auf
+Bash das **Argument** statt des Programms und blockt jedes Kommando, in dem
+ein Geheimnispfad vorkommt. Aufrufe, die die aufgelösten Werte ohne
+Dateinamen ausgeben, fängt stattdessen eine deny-Regel: eine Suche im
+Kommandostring könnte ein Kommando nicht von seiner Erwähnung in einer
+Commit-Nachricht unterscheiden, und genau daran ist der erste Versuch
+gescheitert.
+
+Zwei Kosten, beide bewusst. Der Hook blockt auch Kommandos, die den Namen
+nur erwähnen, ohne zu lesen; beim Bau hat er prompt den eigenen Patch
+aufgehalten. Und er findet keinen Pfad, der erst zur Laufzeit entsteht.
+Beides steht als Test in `harness/test_agent_guard.py` — die Lücke ist
+festgehalten, nicht weggeschwiegen. Was dort trägt, ist die Ebene darunter:
+Bash-Kommandos sind nicht auto-approved, alles Unbekannte fragt nach.
 
 ## Anforderungen an den Agenten
 
