@@ -71,8 +71,60 @@ Packer  →  Golden Image in Glance  →  Terraform  →  je Nutzer eine VM  →
 
 Der Lehrbuchweg wäre `sysprep /generalize`, damit jede VM eine eigene Maschinen-SID bekommt. Auf einem Windows-11-Client mit frisch installierter Software bricht Sysprep aber regelmäßig ab und macht das Abbild dabei unbrauchbar, ohne dass der Build es merkt. Die gemeinsame SID ist hier vertretbar: jede VM gehört einem Studierenden, keine tritt einer Domäne bei.
 
+## Was den Neuaufbau überlebt
+
+Der Deploy reißt die Staging-VM ab. Alles, was bestehen bleiben muss, liegt
+deshalb **außerhalb** — auf der Runner-VM.
+
+| | wo | seit |
+|---|---|---|
+| Terraform-State der Plattform | Datei auf der Runner-VM | ADR-0003 |
+| Terraform-State der App-Deployments | Postgres auf der Runner-VM | ADR-0005 |
+| Deployments, Benutzer, Kurse, Zugangsdaten | Postgres auf der Runner-VM | ADR-0006 |
+| Keycloak: Anmeldungen, Realm, Rollen | Postgres auf der Runner-VM | ADR-0006 |
+| TLS-Zertifikat | Sicherung auf der Runner-VM | siehe unten |
+
+### TLS-Zertifikat
+
+In der Kette oben sitzt das zwischen **05 Terraform** und **07 Docker Compose**:
+
+```
+05 Terraform            06 Ansible              07 Docker Compose
+   ↓ vor dem destroy       ↓ vor dem Start
+   Zertifikat sichern      Zertifikat zurückspielen
+```
+
+Caddy holt sein Zertifikat über ACME bei der DHBW-CA, per `dns-01` — es muss
+niemand von außen auf die VM kommen, Caddy setzt selbst einen TXT-Eintrag. Das
+läuft automatisch, hat aber einen Haken: Caddys Datenverzeichnis liegt in einem
+Docker-Volume auf der VM und verschwindet mit ihr. Jeder Neuaufbau bestellte
+deshalb ein neues Zertifikat, und am 19.09.2026 blieb diese Bestellung dreimal
+beim Finalisieren hängen — einmal über sieben Minuten, in der die Seite einen
+TLS-Fehler zeigte.
+
+Zwei Maßnahmen greifen jetzt ineinander:
+
+1. **Das Volume wird vor dem `destroy` gesichert** und vor dem Start des Stacks
+   zurückgespielt. Findet Caddy sein Zertifikat vor, unterbleibt die Bestellung
+   ganz.
+2. **Bleibt es doch aus**, startet das Playbook Caddy neu und wartet bis zu drei
+   Minuten auf die Zertifikatsdatei. Kommt keine, bricht der Deploy ab — lieber
+   rot als grün mit unerreichbarer Seite.
+
+### DNS
+
+Ebenfalls automatisch, ebenfalls zwischen 05 und 06: Die neue VM bekommt eine
+neue IPv6-Adresse, also setzt der Workflow den `AAAA`-Eintrag per `nsupdate`
+nach dem `apply`. Ohne das zeigte der Hostname nach jedem Merge auf eine VM,
+die es nicht mehr gibt.
+
 ## Bekannte Schwächen
 
-- **Staging ist während eines Merges nicht erreichbar** (10 bis 15 Minuten). Das ist der Preis von ADR-0003.
-- **Das TLS-Zertifikat wird bei jedem Neuaufbau neu ausgestellt**, weil Caddys Datenverzeichnis mit der VM verschwindet. Am 19.09.2026 hing die CA dabei sieben Minuten.
-- **Die Anwendungsdatenbank überlebt einen Merge nicht.** Deployments, Benutzer und Kurse werden neu geseedet. Nur die Terraform-States liegen außerhalb.
+- **Staging ist während eines Merges nicht erreichbar** (10 bis 15 Minuten).
+  Das ist der Preis von ADR-0003.
+- **Mehrere Merges kurz hintereinander bedeuten mehrere Neuaufbauten.** Sie
+  laufen nacheinander, nicht parallel — vier Merges sind rund zwanzig Minuten
+  Ausfall.
+- **Die Runner-VM ist der Einzelpunkt, an dem alles hängt.** Sie führt den
+  Deploy aus und hält sämtlichen Zustand. Fällt sie aus, ist die Plattform
+  unbenutzbar. Die Abwägung steht in ADR-0006.
