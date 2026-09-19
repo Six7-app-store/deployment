@@ -57,7 +57,7 @@ PGADMIN_PORT       ?= 5050
         prod-up prod-down prod-stop prod-restart prod-pull prod-logs prod-ps \
         prod-migrate prod-seed prod-cert-self-signed prod-reset \
         prod-set-keycloak-urls \
-        up down logs build
+        harness-sync harness-check harness-test \n        up down logs build
 
 # ----------------------------------------------------------------
 # Help
@@ -549,6 +549,29 @@ prod-reset: ## ⚠️  STOP prod + DELETE all volumes (DBs, Keycloak, RabbitMQ).
 	else \
 	  echo "Aborted."; \
 	fi
+
+# ----------------------------------------------------------------
+# Claude-Code-Harness
+# ----------------------------------------------------------------
+# Claude Code liest `.claude/` nur im Ordner, in dem die Sitzung
+# gestartet wurde. Ein `backend/.claude/settings.json` gilt also nicht,
+# wenn jemand Claude im Arbeitsordner darueber startet -- und weil die
+# vier Repos getrennt sind, kann keines dem anderen etwas mitgeben.
+# Deshalb liegt die Quelle hier in harness/ und wird von dort verteilt.
+
+HARNESS_PY := $(shell command -v python 2>/dev/null || command -v python3 2>/dev/null)
+
+harness-sync: ## Hooks, Berechtigungen und geteilte Skills in alle 4 Repos + Arbeitsordner verteilen
+	@if [ -z "$(HARNESS_PY)" ]; then echo "Kein python gefunden."; exit 1; fi
+	@$(HARNESS_PY) harness/sync.py
+
+harness-test: ## Tests des Hook-Helfers fahren (nur Standardbibliothek)
+	@if [ -z "$(HARNESS_PY)" ]; then echo "Kein python gefunden."; exit 1; fi
+	@$(HARNESS_PY) harness/test_agent_guard.py
+
+harness-check: ## Nur pruefen, ob die verteilten Kopien aktuell sind (Exit 1 bei Drift)
+	@if [ -z "$(HARNESS_PY)" ]; then echo "Kein python gefunden."; exit 1; fi
+	@$(HARNESS_PY) harness/sync.py --check
 
 # ----------------------------------------------------------------
 # Aliases

@@ -14,9 +14,9 @@ Dev-Umgebung geprüft.
 
 | Erlaubt | Verboten |
 |---|---|
-| Staging-Workflow anstoßen (`mode: plan`, dann `apply`) | Produktions-Deployment |
+| Staging-Workflow anstoßen — **nur nach Rückfrage bei einem Menschen** | Produktions-Deployment |
 | Health-Endpunkt abfragen | `terraform apply` / `destroy` von Hand |
-| Erreichbarkeit über IPv4 und IPv6 prüfen | Rollback und `forget_volume` |
+| Erreichbarkeit über IPv4 und IPv6 prüfen | Rollback, `deploy.cmd`, `scripts/deploy.sh` |
 | Containerstatus und Logs lesen | Secrets lesen oder schreiben |
 | Pipeline-Ergebnis lesen | |
 
@@ -24,11 +24,24 @@ Die Grenze läuft zwischen **dem Knopf, den die Pipeline anbietet** und **der
 Infrastruktur darunter**. Den Workflow starten: ja. Terraform von Hand gegen
 OpenStack: nein. Dieselbe Regel, die auch für Menschen im Team gilt.
 
-**Immer zuerst `mode: plan`.** Der Lauf prüft Runner, Image, Checkout, alle
-sechs Secrets und eine echte OpenStack-Anmeldung, ändert aber nichts. Erwartet
-wird `0 to add, 0 to change, 0 to destroy` und **keine** Zeile mit
-`must be replaced`. Steht dort etwas anderes, ist das ein Befund für einen
-Menschen — nicht der Anlass, trotzdem `apply` zu fahren.
+**Es gibt keinen Trockenlauf mehr.** Bis zum Umbau am 19.09.2026 kannte der
+Workflow eine Eingabe `mode` mit Default `plan`, die nichts veränderte. Die
+gibt es nicht mehr. `.github/workflows/staging.yml` kennt heute zwei Eingaben:
+
+| Eingabe | Default | Wirkung |
+|---|---|---|
+| `recreate` | **true** | `terraform destroy -auto-approve`, dann Neuaufbau. Die Staging-VM ist danach eine andere Maschine |
+| `seed` | false | legt Benutzer, Kurse und Apps an |
+
+**Jeder Lauf verändert also etwas.** Der schonendste ist
+`workflow_dispatch` mit `recreate: false` — der überspringt das `destroy` und
+wendet nur Änderungen an. Ein reines „erst mal schauen" ist nicht vorgesehen.
+
+Dass Staging bei jedem Merge ohnehin neu gebaut wird, ist eine bewusste
+Entscheidung (`docs/adr/0003-staging-wird-bei-jedem-merge-neu-gebaut.md`) — das
+macht einen versehentlichen Lauf nicht harmlos, nur nicht katastrophal. Ein
+Deploy anzustoßen ist deshalb kein Schritt, den dieser Skill allein geht:
+`gh workflow run` steht in `permissions.ask`, ein Mensch bestätigt ihn.
 
 ## Lokal (dev)
 
@@ -65,12 +78,20 @@ ist kein Fehler.
 
 ## Pipeline-Ergebnis
 
-Der Staging-Deploy läuft in **Forgejo**, nicht in GitHub Actions. Der Workflow
-gibt am Ende `docker compose ps` aus; dort sollten alle Dienste mit Healthcheck
+Der Staging-Deploy läuft seit `52d931f` in **GitHub Actions**, auf dem
+self-hosted Runner im Campusnetz (VM `github-runner`). Der frühere
+Forgejo-Workflow ist gelöscht. Warum ein eigener Runner nötig ist: die
+OpenStack-API der DHBW ist von außen nicht erreichbar —
+`docs/adr/0002-self-hosted-runner-auf-eigener-vm.md`.
+
+Ausgelöst wird er von einem Push auf `main`, von einem `repository_dispatch`
+aus der CI von frontend, backend oder worker, oder von Hand. Der Workflow gibt
+am Ende `docker compose ps` aus; dort sollten alle Dienste mit Healthcheck
 `healthy` sein. Das Log ist die verlässlichste Quelle dafür, *warum* etwas
 schiefging.
 
-Der CI-Status der Pull Requests liegt dagegen auf GitHub:
+Sowohl das Deployment als auch der CI-Status der Pull Requests liegen damit
+auf GitHub:
 
 ```bash
 gh run list --limit 5

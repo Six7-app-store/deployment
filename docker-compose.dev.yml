@@ -194,6 +194,12 @@ services:
     environment:
       # Database
       DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-backend_dev}
+      # Die Testsuite truncatet ihre Tabellen und droppt sie beim Teardown.
+      # Ohne diese Zeile faellt conftest.py auf DATABASE_URL zurueck und
+      # loescht damit den Entwicklungsdatenbestand — inklusive Schema, denn
+      # alembic_version bleibt auf head stehen und ein spaeteres
+      # `alembic upgrade head` meldet dann nichts zu tun.
+      TEST_DATABASE_URL: postgresql://${TEST_DB_USER:-postgres}:${TEST_DB_PASSWORD:-postgres}@postgres-test:5432/${TEST_DB_NAME:-backend_test}
       
       # Security
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-12345}
@@ -272,6 +278,8 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
+        condition: service_healthy
+      postgres-test:
         condition: service_healthy
       redis:
         condition: service_healthy
