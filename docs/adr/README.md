@@ -52,3 +52,4 @@ Das ist Teil der Definition of Done in den `AGENTS.md` aller vier Repos.
 | Nr. | Titel | Status |
 |---|---|---|
 | [0001](0001-keine-windows-apps.md) | Windows-Apps werden nicht unterstützt | Angenommen |
+| [0002](0002-protokoll-statt-type-im-account-vertrag.md) | Das Zugangsprotokoll ist ein eigenes Feld, kein Wert in `type` | Angenommen |

@@ -1,47 +1,18 @@
 {
-  "enabledPlugins": {
-    "context7@claude-plugins-official": true
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "P=$(command -v python || command -v python3); [ -n \"$P\" ] && \"$P\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/agent_guard.py\" pre; exit 0",
-            "timeout": 15,
-            "statusMessage": "Secret- und Migrationsschutz"
-          }
-        ],
-        "matcher": "Edit|Write"
-      }
-    ],
-    "PostToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "P=$(command -v python || command -v python3); [ -n \"$P\" ] && \"$P\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/agent_guard.py\" lint; exit 0",
-            "timeout": 90,
-            "statusMessage": "Auto-Format"
-          }
-        ],
-        "matcher": "Edit|Write"
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "P=$(command -v python || command -v python3); [ -n \"$P\" ] && \"$P\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/agent_guard.py\" stop; exit 0",
-            "timeout": 300,
-            "statusMessage": "Qualitaets-Gate"
-          }
-        ]
-      }
-    ]
-  },
+  "_kommentar": [
+    "Kanonische Berechtigungen fuer alle vier Repos und den Arbeitsordner.",
+    "Quelle: deployment/harness/permissions.json — verteilt von sync.py in",
+    "jedes <repo>/.claude/settings.json und in DHBW_APP/.claude/settings.json.",
+    "Nie in einer Kopie bearbeiten, sonst driften die Repos.",
+    "",
+    "Regeln: deny schlaegt ask schlaegt allow. Eine allow-Regel kann aus",
+    "einer deny-Regel keine Ausnahme schnitzen. Bash-Muster matchen",
+    "wortweise ab Kommandoanfang; ' *' am Ende deckt auch das nackte",
+    "Kommando ab, '*' ohne Leerzeichen setzt das Wort nur fort.",
+    "",
+    "Was hier NICHT steht, fragt nach — das ist der gewollte Normalfall."
+  ],
+
   "permissions": {
     "deny": [
       "Read(.env)",
@@ -59,6 +30,7 @@
       "Edit(.env.production)",
       "Edit(**/*.pem)",
       "Edit(**/*.key)",
+
       "Bash(git push --force *)",
       "Bash(git push -f *)",
       "Bash(git push * main)",
@@ -66,6 +38,7 @@
       "Bash(git push * HEAD:main)",
       "Bash(git push origin main)",
       "Bash(gh pr merge *)",
+
       "Bash(make prod*)",
       "Bash(docker compose -f docker-compose.prod.yml *)",
       "Bash(docker-compose -f docker-compose.prod.yml *)",
@@ -75,20 +48,24 @@
       "Bash(./deploy.cmd *)",
       "Bash(scripts/deploy.sh *)",
       "Bash(./scripts/deploy.sh *)",
+
       "Bash(terraform apply *)",
       "Bash(terraform destroy *)",
       "Bash(terraform state *)",
       "Bash(terraform import *)",
+
       "Bash(docker system prune *)",
       "Bash(docker volume rm *)",
       "Bash(docker volume prune *)",
       "Bash(rm -rf *)",
+
       "Bash(docker exec backend-dev env *)",
       "Bash(docker exec backend-dev printenv *)",
       "Bash(docker exec worker-dev env *)",
       "Bash(docker exec worker-dev printenv *)",
       "Bash(docker exec backend-dev alembic downgrade base *)"
     ],
+
     "ask": [
       "Bash(git push *)",
       "Bash(git reset --hard *)",
@@ -102,18 +79,21 @@
       "Bash(make clean-all*)",
       "Bash(make prune*)"
     ],
+
     "allow": [
       "Bash(docker exec backend-dev poetry run *)",
       "Bash(docker exec backend-dev alembic *)",
       "Bash(docker exec worker-dev poetry run *)",
       "Bash(docker exec frontend-dev npx *)",
       "Bash(docker exec frontend-dev sh -lc *)",
+
       "Bash(docker ps *)",
       "Bash(docker logs *)",
       "Bash(docker restart *)",
       "Bash(docker compose ps *)",
       "Bash(docker compose -f docker-compose.dev.yml ps *)",
       "Bash(docker compose -f docker-compose.dev.yml logs *)",
+
       "Bash(make dev-*)",
       "Bash(make test-*)",
       "Bash(make lint-*)",
@@ -126,6 +106,7 @@
       "Bash(make status*)",
       "Bash(make health*)",
       "Bash(make help*)",
+
       "Bash(git status *)",
       "Bash(git diff *)",
       "Bash(git log *)",
@@ -139,23 +120,21 @@
       "Bash(git fetch *)",
       "Bash(git pull *)",
       "Bash(git remote *)",
+
       "Bash(gh pr view *)",
       "Bash(gh pr list *)",
       "Bash(gh pr diff *)",
       "Bash(gh pr checks *)",
       "Bash(gh run list *)",
       "Bash(gh run view *)",
+
       "Bash(terraform fmt *)",
       "Bash(terraform validate *)",
+
       "Bash(curl -sS http://localhost:8000/health)",
       "Bash(curl http://localhost:8000/health)",
       "Bash(curl http://localhost:8000/openapi.json)",
       "Bash(curl http://localhost:5173/src/router/index.ts)"
-    ],
-    "additionalDirectories": [
-      "../backend",
-      "../frontend",
-      "../worker"
     ]
   }
 }
