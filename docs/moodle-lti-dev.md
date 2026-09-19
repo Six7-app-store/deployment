@@ -114,7 +114,9 @@ curl -s http://host.docker.internal:8081/mod/lti/certs.php
 
 ## Launch testen
 
-Im Testkurs → *Material oder Aktivität anlegen → Externes Tool* → das registrierte Tool auswählen → speichern. Ein Klick darauf löst die Kette aus:
+> **Moodle 5 hat diesen Weg geändert.** Ein Tool direkt in der Aktivität zu konfigurieren geht nicht mehr — `modedit.php?add=lti` ohne `typeid` antwortet mit „Die manuelle Erstellung von Tools ohne die Definition von Kurstools wird nicht mehr unterstützt." Das site-weit registrierte Tool muss erst im Kurs sichtbar gemacht werden: *Kurs → Mehr → LTI Externe Tools* (`/mod/lti/coursetools.php?id=<kursid>`), dort beim Tool **„In Aktivitätsauswahl anzeigen"** anhaken. Danach steht es in der Aktivitätsauswahl.
+
+Im Testkurs → *Aktivität oder Material anlegen* → das registrierte Tool auswählen → speichern. Ein Klick darauf löst die Kette aus:
 
 ```
 POST /lti/login   (Moodle → Backend, iss + login_hint + target_link_uri)
@@ -162,6 +164,103 @@ docker restart frontend-dev
 ```
 
 Beim Backend reicht aus demselben Grund kein `restart`, wenn sich `.env` oder Compose-Variablen geändert haben — dort `up -d --force-recreate backend`.
+
+## Teilnehmerliste abrufen (NRPS)
+
+Der App Store kann aus einem Moodle-Kurs eine **Studiengruppe anlegen** und die Teilnehmenden übernehmen: `POST /lti/contexts/{id}/import`, ausgelöst über den Knopf „Studiengruppe aus Moodle anlegen" auf der Zuordnungsseite. Die Liste kommt über **NRPS** (Names and Role Provisioning Service). Warum das so und nicht als Vollsync gebaut ist: [ADR 0008](adr/0008-studiengruppe-aus-moodle-kurs-anlegen.md).
+
+Moodle-seitig muss dafür unter *Tools verwalten → Zahnrad → Dienste* **IMS LTI Names and Role Provisioning** auf „Kursmitglieder abrufen" stehen. Gegenprobe in der Tool-Konfiguration: `ltiservice_memberships = 1`.
+
+### Moodle muss den App Store erreichen können
+
+Das ist die Richtung, die beim Launch **nicht** vorkommt. Für NRPS holt sich das Backend zuerst ein Access-Token bei `/mod/lti/token.php`, und Moodle prüft dieses Token gegen das Keyset unter `http://host.docker.internal:8000/lti/jwks`. Dieser Abruf geht durch Moodles cURL-Sicherheitsfilter — und der blockt ihn im Standard doppelt:
+
+| Einstellung | Standard | Problem |
+|---|---|---|
+| `curlsecurityallowedport` | `80`, `443` | Backend läuft auf `8000` |
+| `curlsecurityblockedhosts` | u. a. `192.168.0.0/16` | `host.docker.internal` → `192.168.65.254` (Docker-Desktop-Gateway) |
+
+Das Symptom ist irreführend: `token.php` antwortet mit **404** und einer HTML-Fehlerseite statt mit JSON, darin
+
+```
+mod_lti\local\ltiopenid\jwks_helper::fix_jwks_alg(): Argument #1 ($jwks) must be of type array, null given
+```
+
+Der Launch funktioniert dabei unverändert weiter, weil dort das Backend Moodles Keyset holt und nicht umgekehrt. Fix für die Dev-Instanz:
+
+```bash
+docker exec moodle-dev php /var/www/html/admin/cli/cfg.php \
+  --name=curlsecurityallowedport --set="443
+80
+8000"
+
+docker exec moodle-dev php /var/www/html/admin/cli/cfg.php \
+  --name=curlsecurityblockedhosts --set="127.0.0.0/8
+10.0.0.0/8
+172.16.0.0/12
+0.0.0.0
+localhost
+169.254.169.254
+0000::1"
+```
+
+Die CLI liegt unter `/var/www/html/admin/cli/`, **nicht** unter `public/` — Moodle 5 hat nur den Web-Root nach `public/` verschoben. Beide Werte hängen an der Datenbank, überleben also einen Neustart, aber **nicht** ein frisches Volume.
+
+Prüfen, ob Moodle den Abruf jetzt zulässt:
+
+```bash
+docker exec moodle-dev php -r '
+define("CLI_SCRIPT", true);
+require("/var/www/html/config.php");
+require_once($CFG->libdir . "/filelib.php");
+$h = new \core\files\curl_security_helper();
+var_dump($h->url_is_blocked("http://host.docker.internal:8000/lti/jwks"));'
+```
+
+`bool(false)` heißt: erlaubt. In Produktion entfällt die Anpassung — dort läuft alles über HTTPS auf 443 und über öffentlich auflösbare Namen.
+
+### Was der Import tut und was nicht
+
+- Gematcht wird über `(issuer, user_id)` — denselben Wert, den ein Launch als `sub` schickt. Eine **bereits vergebene E-Mail-Adresse führt nie zu einem Treffer**, sondern zu einem gemeldeten Übersprung `link_required`: die Adresse ist ein bearbeitbares Moodle-Profilfeld.
+- Ein Moodle-Trainer wird nur dann Dozent:in im App Store, wenn `LTI_TRUST_INSTRUCTOR_ROLE=true` gesetzt ist. Sonst erscheint er als `instructor_not_trusted` in der Übersprungsliste.
+- Studierende, die schon in einer anderen Studiengruppe sind, bleiben dort (`already_in_another_group`).
+- Der Import läuft **einmal**. Wer sich später in Moodle einschreibt, kommt nicht automatisch dazu.
+
+## Deep Linking: Aktivität an eine App binden
+
+Ohne Deep Linking heißt jede Aktivität nur „der App Store", und wohin ein Klick führt, rät `resolve_launch_target`. Mit Deep Linking fragt Moodle beim **Anlegen** der Aktivität, worauf sie zeigen soll; die Lehrperson wählt eine App, und die Wahl steckt danach als `custom`-Parameter in der Aktivität. Warum an eine App und nicht an eine konkrete Umgebung: [ADR 0009](adr/0009-deep-link-bindet-an-app.md).
+
+Moodle bietet die Auswahl nur an, wenn am Tool **„Tool unterstützt Deep Linking (Content-Item Message)"** gesetzt ist — *Tools verwalten → Zahnrad → Deep Linking unterstützen*. Gegenprobe:
+
+```bash
+docker exec moodle-postgres-dev psql -U moodle -d moodle \
+  -c "select name, value from mdl_lti_types_config where typeid=1 and name='contentitem';"
+```
+
+`1` heißt an. Per CLI setzen und Caches leeren:
+
+```bash
+docker exec moodle-postgres-dev psql -U moodle -d moodle \
+  -c "update mdl_lti_types_config set value='1' where typeid=1 and name='contentitem';"
+MSYS_NO_PATHCONV=1 docker exec moodle-dev php /var/www/html/admin/cli/purge_caches.php
+```
+
+Danach zeigt Moodle beim Anlegen der Aktivität *Externes Tool* den Knopf **„Inhalt auswählen"**. Er öffnet `/lti/auswahl` im App Store, dort wird die App gewählt, und Moodle legt die Aktivität mit Titel und Bindung an.
+
+Ablauf, mit den beteiligten Nachrichtentypen:
+
+```
+Klick "Inhalt auswählen"
+POST /lti/launch        LtiDeepLinkingRequest  (gleicher Endpunkt wie ein Launch)
+302                     -> /lti/callback -> /lti/auswahl?dl=<handle>
+POST /lti/deep-link/select   { handle, appId }  -> signiertes JWT
+Formular-POST           JWT -> Moodles deep_link_return_url
+Moodle legt Aktivität an, custom: { app_id: ... }
+```
+
+Der Handle ist **einmal einlösbar** und an das Konto gebunden, dem er ausgestellt wurde; Gültigkeit über `LTI_DEEP_LINK_TTL_MINUTES` (Standard 30 Minuten). Die signierte Antwort wird bewusst **aus dem Browser** gepostet, nicht vom Backend — `deep_link_return_url` erwartet die Moodle-Sitzung der Lehrperson.
+
+Bestehende Aktivitäten ohne Bindung laufen unverändert weiter: ein fehlender `custom`-Parameter ist genau der alte Pfad.
 
 ## Troubleshooting
 

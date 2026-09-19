@@ -108,6 +108,37 @@ Leute an die falsche Gruppe hängen. Die Zuordnung ist ein **Wegweiser, keine
 Berechtigung**: sie wählt unter den Umgebungen aus, in denen jemand ohnehin
 Mitglied ist, und fügt keine hinzu.
 
+## Die dritte Kante: Mitgliederliste aus Moodle
+
+Zum Zuordnen gehört der Fall, dass es noch nichts zum Zuordnen gibt. Dann legt
+eine Lehrperson die Studiengruppe **aus dem Moodle-Kurs** an und übernimmt die
+Teilnehmenden über **NRPS** (`POST /lti/contexts/{id}/import`). Begründung und
+verworfene Alternativen: [ADR 0008](adr/0008-studiengruppe-aus-moodle-kurs-anlegen.md).
+
+Das ist die erste Stelle, an der **das Backend Moodle anruft** statt umgekehrt:
+
+```mermaid
+sequenceDiagram
+  participant L as Lehrende:r
+  participant B as Backend
+  participant M as Moodle
+  L->>B: POST /lti/contexts/{id}/import
+  B->>M: client_credentials (mit Tool-Schlüssel signiert)
+  M->>B: JWKS-Abruf zur Prüfung der Signatur
+  M-->>B: Access Token
+  B->>M: GET memberships
+  M-->>B: Mitglieder + Rollen
+  B-->>L: Studiengruppe + Bericht, wer nicht übernommen wurde
+```
+
+Der mittlere Pfeil ist der, der lokal scheitert: Moodles cURL-Sicherheitsfilter
+lässt weder Port 8000 noch das Docker-Gateway zu, und der Launch merkt davon
+nichts, weil er ohne diese Richtung auskommt. Siehe `docs/moodle-lti-dev.md`.
+
+Die beiden Entscheidungen von oben gelten hier unverändert: gematcht wird über
+`(issuer, user_id)`, nie über die Adresse, und `courseId` setzt weiterhin nur
+ein Mensch — der Knopf ist die Entscheidung, der Import nur ihre Ausführung.
+
 ## Rollen und Sichten
 
 Drei Schichten, bewusst getrennt:

@@ -261,6 +261,11 @@ services:
       LTI_LAUNCH_REDIRECT_URL: ${LTI_LAUNCH_REDIRECT_URL:-${APP_BASE_URL}/lti/callback}
       LTI_LINK_REDIRECT_URL: ${LTI_LINK_REDIRECT_URL:-${APP_BASE_URL}/lti/link}
 
+      # Wie lange eine angefangene Deep-Link-Auswahl offen bleibt. Moodle
+      # uebergibt seine Rueckgabe-URL beim Anlegen der Aktivitaet; die
+      # Auswahl trifft danach ein Mensch. Einmal einloesbar.
+      LTI_DEEP_LINK_TTL_MINUTES: ${LTI_DEEP_LINK_TTL_MINUTES:-30}
+
       LTI_TRUST_INSTRUCTOR_ROLE: ${LTI_TRUST_INSTRUCTOR_ROLE:-false}
 
       # Public base URL of the frontend, used in owner-summary mails
