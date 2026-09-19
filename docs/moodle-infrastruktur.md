@@ -222,6 +222,32 @@ beim ersten Lauf an und liest beim zweiten nur aus.
 `STAGING_ENV_FILE` und `MOODLE_ENV_FILE` sind gesetzt. Wirksam wird die
 Anbindung mit dem naechsten Deploy nach `main`.
 
+### IPv6 im Docker-Daemon
+
+Der Fund, der alles andere wertlos gemacht hätte. Die DHBW-Cloud hat kein IPv4,
+Docker legt Bridge-Netze aber per Vorgabe nur mit IPv4 an. **Kein Container
+erreichte irgendetwas außerhalb seiner VM** — in beide Richtungen.
+
+Für LTI ist das tödlich, denn der Austausch läuft von Server zu Server:
+
+```
+Moodle    ──> App Store  /api/lti/jwks        Signatur des Werkzeugs prüfen
+App Store ──> Moodle     /mod/lti/certs.php   Signatur des id_token prüfen
+App Store ──> Moodle     /mod/lti/token.php   Token holen
+```
+
+Das Fehlerbild führt in die Irre: von der VM aus antwortet die Adresse
+einwandfrei, nur aus dem Container kommt `Network is unreachable`. Man sucht
+die Ursache bei der Gegenstelle.
+
+Zwei Einstellungen, die beide nötig sind — die eine gilt nur für das
+Standardnetz, die andere nur für die benannten:
+
+| wo | was |
+|---|---|
+| `docker_daemon_options` im Playbook | `ipv6: true`, `fixed-cidr-v6`, `ip6tables: true` |
+| jedes Netz in `docker-compose` | `enable_ipv6: true` |
+
 ### Was beim ersten Ausrollen nicht funktionierte
 
 Fuenf Dinge, die die Datei vorher anders beschrieb, als die Wirklichkeit es
@@ -234,6 +260,7 @@ wiederkommt:
 | `MOODLE_SITENAME` mit Leerzeichen | das Entrypoint reicht den Wert unquotiert an Moodles Installations-CLI weiter, jedes Wort wird ein eigenes Argument, `config.php` entsteht nie |
 | durchgereichter `Host`-Kopf | Moodle wirft mit `reverseproxy=true` `reverseproxyabused`, sobald der empfangene Host dem `wwwroot` gleicht. Der Proxy muss den **internen** Namen senden |
 | `lti_get_lti_types()` | steht in `mod/lti/lib.php`, nicht in `locallib.php` |
+| Registrierung ohne `/api` | Caddy leitet nur `/api/*` an das Backend; unter `/lti/*` liegen die Seiten der Vue-Anwendung. Moodle holte als JWKS die `index.html` |
 | Idempotenzpruefung | `lti_add_type()` speichert `lti_toolurl` als `baseurl`, nicht die uebergebene Basis — der Vergleich traf nie zu, jeder Lauf legte eine neue Registrierung mit neuer `client_id` an |
 
 ### Kein Workflow
