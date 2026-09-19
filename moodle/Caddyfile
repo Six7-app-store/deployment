@@ -1,0 +1,25 @@
+# Reverse Proxy und TLS fuer die Moodle-Instanz. Aufbau wie beim App Store.
+{
+	acme_ca {$ACME_CA_URL}
+	email {$ACME_EMAIL}
+}
+
+{$APP_HOSTNAME} {
+	# dns-01, weil die CA diesen Host nicht von aussen erreichen kann - die
+	# Begruendung steht ausfuehrlich in caddy/Caddyfile des App Stores.
+	tls {
+		dns rfc2136 {
+			key_name {$DNS_TSIG_KEY_NAME}
+			key_alg {$DNS_TSIG_KEY_ALG}
+			key {$DNS_TSIG_KEY}
+			server {$DNS_SERVER}
+		}
+	}
+
+	# Moodle laeuft im Bitnami-Image auf 8080. X-Forwarded-Proto ist nicht
+	# optional: ohne den Kopf baut Moodle alle Links mit http:// und der
+	# LTI-Launch scheitert am Mixed-Content-Schutz des Browsers.
+	reverse_proxy moodle:8080 {
+		header_up X-Forwarded-Proto https
+	}
+}
