@@ -43,6 +43,11 @@ moodle.<zone>.users.dhbw.site
 | Terraform | `infrastructure/terraform/envs/moodle/` |
 | State | `/var/lib/tf-state/moodle/` auf der Runner-VM |
 | Playbook | `infrastructure/ansible/moodle.yml` |
+| Compose | `docker-compose.moodle-infra.yml` |
+
+Der Name trennt diesen Stack von `docker-compose.moodle.yml` — das ist das
+lokale Entwicklungs-Moodle aus [moodle-lti-dev.md](moodle-lti-dev.md) und hat
+mit dem Server nichts zu tun.
 
 **Die Security Group unterscheidet sich vom App Store:** 80 und 443 stehen
 offen, nicht nur dem Campusnetz. Das ist nötig, weil Moodle von außen erreichbar

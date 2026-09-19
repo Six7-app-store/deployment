@@ -1,94 +1,152 @@
-# Moodle als LTI-Plattform fuer den App Store.
+# ================================================================
+# Moodle — lokale LTI-1.3-Testplattform (nur Entwicklung)
+# ================================================================
+# Eigenständiger Stack neben `docker-compose.dev.yml`. Moodle ist hier
+# die LTI-*Platform*, der App Store der LTI-*Tool*: Moodle stellt beim
+# Klick auf eine Aktivität ein signiertes id_token aus, das Backend
+# prüft die Signatur gegen Moodles öffentlichen Schlüssel.
 #
-# Bewusst NICHT moodle-docker: das ist die Entwicklungsumgebung von moodlehq,
-# sie bindet einen Moodle-Quellcodebaum von der Platte ein und bringt Selenium,
-# Mailpit und exttests mit. Fuer einen Server ist das der falsche Ausgangspunkt.
+# Beschreibt den seit 04.09.2026 laufenden Stack (erseco/alpine-moodle
+# + Postgres). Die ursprüngliche Compose-Datei war verlorengegangen,
+# die Container liefen verwaist weiter — deshalb greift diese Datei die
+# bestehenden Volumes über feste Namen wieder auf.
 #
-# Stattdessen das Bitnami-Image: es bringt Moodle fertig installiert mit und
-# konfiguriert sich beim ersten Start aus Umgebungsvariablen.
+# Start:
+#   docker compose -f docker-compose.moodle.yml up -d
+#   docker compose -f docker-compose.moodle.yml logs -f moodle
+#
+# Details + Tool-Registrierung: docs/moodle-lti-dev.md
+# ================================================================
+
+# Eigener Projektname. Ohne ihn leiten beide Compose-Dateien ihren
+# Projektnamen aus dem Verzeichnis ab ("deployment"), und `up`/`down`
+# auf der einen Datei behandelt die Container der anderen als Orphans.
+name: appstore-moodle
 
 services:
-  postgres:
+  # ----------------------------------------------------------------
+  # PostgreSQL (nur für Moodle)
+  # ----------------------------------------------------------------
+  # Bewusst getrennt von den Postgres-Instanzen des App Stores: Moodle
+  # ist Fremdsoftware und darf die Anwendungsdaten nicht sehen. Kein
+  # Host-Port — die DB wird nur vom Moodle-Container gebraucht.
+  #
+  # Der Servicename muss `moodle-postgres` bleiben: er ist zugleich der
+  # DNS-Name und steht so bereits als $CFG->dbhost in der persistierten
+  # config.php.
+  moodle-postgres:
     image: postgres:16-alpine
-    container_name: moodle-postgres
+    container_name: moodle-postgres-dev
     environment:
-      POSTGRES_USER: ${MOODLE_DB_USER:?MOODLE_DB_USER is required}
-      POSTGRES_PASSWORD: ${MOODLE_DB_PASSWORD:?MOODLE_DB_PASSWORD is required}
-      POSTGRES_DB: ${MOODLE_DB_NAME:?MOODLE_DB_NAME is required}
+      POSTGRES_DB: ${MOODLE_DB_NAME:-moodle}
+      POSTGRES_USER: ${MOODLE_DB_USER:-moodle}
+      POSTGRES_PASSWORD: ${MOODLE_DB_PASSWORD:-moodle}
     volumes:
-      - moodle_db:/var/lib/postgresql/data
+      - moodle_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${MOODLE_DB_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    networks: [moodle]
+      test: ["CMD-SHELL", "pg_isready -U ${MOODLE_DB_USER:-moodle}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
+  # ----------------------------------------------------------------
+  # Moodle (LTI 1.3 Platform)
+  # ----------------------------------------------------------------
   moodle:
-    image: bitnami/moodle:4.5
-    container_name: moodle
+    # Auf die installierte Version gepinnt. `latest` würde beim nächsten
+    # Pull ungefragt hochziehen und einen Moodle-Upgrade-Lauf gegen die
+    # bestehende DB auslösen.
+    image: erseco/alpine-moodle:v5.2.2
+    container_name: moodle-dev
     environment:
-      MOODLE_DATABASE_TYPE: pgsql
-      MOODLE_DATABASE_HOST: postgres
-      MOODLE_DATABASE_PORT_NUMBER: 5432
-      MOODLE_DATABASE_USER: ${MOODLE_DB_USER}
-      MOODLE_DATABASE_PASSWORD: ${MOODLE_DB_PASSWORD}
-      MOODLE_DATABASE_NAME: ${MOODLE_DB_NAME}
-      MOODLE_USERNAME: ${MOODLE_ADMIN_USER:?MOODLE_ADMIN_USER is required}
-      MOODLE_PASSWORD: ${MOODLE_ADMIN_PASSWORD:?MOODLE_ADMIN_PASSWORD is required}
-      MOODLE_EMAIL: ${MOODLE_ADMIN_EMAIL:?MOODLE_ADMIN_EMAIL is required}
-      MOODLE_SITE_NAME: ${MOODLE_SITE_NAME:-DHBW App Store Moodle}
-      # Muss exakt der oeffentliche Hostname sein. Moodle schreibt diesen Wert
-      # als wwwroot in die Konfiguration, und genau dieser Wert erscheint als
-      # iss-Claim in jedem LTI-Token. Steht hier etwas anderes als in
-      # LTI_PLATFORM_ISSUER des App Stores, wird jeder Launch abgewiesen.
-      MOODLE_HOST: ${MOODLE_HOSTNAME:?MOODLE_HOSTNAME is required}
-      MOODLE_REVERSEPROXY: "yes"
-      MOODLE_SSLPROXY: "yes"
-    volumes:
-      - moodle_data:/bitnami/moodle
-      - moodle_datadir:/bitnami/moodledata
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks: [moodle]
-    restart: unless-stopped
+      # --- wwwroot ---
+      # Landet als $CFG->wwwroot in der config.php und wird damit zum
+      # LTI-Issuer (`iss`) jedes ausgestellten id_token. Das Backend muss
+      # unter genau dieser URL Moodles JWKS abrufen können.
+      #
+      # Deshalb host.docker.internal und nicht localhost: `localhost`
+      # zeigt im Backend-Container auf den Backend-Container selbst, der
+      # JWKS-Abruf liefe ins Leere und der Launch scheiterte mit einem
+      # Signaturfehler ohne erkennbare Ursache. host.docker.internal
+      # löst im Browser (Docker Desktop trägt es in die hosts-Datei ein)
+      # und im Container auf dieselbe Maschine auf.
+      SITE_URL: ${MOODLE_SITE_URL:-http://host.docker.internal:8081}
 
-  # Dasselbe Bauprinzip wie beim App Store: Caddy holt das Zertifikat ueber
-  # dns-01 bei der DHBW-CA. Der Weg ueber DNS ist hier wie dort noetig, weil
-  # die CA den Host nicht von aussen erreichen kann.
-  caddy:
-    build:
-      context: ./caddy
-    image: appstore-caddy:rfc2136
-    container_name: moodle-caddy
-    environment:
-      APP_HOSTNAME: ${MOODLE_HOSTNAME}
-      ACME_CA_URL: ${ACME_CA_URL:-https://certificates.dhbw.cloud/directory}
-      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
-      DNS_TSIG_KEY_NAME: ${DNS_TSIG_KEY_NAME:?DNS_TSIG_KEY_NAME is required}
-      DNS_TSIG_KEY_ALG: ${DNS_TSIG_KEY_ALG:-hmac-sha512}
-      DNS_TSIG_KEY: ${DNS_TSIG_KEY:?DNS_TSIG_KEY is required}
-      DNS_SERVER: ${DNS_SERVER:-ns.cloud-ns.dhbw-mannheim.de.:53}
+      # --- Admin-Konto (nur beim ersten Boot wirksam) ---
+      MOODLE_USERNAME: ${MOODLE_ADMIN_USER:-admin}
+      MOODLE_PASSWORD: ${MOODLE_ADMIN_PASSWORD:-Moodle#2026}
+      MOODLE_EMAIL: ${MOODLE_ADMIN_EMAIL:-admin@example.com}
+      MOODLE_SITENAME: ${MOODLE_SITE_NAME:-DHBW-Fake-Moodle}
+      MOODLE_LANGUAGE: de
+
+      # --- Datenbank ---
+      DB_TYPE: pgsql
+      DB_HOST: moodle-postgres
+      DB_PORT: 5432
+      DB_NAME: ${MOODLE_DB_NAME:-moodle}
+      DB_USER: ${MOODLE_DB_USER:-moodle}
+      DB_PASS: ${MOODLE_DB_PASSWORD:-moodle}
+
+      REVERSEPROXY: "true"
+      SSLPROXY: "false"
+      # Kein stiller Code-Upgrade beim Boot — sonst driften Image-Tag und
+      # tatsächlich laufender Code auseinander.
+      AUTO_UPDATE_MOODLE: "false"
     ports:
-      - "80:80"
-      - "443:443"
+      # Host-Port muss zu SITE_URL passen. Wer ihn ändert, ändert beides.
+      - "${MOODLE_PORT:-8081}:8080"
     volumes:
-      - ./moodle/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on: [moodle]
-    networks: [moodle]
+      - moodle_html:/var/www/html
+      - moodle_data:/var/www/moodledata
+    extra_hosts:
+      # Damit Moodle serverseitig die Keyset-URL des Tools abrufen kann.
+      # Auf Docker Desktop ohnehin gesetzt, auf Linux-Engines nötig.
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/login/index.php || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      # Erstinstallation dauert mehrere Minuten; vorher ist "unhealthy"
+      # kein Fehler, sondern der laufende Setup.
+      start_period: 600s
+    depends_on:
+      moodle-postgres:
+        condition: service_healthy
     restart: unless-stopped
 
-networks:
-  moodle:
-    driver: bridge
-
+# ----------------------------------------------------------------
+# Volumes
+# ----------------------------------------------------------------
+# `external`, weil die Volumes aus dem verwaisten Vorgänger-Stack
+# stammen und die Installation vom 04.09.2026 enthalten. Ohne das Flag
+# warnt Compose bei jedem `up`, dass sie einem anderen Projekt gehören.
+#
+# Zweiter Effekt, durchaus erwünscht: `down -v` fasst externe Volumes
+# nicht an. Die Moodle-Installation überlebt also auch einen
+# versehentlichen Aufruf mit -v.
+#
+# Auf einer frischen Maschine einmalig anlegen:
+#   docker volume create moodle_html_dev
+#   docker volume create moodle_data_dev
+#   docker volume create moodle_postgres_data_dev
 volumes:
-  moodle_db:
+  moodle_html:
+    external: true
+    name: moodle_html_dev
   moodle_data:
-  moodle_datadir:
-  caddy_data:
-  caddy_config:
+    external: true
+    name: moodle_data_dev
+  moodle_postgres_data:
+    external: true
+    name: moodle_postgres_data_dev
+
+# ----------------------------------------------------------------
+# Networks
+# ----------------------------------------------------------------
+# Kein gemeinsames Netz mit dem App Store, bewusst. Backend und Moodle
+# reden über host.docker.internal — also über dieselbe URL, die auch der
+# Browser benutzt. Ein zweiter Pfad über Docker-DNS (`http://moodle:8080`)
+# würde genau die Issuer-Verwechslung wieder einladen, die oben
+# beschrieben ist, und der Stack hinge beim Start am Dev-Netz.

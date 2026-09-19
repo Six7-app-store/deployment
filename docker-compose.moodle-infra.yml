@@ -1,0 +1,94 @@
+# Moodle als LTI-Plattform fuer den App Store.
+#
+# Bewusst NICHT moodle-docker: das ist die Entwicklungsumgebung von moodlehq,
+# sie bindet einen Moodle-Quellcodebaum von der Platte ein und bringt Selenium,
+# Mailpit und exttests mit. Fuer einen Server ist das der falsche Ausgangspunkt.
+#
+# Stattdessen das Bitnami-Image: es bringt Moodle fertig installiert mit und
+# konfiguriert sich beim ersten Start aus Umgebungsvariablen.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: moodle-postgres
+    environment:
+      POSTGRES_USER: ${MOODLE_DB_USER:?MOODLE_DB_USER is required}
+      POSTGRES_PASSWORD: ${MOODLE_DB_PASSWORD:?MOODLE_DB_PASSWORD is required}
+      POSTGRES_DB: ${MOODLE_DB_NAME:?MOODLE_DB_NAME is required}
+    volumes:
+      - moodle_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MOODLE_DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [moodle]
+    restart: unless-stopped
+
+  moodle:
+    image: bitnami/moodle:4.5
+    container_name: moodle
+    environment:
+      MOODLE_DATABASE_TYPE: pgsql
+      MOODLE_DATABASE_HOST: postgres
+      MOODLE_DATABASE_PORT_NUMBER: 5432
+      MOODLE_DATABASE_USER: ${MOODLE_DB_USER}
+      MOODLE_DATABASE_PASSWORD: ${MOODLE_DB_PASSWORD}
+      MOODLE_DATABASE_NAME: ${MOODLE_DB_NAME}
+      MOODLE_USERNAME: ${MOODLE_ADMIN_USER:?MOODLE_ADMIN_USER is required}
+      MOODLE_PASSWORD: ${MOODLE_ADMIN_PASSWORD:?MOODLE_ADMIN_PASSWORD is required}
+      MOODLE_EMAIL: ${MOODLE_ADMIN_EMAIL:?MOODLE_ADMIN_EMAIL is required}
+      MOODLE_SITE_NAME: ${MOODLE_SITE_NAME:-DHBW App Store Moodle}
+      # Muss exakt der oeffentliche Hostname sein. Moodle schreibt diesen Wert
+      # als wwwroot in die Konfiguration, und genau dieser Wert erscheint als
+      # iss-Claim in jedem LTI-Token. Steht hier etwas anderes als in
+      # LTI_PLATFORM_ISSUER des App Stores, wird jeder Launch abgewiesen.
+      MOODLE_HOST: ${MOODLE_HOSTNAME:?MOODLE_HOSTNAME is required}
+      MOODLE_REVERSEPROXY: "yes"
+      MOODLE_SSLPROXY: "yes"
+    volumes:
+      - moodle_data:/bitnami/moodle
+      - moodle_datadir:/bitnami/moodledata
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [moodle]
+    restart: unless-stopped
+
+  # Dasselbe Bauprinzip wie beim App Store: Caddy holt das Zertifikat ueber
+  # dns-01 bei der DHBW-CA. Der Weg ueber DNS ist hier wie dort noetig, weil
+  # die CA den Host nicht von aussen erreichen kann.
+  caddy:
+    build:
+      context: ./caddy
+    image: appstore-caddy:rfc2136
+    container_name: moodle-caddy
+    environment:
+      APP_HOSTNAME: ${MOODLE_HOSTNAME}
+      ACME_CA_URL: ${ACME_CA_URL:-https://certificates.dhbw.cloud/directory}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+      DNS_TSIG_KEY_NAME: ${DNS_TSIG_KEY_NAME:?DNS_TSIG_KEY_NAME is required}
+      DNS_TSIG_KEY_ALG: ${DNS_TSIG_KEY_ALG:-hmac-sha512}
+      DNS_TSIG_KEY: ${DNS_TSIG_KEY:?DNS_TSIG_KEY is required}
+      DNS_SERVER: ${DNS_SERVER:-ns.cloud-ns.dhbw-mannheim.de.:53}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./moodle/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [moodle]
+    networks: [moodle]
+    restart: unless-stopped
+
+networks:
+  moodle:
+    driver: bridge
+
+volumes:
+  moodle_db:
+  moodle_data:
+  moodle_datadir:
+  caddy_data:
+  caddy_config:
