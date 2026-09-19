@@ -39,9 +39,15 @@ if ($options['help'] || empty($options['appstore'])) {
 $basis = rtrim($options['appstore'], '/');
 
 // Bereits vorhanden? Dann nichts anlegen, nur ausgeben.
+//
+// Verglichen wird gegen die LAUNCH-URL, nicht gegen die Basis: lti_add_type()
+// uebernimmt lti_toolurl als baseurl des Typs. Ein Vergleich mit der Basis
+// trifft deshalb nie zu, und jeder Aufruf legte eine weitere Registrierung an
+// - mit einer neuen client_id, wodurch die zuvor verteilte ungueltig wirkte.
+$launchurl = $basis . '/lti/launch';
 $vorhanden = null;
 foreach (lti_get_lti_types() as $typ) {
-    if (rtrim($typ->baseurl, '/') === $basis) {
+    if (rtrim($typ->baseurl, '/') === $launchurl || rtrim($typ->baseurl, '/') === $basis) {
         $vorhanden = $typ;
         break;
     }
