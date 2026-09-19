@@ -20,6 +20,15 @@
         owner: ubuntu
         mode: '0755'
 
+    # copy legt nur die Datei an, nicht den Pfad darunter.
+    - name: Unterverzeichnisse anlegen
+      ansible.builtin.file:
+        path: "{{ project_root }}/{{ item }}"
+        state: directory
+        owner: ubuntu
+        mode: '0755'
+      loop: [moodle, moodle/cli, caddy]
+
     # Nur die Dateien, die Moodle braucht. Der Compose-Stack des App Stores
     # hat hier nichts verloren.
     - name: Compose-Datei und Caddy-Konfiguration kopieren
