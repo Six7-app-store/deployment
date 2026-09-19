@@ -6,6 +6,24 @@
 
   vars:
     docker_users: ["ubuntu"]
+    # Ohne IPv6 im Docker-Daemon erreicht kein Container etwas ausserhalb der
+    # VM. Die DHBW-Cloud hat kein IPv4, Docker legt Bridge-Netze aber per
+    # Vorgabe nur mit IPv4 an. Von innen sieht das nach "Network is
+    # unreachable" aus, waehrend dieselbe Adresse von der VM selbst
+    # einwandfrei antwortet - ein Fehlerbild, das man leicht der Gegenstelle
+    # anlastet.
+    #
+    # fd00::/8 ist ein privater Bereich; ip6tables uebersetzt nach aussen auf
+    # die globale Adresse der VM. Die Container brauchen keine eigene
+    # oeffentliche Adresse, nur einen Weg hinaus.
+    #
+    # Die Netze in docker-compose brauchen zusaetzlich enable_ipv6: true -
+    # diese Einstellung gilt nur fuer das Standardnetz.
+    docker_daemon_options:
+      ipv6: true
+      fixed-cidr-v6: "fd00:d0c:0::/64"
+      ip6tables: true
+
     docker_install_compose: true
     project_root: "/home/ubuntu/moodle"
 

@@ -108,6 +108,11 @@ services:
 networks:
   moodle:
     driver: bridge
+    # Ohne das erreicht kein Container etwas ausserhalb der VM: Docker legt
+    # Bridge-Netze per Vorgabe nur mit IPv4 an, und die DHBW-Cloud hat kein
+    # IPv4. Von innen sieht das nach "Network is unreachable" aus, waehrend
+    # dieselbe Adresse von der VM selbst einwandfrei antwortet.
+    enable_ipv6: true
 
 volumes:
   moodle_db:
