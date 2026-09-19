@@ -41,7 +41,10 @@ services:
       MOODLE_USERNAME: ${MOODLE_ADMIN_USER:?MOODLE_ADMIN_USER is required}
       MOODLE_PASSWORD: ${MOODLE_ADMIN_PASSWORD:?MOODLE_ADMIN_PASSWORD is required}
       MOODLE_EMAIL: ${MOODLE_ADMIN_EMAIL:?MOODLE_ADMIN_EMAIL is required}
-      MOODLE_SITENAME: ${MOODLE_SITE_NAME:-DHBW App Store Moodle}
+      # Ohne Leerzeichen. Das Entrypoint reicht den Wert unquotiert an Moodles
+      # Installations-CLI weiter; jedes Leerzeichen wird dort zu einem eigenen,
+      # unbekannten Argument, und der Container landet in einer Neustartschleife.
+      MOODLE_SITENAME: ${MOODLE_SITE_NAME:-DHBW-App-Store-Moodle}
       MOODLE_LANGUAGE: de
 
       DB_TYPE: pgsql
