@@ -15,7 +15,20 @@
     seed_data: false
     # Muss zu docker_data_volume_size_gb in envs/staging passen: "" solange dort
     # 0 steht, /dev/vdb sobald wieder ein Volume angelegt wird.
-    docker_data_device: "/dev/vdb"
+    #
+    # Steht seit ADR-0004 auf "": die VM laeuft auf einem Flavor mit 50 GB
+    # Systemplatte, ein Cinder-Volume gibt es nicht mehr. Alle Volume-Schritte
+    # unten haengen an `docker_data_device | length > 0` und werden damit
+    # uebersprungen; die Docker-Daten bleiben unter /var/lib/docker auf der
+    # Systemplatte.
+    docker_data_device: ""
+    # Installiert den Timer, der neue Images aus GHCR selbst nachzieht. Damit
+    # aktualisiert sich Staging nach einem Merge auf main ohne Deploy.
+    # Auf false setzen, um ihn wieder abzuschalten - die Tasks am Playbook-Ende
+    # halten den Dienst dann an und entfernen ihn.
+    auto_update: true
+    # Wie oft nachgesehen wird. systemd-Zeitangabe.
+    auto_update_interval: "5min"
 
   pre_tasks:
     # Das zweite Interface hängt Terraform an die laufende VM, konfiguriert ist
@@ -71,6 +84,10 @@
     # überstehen müssen. mangle verwaltet Docker nicht, es kollidiert also
     # nichts mit dessen Ketten.
     - name: Connmark-Skript installieren
+      # Wie beim Netplan-Task darueber: ohne zweites Interface gibt es
+      # kein secondary_ipv4, und die Vorlage unten liesse sich nicht
+      # aufloesen.
+      when: secondary_mac | default('') | length > 0
       ansible.builtin.copy:
         dest: /usr/local/sbin/secondary-ipv4-marks.sh
         owner: root
@@ -107,6 +124,10 @@
       tags: [network]
 
     - name: Unit installieren, die die Marken beim Booten neu setzt
+      # Wie beim Netplan-Task darueber: ohne zweites Interface gibt es
+      # kein secondary_ipv4, und die Vorlage unten liesse sich nicht
+      # aufloesen.
+      when: secondary_mac | default('') | length > 0
       ansible.builtin.copy:
         dest: /etc/systemd/system/secondary-ipv4-marks.service
         owner: root
@@ -317,7 +338,26 @@
     # ihn über den Reload-Schritt am Playbook-Ende neu — validiert und ohne
     # Unterbrechung, statt den Container wegzuwerfen.
 
-    # Ohne Anmeldung: die Images der Organisation sind öffentlich.
+    # Die Images liegen in einem privaten GHCR-Namespace (IMAGE_NAMESPACE in
+    # der .env), deshalb braucht der Pull eine Anmeldung. Token und Benutzer
+    # werden in der Rezept-Shell aus der .env auf der VM gelesen - wie beim
+    # Keycloak-Schritt am Playbook-Ende. So steht das Token weder in einer
+    # Ansible-Variable noch auf der Kommandozeile, und --password-stdin haelt
+    # es aus der Prozessliste heraus.
+    - name: An GHCR anmelden
+      ansible.builtin.shell:
+        cmd: |
+          set -eu
+          set -a; . ./.env; set +a
+          if [ -z "${GIT_ACCESS_TOKEN:-}" ]; then
+            echo "GIT_ACCESS_TOKEN fehlt in der .env - private Images sind nicht ziehbar" >&2
+            exit 1
+          fi
+          printf '%s' "$GIT_ACCESS_TOKEN"             | docker login ghcr.io --username "${GIT_USER:-x-access-token}" --password-stdin
+        chdir: "{{ project_root }}"
+        executable: /bin/bash
+      changed_when: true
+
     - name: Pull alle Images
       ansible.builtin.shell:
         # --ignore-buildable überspringt Dienste mit build:-Abschnitt. Ohne das
@@ -330,13 +370,6 @@
       changed_when: true
       async: 600
       poll: 30
-
-    # Räumt Zugangsdaten weg, die frühere Läufe mit GHCR-Anmeldung hinterlassen
-    # haben. Ohne Anmeldung entsteht die Datei nicht mehr neu.
-    - name: Zugangsdaten aus dem Root-Store entfernen
-      ansible.builtin.file:
-        path: /root/.docker/config.json
-        state: absent
 
     # Validiert die zusammengesetzte Konfiguration, bevor das Modul übernimmt.
     # Der Schritt existiert nur wegen der Diagnose: docker_compose_v2 ruft
@@ -379,6 +412,14 @@
         chdir: "{{ project_root }}"
       register: compose_output
       changed_when: true
+
+    # Erst jetzt aufraeumen, nicht schon nach dem Pull: `up -d` kann ein Image
+    # nachladen, das der Pull uebersprungen hat, und braucht die Anmeldung dann
+    # noch. Das Token soll aber nicht dauerhaft im Root-Store der VM liegen.
+    - name: Zugangsdaten aus dem Root-Store entfernen
+      ansible.builtin.file:
+        path: /root/.docker/config.json
+        state: absent
 
     # `up -d --build` baut Caddy neu, ersetzt den Container aber nicht, wenn
     # sich nur die Image-ID geändert hat: Compose entscheidet darüber anhand der
@@ -520,3 +561,110 @@
 
     - ansible.builtin.debug:
         var: compose_ps.stdout_lines
+
+    # ----------------------------------------------------------------
+    # Selbstaktualisierung
+    # ----------------------------------------------------------------
+    # Ein Timer auf der VM zieht neue Images aus GHCR und startet die
+    # betroffenen Dienste neu. Damit wird ein Merge auf main auf Staging
+    # sichtbar, ohne dass jemand einen Deploy ausloest.
+    #
+    # Die Richtung ist umgedreht, weil die andere nicht geht: Ein GitHub-Runner
+    # erreicht hier weder die OpenStack-API noch Port 22 - beides ist
+    # abgeschottet. GHCR erreichen beide Seiten. Also holt die Maschine sich,
+    # was sie braucht, statt dass jemand hereinkommt.
+    #
+    # Was der Timer NICHT kann: Aenderungen an Terraform, Ansible oder der
+    # Compose-Datei. Dafuer bleibt dieses Playbook zustaendig.
+    - name: Update-Skript auf die VM legen
+      ansible.builtin.copy:
+        src: "{{ local_compose_path }}/scripts/autoupdate.sh"
+        dest: /usr/local/bin/appstore-autoupdate
+        owner: root
+        group: root
+        mode: "0755"
+      when: auto_update | bool
+
+    - name: Service-Unit fuer die Selbstaktualisierung
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/appstore-autoupdate.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=App Store: neue Images aus GHCR nachziehen
+          After=network-online.target docker.service
+          Wants=network-online.target
+          Requires=docker.service
+
+          [Service]
+          Type=oneshot
+          Environment=PROJECT_ROOT={{ project_root }}
+          ExecStart=/usr/local/bin/appstore-autoupdate
+          User=root
+          TimeoutStartSec=900
+      when: auto_update | bool
+
+    - name: Timer fuer die Selbstaktualisierung
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/appstore-autoupdate.timer
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=App Store: regelmaessig nach neuen Images sehen
+
+          [Timer]
+          OnBootSec=10min
+          OnUnitActiveSec={{ auto_update_interval }}
+          RandomizedDelaySec=60s
+          Persistent=true
+
+          [Install]
+          WantedBy=timers.target
+      when: auto_update | bool
+
+    - name: Timer aktivieren
+      ansible.builtin.systemd_service:
+        name: appstore-autoupdate.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+      when: auto_update | bool
+
+    - name: Timer abschalten und entfernen, wenn auto_update false ist
+      when: not (auto_update | bool)
+      block:
+        - name: Timer anhalten
+          ansible.builtin.systemd_service:
+            name: appstore-autoupdate.timer
+            enabled: false
+            state: stopped
+          failed_when: false
+
+        - name: Units und Skript loeschen
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /etc/systemd/system/appstore-autoupdate.timer
+            - /etc/systemd/system/appstore-autoupdate.service
+            - /usr/local/bin/appstore-autoupdate
+          notify: reload systemd
+
+    - name: Naechster Lauf des Timers
+      ansible.builtin.command: systemctl list-timers appstore-autoupdate.timer --no-pager
+      register: autoupdate_timers
+      changed_when: false
+      when: auto_update | bool
+
+    - ansible.builtin.debug:
+        var: autoupdate_timers.stdout_lines
+      when: auto_update | bool
+
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
