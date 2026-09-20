@@ -9,7 +9,7 @@ Der App Store ist ein Web-System, in dem Studierende und Dozierende vorgefertigt
 | Docker Desktop (oder Docker Engine) | 24.x oder neuer | Compose v2 ist enthalten |
 | Docker Compose | v2 (`docker compose`, nicht `docker-compose`) | Über Docker Desktop bereits dabei |
 | Git | 2.x | |
-| Python 3 | 3.11+ | Wird einmalig zum Generieren des Fernet-Keys gebraucht |
+| Python 3 | 3.11+ | Fernet-Key, `make harness-sync` und die Claude-Hooks laufen darueber |
 | GNU Make | Pflicht | Alle Schritte sind als `make`-Targets ausgelegt — wer kein Make hat, kann die zugrunde liegenden Befehle direkt aus dem [Makefile](./Makefile) ablesen |
 | Freie Ports | 5173, 8000, 8080, 5432, 5672, 15672, 6379, 5050, 55433 | Bei Konflikt den entsprechenden Port in der `.env` überschreiben (z. B. `KEYCLOAK_PORT=8180`) — die zugehörige `VITE_*_URL` ebenfalls anpassen |
 
@@ -42,6 +42,21 @@ appstore/
 ├── deployment/      # docker-compose.dev.yml, Makefile, .env.example, seed/, keycloak/
 └── org-docs/        # Dokumentation
 ```
+
+> [!IMPORTANT]
+> Die vier Ordner müssen **genau so heißen** — `frontend`, `backend`, `worker`,
+> `deployment` — und flach nebeneinander liegen. Wie der Ordner darüber heißt,
+> ist egal.
+>
+> Daran hängt der Claude-Harness: Hooks, Berechtigungen und die geteilten Skills
+> liegen kanonisch in `deployment/harness/` und werden von dort in alle vier
+> Repos **und** in den Ordner darüber verteilt. `make quickstart` in Schritt 3
+> erledigt das mit; wer die Schritte einzeln fährt, holt es mit
+> `make harness-sync` nach.
+>
+> Ohne diesen Schritt startet eine Claude-Code-Sitzung im übergeordneten Ordner
+> ohne Hooks und ohne deny-Regeln — und ein fehlender Hook sieht aus wie gar
+> kein Hook. Hintergrund: [harness.md](harness.md).
 
 ## Schritt 2: `.env` anlegen
 

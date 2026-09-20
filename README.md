@@ -37,6 +37,7 @@ Die wichtigsten im Alltag:
 | `make dev-up` / `make dev-down` | Stack starten und stoppen (Volumes bleiben) |
 | `make dev-logs-backend` | Logs verfolgen; auch `-frontend`, `-worker`, `-keycloak` |
 | `make shell-backend` | Shell im Container; auch `shell-worker`, `shell-frontend`, `shell-db` |
+| `make harness-sync` | Claude-Harness in alle vier Repos verteilen — nach jedem `git pull` hier |
 | `make dev-restart-worker` | Neustart, wenn der Hot-Reload nicht greift — etwa bei Celery-Tasks |
 | `make migrate-dev` | Alembic-Migrationen anwenden |
 | `make migration-create MSG="..."` | Neue Migration erzeugen |
