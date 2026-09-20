@@ -99,7 +99,14 @@ secret: ## Generate a new secret key (prints SECRET_KEY=...)
 # existiert, lässt env es in Ruhe, also auch zum "auf den neuesten
 # Stand bringen" verwendbar.
 init: quickstart ## Alias for `quickstart`
-quickstart: ## One-shot: env + dev-up + migrate-dev + seed-data
+quickstart: ## One-shot: harness + env + dev-up + migrate-dev + seed-data
+	@$(MAKE) --no-print-directory harness-sync || { \
+	  echo ""; \
+	  echo "!! Harness nicht verteilt. Hooks und deny-Regeln greifen dann nur,"; \
+	  echo "   wenn Claude Code IM jeweiligen Repo gestartet wird, nicht im"; \
+	  echo "   Ordner darueber. Nachholen mit: make harness-sync"; \
+	  echo ""; \
+	}
 	@$(MAKE) --no-print-directory env
 	@$(MAKE) --no-print-directory dev-up
 	@echo "⏳ Warte 10s bis Backend/Postgres bereit sind..."
