@@ -216,15 +216,17 @@ services:
       # CORS
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
 
-      # Email (Gmail SMTP) — used by the post-deploy notify hook in
+      # Email (any SMTP server) — used by the post-deploy notify hook in
       # celery_event_listener.py. SMTP_ENABLED is the explicit
-      # kill-switch (default false): even with SMTP_USER/SMTP_PASSWORD
-      # populated, mail delivery only happens when SMTP_ENABLED=true.
+      # kill-switch (default false): mail delivery only happens when
+      # SMTP_ENABLED=true. SMTP_USER/SMTP_PASSWORD stay empty for a relay
+      # that admits the host by address.
       # Use it to keep credentials in .env for later but turn delivery
       # off in dev / CI / on demo days without scrubbing the creds.
       SMTP_ENABLED: ${SMTP_ENABLED:-false}
-      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_SECURITY: ${SMTP_SECURITY:-auto}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}

@@ -109,7 +109,9 @@ Für reines Testen ohne private Repos darf der Wert leer bleiben.
 
 ### 2d. `SMTP_*` (optional)
 
-E-Mail-Benachrichtigungen (Approval-Workflow). Wenn nicht gebraucht, einfach `SMTP_ENABLED=false` lassen und die anderen Felder leer. Für Gmail ein App-Password verwenden, nicht das Account-Passwort.
+E-Mail-Benachrichtigungen (Approval-Workflow). Wenn nicht gebraucht, einfach `SMTP_ENABLED=false` lassen.
+
+Mit `SMTP_ENABLED=true` und sonst leeren Feldern gehen alle Mails an den lokalen Mailpit und sind unter http://localhost:8025 zu lesen. Nichts verlässt den Rechner. Einen echten Mailserver testet man über `SMTP_HOST`, `SMTP_PORT` und `SMTP_SECURITY` (`ssl`, `starttls`, `none` oder `auto`); `SMTP_USER`/`SMTP_PASSWORD` nur, wenn der Server eine Anmeldung verlangt.
 
 ## Schritt 3: Stack starten
 
@@ -117,7 +119,7 @@ E-Mail-Benachrichtigungen (Approval-Workflow). Wenn nicht gebraucht, einfach `SM
 make dev-up
 ```
 
-Das startet zwölf Container: `frontend`, `backend`, `worker`, `keycloak`, `keycloak-postgres`, `postgres`, `postgres-test`, `postgres-tfstate`, `redis`, `rabbitmq`, `pgadmin`.
+Das startet zwölf Container: `frontend`, `backend`, `worker`, `keycloak`, `keycloak-postgres`, `postgres`, `postgres-test`, `postgres-tfstate`, `redis`, `rabbitmq`, `pgadmin`, `mailpit`.
 
 Beim ersten Start dauert der Boot 1–3 Minuten (Image-Pull + Keycloak-Init). Bevor Schritt 4 läuft, sicherstellen dass Keycloak fertig ist:
 

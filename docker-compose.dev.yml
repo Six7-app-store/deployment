@@ -249,18 +249,20 @@ services:
       # Redis DB 1 — Celery owns DB 0.
       LTI_REDIS_URL: ${LTI_REDIS_URL:-redis://redis:6379/1}
 
-      # Email (Gmail SMTP) — used by the post-deploy notify hook in
+      # Email — used by the post-deploy notify hook in
       # celery_event_listener.py. SMTP_ENABLED is the explicit
-      # kill-switch (default false): even with SMTP_USER/SMTP_PASSWORD
-      # populated, mail delivery only happens when SMTP_ENABLED=true.
-      # Use it to keep credentials in .env for later but turn delivery
-      # off in dev / CI / on demo days without scrubbing the creds.
+      # kill-switch (default false): mail delivery only happens when
+      # SMTP_ENABLED=true. Without further settings, dev mail goes to
+      # the local Mailpit (web UI on http://localhost:8025) and never
+      # leaves the machine. Point SMTP_HOST elsewhere to test a real
+      # mail server.
       SMTP_ENABLED: ${SMTP_ENABLED:-false}
-      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
-      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURITY: ${SMTP_SECURITY:-none}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@appstore.localhost}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Click-n-Deploy}
 
       # Public base URL of the frontend, used in owner-summary mails
@@ -392,6 +394,16 @@ services:
     networks:
       - backend-network
       - worker-network
+    restart: unless-stopped
+
+  # Catches every mail the backend sends in dev; nothing is relayed.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: mailpit-dev
+    ports:
+      - "${MAILPIT_PORT:-8025}:8025"
+    networks:
+      - backend-network
     restart: unless-stopped
 
 # ----------------------------------------------------------------

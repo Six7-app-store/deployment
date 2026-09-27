@@ -192,15 +192,23 @@ VITE_KEYCLOAK_URL=https://<VM-IP>
 
 ### 2j. `SMTP_*` (optional)
 
-E-Mail-Benachrichtigungen (Approval-Workflow). Wenn nicht gebraucht, einfach `SMTP_ENABLED=false` lassen und die anderen Felder leer. Für Gmail ein App-Password verwenden, nicht das Account-Passwort.
+E-Mail-Benachrichtigungen (Approval-Workflow). Wenn nicht gebraucht, einfach `SMTP_ENABLED=false` lassen und die anderen Felder leer.
+
+Eingetragen wird der Mailserver des Betreibers, an einer Hochschule also deren Relay — kein privates Postfach bei einem Freemail-Anbieter. Zwei Fälle:
+
+- **Relay mit Freigabe per IP-Adresse.** Die Maschine wird beim Mailserver freigeschaltet; `SMTP_USER` und `SMTP_PASSWORD` bleiben leer, Absender ist `SMTP_FROM_EMAIL`. `SMTP_SECURITY=none` nur, wenn der Weg zum Relay im vertrauenswürdigen Netz liegt, sonst `starttls`.
+- **Konto mit Anmeldung.** `SMTP_USER` und `SMTP_PASSWORD` setzen, dazu `SMTP_SECURITY=starttls` (meist Port 587) oder `ssl` (meist 465).
+
+Das Zertifikat des Servers wird geprüft. SPF und DKIM für die Absenderdomain richtet der Betreiber des Mailservers ein, sonst landen die Mails im Spam.
 
 ```
-SMTP_ENABLED=false
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
+SMTP_ENABLED=true
+SMTP_HOST=mail.example-hochschule.de
+SMTP_PORT=587
+SMTP_SECURITY=starttls
 SMTP_USER=
 SMTP_PASSWORD=
-SMTP_FROM_EMAIL=
+SMTP_FROM_EMAIL=appstore@example-hochschule.de
 SMTP_FROM_NAME=Click-n-Deploy
 ```
 

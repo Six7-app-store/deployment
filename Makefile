@@ -35,6 +35,7 @@ BACKEND_PORT       ?= 8000
 KEYCLOAK_PORT      ?= 8080
 RABBITMQ_UI_PORT   ?= 15672
 PGADMIN_PORT       ?= 5050
+MAILPIT_PORT       ?= 8025
 
 .DEFAULT_GOAL := help
 
@@ -69,7 +70,7 @@ help: ## Show this help message
 	@echo ""
 	@echo "Services (dev): frontend, backend, worker, keycloak, postgres,"
 	@echo "                postgres-test, postgres-tfstate, keycloak-postgres,"
-	@echo "                redis, rabbitmq, pgadmin"
+	@echo "                redis, rabbitmq, pgadmin, mailpit"
 	@echo ""
 	@echo "Bootstrap a fresh checkout:  make init"
 	@echo "Show URLs:                   make urls"
@@ -127,6 +128,7 @@ urls: ## Show all dev URLs in one place
 	@echo "  Keycloak Realm:     http://localhost:$(KEYCLOAK_PORT)/realms/dhbw"
 	@echo "  RabbitMQ UI:        http://localhost:$(RABBITMQ_UI_PORT)       (admin / admin)"
 	@echo "  pgAdmin:            http://localhost:$(PGADMIN_PORT)            (admin@admin.com / admin)"
+	@echo "  Mailpit:            http://localhost:$(MAILPIT_PORT)            (Mails aus dem Dev-Stack)"
 	@echo ""
 
 # ----------------------------------------------------------------
