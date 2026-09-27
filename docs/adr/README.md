@@ -60,3 +60,4 @@ Das ist Teil der Definition of Done in den `AGENTS.md` aller vier Repos.
 | [0007](0007-protokoll-statt-type-im-account-vertrag.md) | Das Zugangsprotokoll ist ein eigenes Feld, kein Wert in `type` | Angenommen |
 | [0008](0008-studiengruppe-aus-moodle-kurs-anlegen.md) | Eine Studiengruppe entsteht auf Knopfdruck aus einem Moodle-Kurs | Vorschlag |
 | [0009](0009-deep-link-bindet-an-app.md) | Eine deep-verlinkte Moodle-Aktivität bindet an eine App, nicht an eine Umgebung | Vorschlag |
+| [0010](0010-jeder-betreiber-rollt-aus-eigenem-forgejo-aus.md) | Jeder Betreiber rollt Staging und Produktion aus seinem eigenen Forgejo aus | Vorschlag |
