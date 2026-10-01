@@ -34,8 +34,9 @@ Ein Commit gehört in genau ein Repo. Eine Änderung, die zwei Repos betrifft
   `.env.example`. Die deny-Regeln in `.claude/settings.json` setzen das hart
   durch, ein Hook erklärt den Grund.
 - **Kein Produktions-Deploy, kein `terraform apply` von Hand.** Staging läuft
-  über die Forgejo-Pipeline, Produktion über einen Menschen auf der
-  Zielmaschine.
+  über GitHub Actions auf dem self-hosted Runner (ADR-0002), Produktion über
+  einen Menschen auf der Zielmaschine. Der Forgejo-Stack unter
+  `deployment/forgejo/` ist ein Versuchsaufbau, keine laufende Pipeline.
 - **Kein Push auf `main`, kein Force-Push.** Jeder Push fragt nach; auf `main`
   pusht eine Person.
 - **Architekturentscheidung getroffen?** ADR nach `deployment/docs/adr/`, im
