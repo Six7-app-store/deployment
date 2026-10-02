@@ -27,6 +27,12 @@ spec = importlib.util.spec_from_file_location(
 guard = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(guard)
 
+sync_spec = importlib.util.spec_from_file_location(
+    "harness_sync", os.path.join(HERE, "sync.py")
+)
+sync = importlib.util.module_from_spec(sync_spec)
+sync_spec.loader.exec_module(sync)
+
 
 def capture(function, *args) -> str:
     """Was der Hook nach stdout schreibt — das ist seine Entscheidung."""
@@ -256,6 +262,64 @@ class SitzungsOrdner(unittest.TestCase):
     def test_aus_dem_arbeitsordner_heraus(self):
         cwd = os.path.abspath(os.path.join(os.sep, "ws"))
         self.assertEqual(guard.session_dirs({"cwd": cwd}), (cwd, cwd))
+
+
+class GitArbeitsablauf(unittest.TestCase):
+    def test_erhaelt_repo_anweisungen_und_ist_idempotent(self):
+        existing = "# Repo\n\nLokale Anweisungen.\n"
+        result = sync.git_instructions(existing)
+        self.assertTrue(result.startswith(existing))
+        self.assertEqual(sync.git_instructions(result), result)
+
+    def test_ersetzt_nur_markierten_block(self):
+        existing = (
+            "Vorher\n" + sync.GIT_RULE_START + "\nAlte Regel\n"
+            + sync.GIT_RULE_END + "\nNachher\n"
+        )
+        result = sync.git_instructions(existing)
+        self.assertTrue(result.startswith("Vorher\n"))
+        self.assertTrue(result.endswith("\nNachher\n"))
+        self.assertNotIn("Alte Regel", result)
+
+    def test_beschaedigte_marker_werden_nicht_ueberschrieben(self):
+        with self.assertRaises(ValueError):
+            sync.git_instructions("Anweisungen\n" + sync.GIT_RULE_START)
+
+    def test_check_schreibt_nicht_und_sync_erhaelt_claude(self):
+        with tempfile.TemporaryDirectory() as base:
+            claude = os.path.join(base, "CLAUDE.md")
+            with open(claude, "w", encoding="utf-8") as handle:
+                handle.write("Eigene Claude-Anweisungen\n")
+            changed = []
+            sync.sync_instructions(base, True, changed)
+            self.assertTrue(changed)
+            self.assertFalse(os.path.exists(os.path.join(base, "AGENTS.md")))
+            sync.sync_instructions(base, False, [])
+            with open(claude, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "Eigene Claude-Anweisungen\n")
+            changed = []
+            sync.sync_instructions(base, True, changed)
+            self.assertEqual(changed, [])
+
+    def test_neue_repos_erhalten_claude_import(self):
+        with tempfile.TemporaryDirectory() as base:
+            sync.sync_instructions(base, False, [])
+            with open(os.path.join(base, "CLAUDE.md"), encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "@AGENTS.md\n")
+
+    def test_regeln_in_allen_vorhandenen_repos_aktuell(self):
+        checked = 0
+        for repo in sync.INSTRUCTION_REPOS:
+            base = os.path.join(sync.ROOT, repo)
+            if not os.path.isdir(base):
+                continue
+            path = os.path.join(base, "AGENTS.md")
+            with open(path, encoding="utf-8") as handle:
+                content = handle.read()
+            self.assertEqual(content, sync.git_instructions(content), path)
+            self.assertIn(sync.GIT_RULE_START, content)
+            checked += 1
+        self.assertGreater(checked, 0)
 
 
 class VerteilteKopien(unittest.TestCase):
