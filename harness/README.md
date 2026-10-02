@@ -28,6 +28,7 @@ das sie an die fünf Stellen verteilt.
 | `permissions.json` | der `permissions`-Block jeder `settings.json` |
 | `skills/` | geteilte Skills, in jedes Repo und in den Arbeitsordner |
 | `root/CLAUDE.md` | `DHBW_APP/CLAUDE.md` |
+| `git-workflow.md` | Markierter Block in `AGENTS.md` aller sechs lokalen Repos: Arbeitspakete fertigstellen, Commits und Pushes bündeln |
 | `sync.py` | das Verteilen selbst |
 
 ## Benutzen
@@ -42,10 +43,17 @@ Beides auch direkt: `python harness/sync.py [--check]`.
 **Nach jedem `git pull` im `deployment`-Repo einmal `make harness-sync`.** Das
 Skript schreibt nur, was sich unterscheidet, und ist gefahrlos wiederholbar.
 
+Hooks und Berechtigungen bleiben auf die vier Stack-Repositories begrenzt.
+Die Commit-/Push-Regel wird zusätzlich nach `Ubuntu-App/` und
+`self-service-ui/` verteilt. Repo-spezifische `AGENTS.md`-Inhalte außerhalb
+des markierten Blocks bleiben erhalten. Fehlt dort `CLAUDE.md`, wird
+`@AGENTS.md` als Einstieg angelegt. Bereits bestehende `CLAUDE.md` bleiben
+unverändert. `harness-check` prüft auch die verteilten Regelblöcke.
+
 ## Testen
 
 ```bash
-make harness-test     # 30 Tests, nur Standardbibliothek, ohne Docker
+make harness-test     # Hook- und Sync-Tests, nur Standardbibliothek, ohne Docker
 ```
 
 Geprüft wird die Entscheidungslogik: Secret-Erkennung, Repo-Zuordnung,
@@ -53,6 +61,10 @@ Pfadübersetzung in den Container, die `pre`-Entscheidungen und der
 Schleifenschutz im Stop-Hook. Dazu ein Test, der die verteilten Kopien
 Zeichen für Zeichen gegen die Quelle hält — ein vergessenes `harness-sync`
 fällt damit auf, nicht erst im nächsten Agentenlauf.
+
+Die Sync-Tests prüfen außerdem Erhalt repo-eigener Anweisungen, wiederholbare
+Verteilung, reinen Check ohne Schreibzugriff und die Git-Regel in allen
+vorhandenen Repositories.
 
 Derselbe Lauf hängt als eigener Job `harness` in
 `.github/workflows/infra-qa.yml`. Dort ist nur `deployment` ausgecheckt;
