@@ -1,31 +1,35 @@
 # Umsetzungspläne für die offenen User Stories
 
-Stand: **01.10.2026**. Grundlage: [Prüfbericht mit allen 35 Stories](user-story-audit-2026-10-01.md).
+Stand: **01.10.2026**. Grundlage: [Prüfbericht mit allen 40 aktuellen Stories](user-story-audit-2026-10-01.md), PDF `Projektkonzeption_2026-10-01_17-40-49.pdf`.
 
-Die folgenden **14 Arbeitspakete decken alle 21 teilweise umgesetzten und 4 offenen Stories ab**. Dies ist ein Umsetzungsbacklog; die vorgeschlagenen Funktionen wurden noch nicht gebaut. Bereits funktionierende Komponenten werden weiterverwendet. Ein Architekturvorschlag in diesem Dokument ist noch keine beschlossene Architekturänderung.
+Die folgenden **15 aktiven Arbeitspakete decken alle 26 teilweise umgesetzten und 3 offenen aktuellen Stories ab**. P01 bleibt zusätzlich als historischer Backlog erhalten, weil US-31/US-32 in der neuen PDF fehlen. IDs bleiben stabil; neu sind US-36 bis US-42. Die vorgeschlagenen Funktionen wurden noch nicht gebaut. Architekturvorschläge sind noch keine beschlossenen Architekturänderungen.
 
 ## Priorisierung und Abhängigkeiten
 
 | Paket | Priorität | Stories | Ergebnis | Voraussetzung |
 | --- | --- | --- | --- | --- |
-| P01 | Hoch | US-31, US-32 | Anonymer Zugriff auf öffentliche Repos und GitHub-App-Zugriff auf private Repos | Betreiberkonfiguration für GitHub App |
-| P02 | Hoch | US-15, US-16 | Durchgängiger Portal-/Keycloak-/Cloud-Dienst-Verbund | Tatsächlicher Portal-Dienstvertrag und Rollenmodell |
+| P01 | Historisch | US-31, US-32 | Anonymer Zugriff auf öffentliche Repos und GitHub-App-Zugriff auf private Repos | Weitergeltung der früheren Anforderungen bestätigen |
+| P02 | Hoch | US-15, US-16, US-36, US-38, US-41 | Portal-OIDC/oauth2-proxy, gemeinsame Projekte/Kontingente und durchgängige Mantine-UI | Tatsächlicher Portal-Dienstvertrag und Rollenmodell |
 | P03 | Hoch | US-18 | Abgestimmte Moodle-Kontext-/Rollenübernahme | Vertrauensregeln und P02-Auth-Vertrag |
 | P04 | Hoch | US-03, US-10 | Ubuntu-Lehrdesktop mit Java, Eclipse und IntelliJ | Abgestimmte Labor-Softwareliste |
 | P05 | Hoch | US-01, US-04 | Persönliche SSH-Keys und getrennte Nutzerbereiche | Erweiterung des Account-/Template-Vertrags |
 | P06 | Mittel | US-08, US-09 | Ausreichende Ressourcen und mehrere App-Instanzen pro VM | Softwareprofil P04, Isolation P05 |
 | P07 | Hoch | US-13 | Anwendung/VM gezielt neu starten und Konfiguration ändern | App-Aktionsvertrag; P05/P06 für gemeinsame VMs |
 | P08 | Hoch | US-05, US-27, US-29, US-30 | Mehr-VM-Übungsnetz und geprüfte IPv4-/IPv6-/Dual-Stack-Templates | Quellcode aller unterstützten App-Templates |
-| P09 | Hoch | US-02, US-22 | Nachgewiesener Zugriff von privaten Rechnern und Heimnetzen | P08 und Zugang P05 |
-| P10 | Hoch | US-28 | Bereitmeldung erst nach nachgewiesener Anwendungsbereitschaft | Referenz-App; P01/P08 für integrierte Abnahme |
-| P11 | Hoch | US-14, US-15, US-20 | Zutreffende Softwareangaben und konsistente Übergabedokumentation | Erste Bereinigung sofort; Abschluss nach anderen Paketen |
+| P09 | Hoch | US-02, US-22, US-39 | Privater Rechnerzugriff und zentrale persönliche Daten unter „My Access“ | P02, P08 und Zugang P05 |
+| P10 | Hoch | US-28 | Bereitmeldung erst nach nachgewiesener Anwendungsbereitschaft | Referenz-App; P08 für integrierte Abnahme |
+| P11 | Hoch | US-14, US-15, US-20; Regression US-40 | Softwareangaben, Übergabe und nutzbarer API-Vertrag | Erste Bereinigung sofort; Abschluss nach anderen Paketen |
 | P12 | Mittel | US-12, US-25 | Einfacher, fachlich abgenommener Bereitstellungsablauf | P02, P04, P06, P08 |
-| P13 | Mittel | US-26 | Abgestimmter Katalog tatsächlich deploybarer Apps | P01, P04, P08, P10 |
+| P13 | Mittel | US-26 | Abgestimmter Katalog tatsächlich deploybarer Apps | P04, P08, P10; vorhandener Git-Zugriff |
 | P14 | Hoch | US-34 | Staging/Produktion ohne Secret-Ablage bei GitHub | Betreiberseitiger Secret-Speicher und Runner |
+| P15 | Hoch | US-37 | OpenTofu in Worker, Plattform-CI und Hilfswerkzeugen | Geprüfte Provider-/State-Kompatibilität und Restore-Probe |
+| P16 | Mittel | US-42 | Konfigurierbares Betreiberlogo und Name für Portal/App Store | UI-Grenze P02, Dokumentation P11 |
 
 Hoch = zentraler Lehrbedarf, Integrationslücke oder Betriebsgrundlage; Mittel = Ausbau auf einer funktionsfähigen Grundlage. Keine Tages- oder Fertigstellungszusage, solange Umfang, externe Dienste und App-Repositories nicht vollständig vorliegen.
 
 ## P01 – Öffentliche Repositories und GitHub App
+
+**Historischer Backlog:** US-31/US-32 fehlen in der aktuellen PDF. Das ist kein ausdrücklicher Verzicht; P01 bleibt erhalten, zählt aber nicht zu den 15 aktiven Paketen. Ein funktionierender Repository-Zugriff bleibt unabhängig davon erforderlich.
 
 **Ist:** Backend verlangt einen allgemeinen Git-Token schon bei Zugriffsprüfung und Versionsauflistung. Beide Git-Services verwenden tokenhaltige URLs. Die in Compose vorhandenen GitHub-App-Variablen werden von den Settings nicht ausgewertet.
 
@@ -50,15 +54,20 @@ Hoch = zentraler Lehrbedarf, Integrationslücke oder Betriebsgrundlage; Mittel =
 
 **Betroffene Stellen:** `self-service-ui/APP-STORE.md`, `self-service-ui/Caddyfile`, `self-service-ui/web/app-store/`, Portal-Auth-/Client-Provider, `backend/app/utils/auth.py`, `backend/app/utils/keycloak_auth.py`, `backend/app/routers/openstack_credentials.py`, `deployment/docker-compose.*.yml`, `deployment/docs/architektur.md`.
 
+**Neue ausdrückliche Zielvorgaben (US-36/38/41):** Anmeldung über OIDC und den vorhandenen oauth2-proxy, kein eigener produktiver App-Store-Keycloak; Portal als führende Projekt-/Kontingentverwaltung; gesamte App-Store-Bedienung mit Mantine. Ein eigener Keycloak kann weiterhin als klar getrennter lokaler Testdienst dienen. Die neue Vorgabe konkretisiert die bisherige offene UI-Entscheidung.
+
 **Schritte:**
 
 1. Ist-Vertrag des betriebenen Portals aufnehmen: Keycloak-Issuer/Realm, Audience, Rollen, oauth2-proxy-Tokenweitergabe sowie Projekt-/Budget-/Credential-APIs. Kein vorhandenes Budget-API als Credential-Ausgabedienst voraussetzen.
 2. Portal und Backend auf den vorhandenen Keycloak abstimmen; API-Anfragen über BFF/Proxy mit passendem Access-Token versorgen. Fehlende Sitzung muss als 401 beim Client ankommen. Weitergabe von ID-Token oder unbestätigter E-Mail reicht nicht.
 3. Autorisierte Projektwahl und Zuordnung zu Deployments ergänzen. Falls der bestehende Cloud-Dienst keine passenden kurzlebigen Credentials ausstellen kann, dafür einen klaren Dienstvertrag planen; bis dahin explizite, dokumentierte Credential-Eingabe beibehalten.
-4. Dauerhafte UI-Grenze in einem ADR festlegen. Vorschlag: Portal wird Einstieg und Bedienoberfläche; Vue bleibt während der Migration nutzbar. Wizard, Kurs-/Teamverwaltung, persönliche Zugänge und Lifecycle-Aktionen schrittweise in den Portal-Bereich übernehmen, dieselbe Backend-API nutzen.
+4. Portal als dauerhafte Mantine-Bedienoberfläche festlegen und Migration in einem ADR dokumentieren. Vue bleibt während der Migration nutzbar. Wizard, Kurs-/Teamverwaltung, persönliche Zugänge und Lifecycle-Aktionen in React/Mantine übernehmen, dieselbe Backend-API nutzen; Katalog und Weiterleitungslinks allein erfüllen US-41 nicht.
 5. Bestehenden direkten Login und Moodle-Launch bei jeder Etappe als Regression prüfen. Bei eingebetteter Moodle-Nutzung Frame-/Cookie-/CSP-Regeln des Portals gesondert betrachten; dessen aktuelles `frame-ancestors 'none'` erlaubt kein einfaches Einbetten.
 
-**Abnahme:** Ein echter Portal-Login reicht für Katalog, Details und berechtigte Deployments; keine Dummy-Authentifizierung als Nachweis. Projekt-/Budgetberechtigungen werden serverseitig eingehalten. Abmelden, abgelaufene Sitzung und Rollenwechsel funktionieren. Keine Secret-/Tokenkopie im Browser. Der dauerhaft zu wartende UI-Umfang ist beschrieben und fachlich abgestimmt.
+6. Produktiven App-Store-Keycloak und seine DB aus dem integrierten Betriebsprofil entfernen, sobald Portal-OIDC und direkter Login am bestehenden Identitätsdienst funktionieren. JWKS/Issuer-/Audience-Prüfung erhalten; Proxy-Header allein dürfen keine Identität beglaubigen.
+7. Portal-Projekt-ID und Kontingentquelle verbindlich zuordnen. Projektwahl/Mitgliedschaften/Ressourcenangebote aus dem bestehenden Dienst beziehen; keine parallele App-Store-Projekt- oder Budgetverwaltung aufbauen. Eigene Quota-Endpunkte höchstens als Adapter auf die führende Quelle betreiben. API-Vertrag, Fehlerverhalten und Credential-Ausgabe getrennt festlegen.
+
+**Abnahme:** Ein echter Portal-Login reicht für Katalog, Details und berechtigte Deployments; kein eigener produktiver Keycloak und keine Dummy-Authentifizierung als Nachweis. Ein Portal-Projekt und dessen Kontingente erscheinen im App Store ohne zweite Anlage; Änderungen und entzogene Mitgliedschaft werden berücksichtigt. Katalog, Wizard, Zugang und Lifecycle laufen im Portal mit Mantine. Abmelden, abgelaufene Sitzung und Rollenwechsel funktionieren; keine Secret-/Tokenkopie im Browser.
 
 **Verifikation:** Portal-Browsertests mit realem Test-Keycloak/BFF/Backend für Dozent, Student und Admin, einschließlich 401/403. Bestehende Auth-/Berechtigungstests und direkter Login bleiben grün.
 
@@ -174,6 +183,8 @@ Hoch = zentraler Lehrbedarf, Integrationslücke oder Betriebsgrundlage; Mittel =
 
 **Betroffene Stellen:** App-Zugangsbeschreibung, Hilfeansicht, Account-/URL-Outputs, Gateway/VPN-/Firewall-Konfiguration des Betreibers.
 
+**Zusätzlich für US-39:** Portalroute und Navigation „My Access“ ergänzen, persönliche Deployments laden und je Deployment den vorhandenen `my-access`-Endpunkt integrieren. Für gemeinsame VMs ausschließlich die eigenen Konten anzeigen. Zugänge als Protokoll, Ziel, Benutzer und explizit aufdeckbare Auth-Daten darstellen; nicht in Logs, lokale Browserablage oder Cache schreiben. Bestehende Stelle „My Access“ des tatsächlich betriebenen Portals verwenden, wenn sie außerhalb dieses Checkouts liegt, statt einen zweiten gleichnamigen Bereich aufzubauen.
+
 **Schritte:**
 
 1. Prüffälle für Windows, macOS, Linux sowie Campus, VPN, IPv4-only-Heimnetz, IPv6 und Dual Stack festlegen. SSH und grafischer Zugang P04 getrennt prüfen.
@@ -181,7 +192,7 @@ Hoch = zentraler Lehrbedarf, Integrationslücke oder Betriebsgrundlage; Mittel =
 3. UI zeigt eindeutige Adresse, Port, Protokoll, persönlichen Login und nötige Netzvoraussetzung. IPv6-/Dual-Stack-Endpunkte sinnvoll anbieten, keine private NAT-Adresse als öffentliches Ziel ausgeben.
 4. Kurze Anleitung und überprüfbare Fehlerhilfe für SSH-Hostkey, VPN, fehlende Route und abgelaufene Sitzung ergänzen.
 
-**Abnahme:** Die vereinbarte Kursübung ist ohne Laborrechner von den definierten privaten Client-/Netzkombinationen durchführbar. Für IPv4-only-Anschlüsse existiert ein getesteter Zugang. Ein fehlender Zugang wird mit tatsächlicher Ursache und einem brauchbaren Handlungsschritt erklärt.
+**Abnahme:** VM-Zugänge stehen im Portal unter „My Access“, ohne Wechsel zur Vue-Oberfläche. Zwei Studierende derselben VM sehen jeweils nur ihre eigenen Zugangsdaten; fremde Deployment-IDs ergeben 403. Die Kursübung ist von den definierten privaten Client-/Netzkombinationen durchführbar, einschließlich getesteter IPv4-only-Zugangsoption. Fehlender Zugang wird mit tatsächlicher Ursache und Handlungsschritt erklärt.
 
 **Verifikation:** Protokollierter Ende-zu-Ende-Test aus mindestens einem externen IPv4-only-Netz und einem IPv6-/Dual-Stack-Netz, mit repräsentativen Clients. Ergebnis in Zugriffs-Matrix festhalten.
 
@@ -208,6 +219,8 @@ Hoch = zentraler Lehrbedarf, Integrationslücke oder Betriebsgrundlage; Mittel =
 **Ist:** Gute Menge an Dokumentation, aber nachweisliche Widersprüche. Beschreibungen können von tatsächlichen Images abweichen.
 
 **Betroffene Stellen:** `deployment/README.md`, `docs/architektur.md`, `pipeline.md`, `deploy-runbook.md`, Setup-Dokumente/ADRs, `Ubuntu-App/README.md`, `deployment/seed/app_descriptions/`, App-Details beider UIs.
+
+**API-Dokumentation US-40 (vorhanden, Integrationscheck):** OpenAPI-Schema exportieren und Portal-Integratorzugriff auf Swagger/ReDoc bzw. die bereitgestellte Spezifikation dokumentieren. OIDC/Bearer-Sicherheit, Rollen, Pagination, Deploymentstatus, Fehlercodes sowie Beispiele für Katalog, Start, Projektbindung und `my-access` ergänzen. Contract-Checks gegen generiertes Schema und reale Test-API ausführen; keine zweite manuell auseinanderlaufende Endpoint-Liste pflegen. Unauthenticated Zugangsdatenbeispiele enthalten keine echten Secrets.
 
 **Schritte:**
 
@@ -274,11 +287,46 @@ Hoch = zentraler Lehrbedarf, Integrationslücke oder Betriebsgrundlage; Mittel =
 
 **Verifikation:** Konfigurations-/Workflow-Prüfung mit nicht sensitiven Dummydaten, Probelauf auf dediziertem Testrunner ohne GitHub-Secrets, Log-/Artefaktprüfung und dokumentierter Rotations-/Restore-Test. Keine produktiven Zugangsdaten für die Prüfung verwenden.
 
+## P15 – OpenTofu statt Terraform
+
+**Stories:** US-37. **Ist:** Worker und Plattformworkflow verwenden Terraform. Die vorhandenen `.tf`-Dateien und Executor-Namen müssen nicht allein wegen des CLI-Wechsels umbenannt werden; entscheidend sind verwendetes Werkzeug und kompatibler State.
+
+**Betroffene Stellen:** `worker/Dockerfile`, `worker/app/config.py`, `worker/app/services/terraform_executor.py`, Worker-Tests, Runner-/Deploy-Images, `.github/workflows/staging.yml`, `deployment/scripts/deploy.sh`, Infrastruktur-Hilfsskripte, Makefile und Setup-Dokumentation.
+
+**Schritte:**
+
+1. Alle Terraform-Binaries und Aufrufstellen inventarisieren, einschließlich CI-Installation, `init/plan/apply/destroy/output/state pull`, Formatierung, Validierung und lokaler Werkzeuge. Passende OpenTofu-Version erst anhand aktueller offizieller Dokumentation und verwendeter Provider auswählen.
+2. Provider-/Lockfile-/Backend-Kompatibilität für Plattform-State und App-States separat prüfen. Bestandsstates sichern; Wechsel ausschließlich an Kopien bzw. isoliertem Testprojekt proben. State-Besitz und Sperren erhalten, keinen zweiten leeren State erzeugen.
+3. OpenTofu reproduzierbar in Worker- und Deployment-/Runner-Umgebung installieren, Prüfsummen verifizieren. Executor auf konfigurierten `tofu`-Pfad umstellen. Alte `TERRAFORM_PATH`-Konfiguration bei Bedarf befristet als Alias unterstützen und deren Ablösung dokumentieren.
+4. Sämtliche ausführbaren Workflow-/Script-Aufrufe, Gates und Tool-Checks auf `tofu` umstellen. App-Templates auf tatsächliche Provider-Kompatibilität prüfen; reine Begriffsumbenennung ersetzt keinen Lauf.
+5. Test-Deploy, Outputs, Pause/Resume, gezieltes Replace und Cleanup mit OpenTofu durchlaufen. Wechsel für bestehende Installation mit Backup, Rollback-Regel und Wartungsfenster dokumentieren. Kein automatischer Wechsel an laufender Produktion.
+
+**Abnahme:** Worker und Plattform-CI benötigen kein Terraform-Binary mehr. Ein bestehender Test-State wird korrekt übernommen; der erste Plan enthält keine durch den Werkzeugwechsel unerwarteten Ersatz-/Löschaktionen. Init, Plan, Apply, Outputs, State-Lesen und Destroy funktionieren. Zwei konkurrierende Aktionen bleiben gesperrt; Wiederherstellung aus State-Backup wurde geprobt.
+
+**Verifikation:** Executor-/Konfigurations-/Command-Tests auf `tofu`, CI-Format-/Validierungsgates und kontrollierter Bestandsstate-Test. Migrationsnachweis getrennt für lokalen Plattform-State und PostgreSQL-App-Backend festhalten.
+
+## P16 – Betreiberbranding für bwCloud und andere Betreiber
+
+**Stories:** US-42. **Ist:** DHBW- und SIX7-Logos sind fest importiert. SMTP-Absendername ist bereits konfigurierbar; durchgängiges Betreiberbranding fehlt.
+
+**Betroffene Stellen:** Portal-Konfigurationsprovider und `config.js`-Erzeugung/Entrypoint, `self-service-ui/web/header.jsx`, Favicons/Titel, gegebenenfalls Vue-Layouts während Migration, Login-/Hilfe-/Mailvorlagen und `deployment/.env.example`/Compose.
+
+**Schritte:**
+
+1. Betreibername, Logo, Logo-Alternativtext, Favicon und Supportlink als gemeinsame öffentliche Konfiguration definieren. Vorhandenen Portal-Vertrag bevorzugen; Defaults bewahren das jetzige Erscheinungsbild.
+2. Logo als Betreiberasset oder validierte URL einbinden, CSP/Hosting und fehlende Assets berücksichtigen. Runtime-Konfiguration bevorzugen, damit bwCloud denselben Build mit anderem Branding betreiben kann.
+3. Header, Browser-Titel, Login-/Fehler-/Hilfeseiten und Benachrichtigungen auf dieselben Betreiberangaben abstimmen. SMTP-Absendername konsistent setzen. Übersetzungen und Accessibility beachten; fachliche DHBW-Bezüge nicht versehentlich als Betreibername behandeln.
+4. Zwei Beispielkonfigurationen ohne Secrets dokumentieren: DHBW und bwCloud. Nur tatsächlich benötigte Optionen einführen; konfigurierbare Farben sind kein Muss für die Logo-Story.
+
+**Abnahme:** Derselbe Build lässt sich mit DHBW- und bwCloud-Logo/Name betreiben, ohne Quellcodeänderung. Sichtbarer Name, Logo, Titel und Mails passen zusammen; fehlendes Logo hat einen brauchbaren Fallback. Beide Sprachen und mobile Ansicht funktionieren.
+
+**Verifikation:** Konfigurations-/Komponententests und Browserprüfung beider Betreiberprofile, CSP-/Fallback-Test sowie Mail-Rendering ohne realen Versand.
+
 ## Empfohlene Umsetzungsetappen
 
-1. **Grundlagen:** P11-Dokumentationsbereinigung; P01-Repository-Zugriff; P02-Dienstverträge; P14-Secret-Pfad. Ziel: Betreiber und nächste Entwickler können den tatsächlich geltenden Aufbau nachvollziehen.
+1. **Grundlagen:** P11 Dokumentation/API-Vertrag, P02 Dienstverträge, P14 Secret-Pfad und P15 OpenTofu-Migrationsprobe. P01 nur weiter priorisieren, wenn die historischen Git-Anforderungen weiterhin gelten. Ziel: nachvollziehbarer Betreiberaufbau.
 2. **Lehrumgebung:** P04-Softwareprofil, P05-Konten/Keys, P06-Kapazität, P08-Netzwerk. Ziel: fachlich passende Referenz-App statt nur allgemeiner Deploymentmechanik.
-3. **Integration und Betrieb:** P02 durchgängiger Portalablauf, P03 Moodle, P07 Aktionen, P10 Bereitschaft/Fehlerbehandlung, P09 externe Zugriffsabnahme.
+3. **Integration und Betrieb:** P02 OIDC, gemeinsame Ressourcen und Mantine, P03 Moodle, P07 Aktionen, P10 Bereitschaft, P09 „My Access“/externer Zugriff und P16 Betreiberbranding.
 4. **Abschluss:** P12 Nutzertest, P13 Katalogabnahme und Abschluss P11 Übergabe. Danach Story-Matrix mit tatsächlichen Abnahmeergebnissen aktualisieren.
 
 Unabhängige Arbeiten können zeitlich überlappen; Abnahmen hängen von den genannten Voraussetzungen ab. Der Plan benötigt keine Veränderung laufender Produktion und keine pauschale Freigabe aller Infrastrukturaktionen.
@@ -296,4 +344,4 @@ Unabhängige Arbeiten können zeitlich überlappen; Abnahmen hängen von den gen
 
 ## Vollständigkeitskontrolle
 
-Die 25 noch nicht vollständig erfüllten Stories sind zugeordnet: **US-01, 02, 03, 04, 05, 08, 09, 10, 12, 13, 14, 15, 16, 18, 20, 22, 25, 26, 27, 28, 29, 30, 31, 32, 34**. US-15 ist bewusst sowohl P02 als auch P11 zugeordnet. Für bereits umgesetzte Stories sind in den Paketen gegebenenfalls Regressionen oder Dokumentationsabgleiche vorgesehen, keine unnötige Neuimplementierung.
+Die 29 noch nicht vollständig erfüllten aktuellen Stories sind zugeordnet: **US-01, 02, 03, 04, 05, 08, 09, 10, 12, 13, 14, 15, 16, 18, 20, 22, 25, 26, 27, 28, 29, 30, 34, 36, 37, 38, 39, 41, 42**. US-15 ist P02 und P11 zugeordnet. US-40 erhält in P11 einen API-Vertrags-/Regressionscheck. US-31/US-32 zählen nur zum historischen P01. Bereits umgesetzte Funktionen werden erhalten und regressionsgeprüft.

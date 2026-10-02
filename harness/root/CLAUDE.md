@@ -3,7 +3,7 @@
 <!-- Erzeugt von deployment/harness/sync.py. Nicht hier bearbeiten,
      sondern in deployment/harness/root/CLAUDE.md. -->
 
-Dieser Ordner ist kein Repository. Er hält die **vier getrennten Git-Repos**
+Dieser Ordner ist kein Repository. Er hält die **vier getrennten Stack-Repos**
 des Projekts nebeneinander, weil sie nur zusammen laufen:
 
 | Ordner | Rolle |
@@ -12,6 +12,10 @@ des Projekts nebeneinander, weil sie nur zusammen laufen:
 | `backend/` | FastAPI + SQLAlchemy + Alembic + Celery |
 | `frontend/` | Vue 3 + TypeScript + Pinia + Vite |
 | `worker/` | Celery-Worker: klont App-Repos, baut Packer-Images, fährt Terraform gegen OpenStack |
+
+Zusätzlich liegen hier `Ubuntu-App/` (App-Template) und `self-service-ui/`
+(Portal mit React/Mantine). Die gemeinsame Git-Regel gilt für alle sechs
+Repositories; Hooks und Stack-Befehle gelten für die vier Stack-Repos.
 
 Backend, Frontend und Worker laufen **nicht standalone**, sondern nur als
 Dienste im Stack aus `deployment/docker-compose.dev.yml`.
@@ -24,6 +28,11 @@ verbindlich. Diese Datei hier ersetzt sie nicht, sie ordnet nur ein.
 
 Ein Commit gehört in genau ein Repo. Eine Änderung, die zwei Repos betrifft
 (z. B. neuer Endpunkt + Frontend-Aufruf), sind zwei Commits in zwei Repos.
+
+Die gemeinsame Regel für gebündelte Commits und Pushes steht hier und wird
+auch in die `AGENTS.md` aller sechs lokalen Repositories verteilt:
+
+@deployment/harness/git-workflow.md
 
 ## Gilt überall
 
