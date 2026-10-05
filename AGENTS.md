@@ -1,7 +1,7 @@
 # Deployment — Click-n-Deploy App Store
 
 Einstiegspunkt für alles Lokale. Hier liegen die Compose-Stacks der drei
-Umgebungen, Keycloak-Realm, Seed-Daten, Terraform und Ansible. Backend,
+Umgebungen, Keycloak-Realm, Seed-Daten, OpenTofu und Ansible. Backend,
 Frontend und Worker laufen nur über die Stacks hier.
 
 ## Befehle
@@ -56,13 +56,17 @@ abweicht, was die Pipeline erzeugt.
 - Optionale Features bekommen einen Kill-Switch mit Default `false`
   (Vorbild: `LTI_ENABLED`).
 - Redis: DB 0 gehört Celery, DB 1 der LTI-Sitzungsablage. Nicht mischen.
-- Terraform-Änderungen mit `terraform fmt -recursive` formatieren — die
-  Pipeline prüft das mit `-check` und bricht sonst ab.
+- OpenTofu-Änderungen mit `tofu fmt -recursive infrastructure/tofu`
+  formatieren — die Pipeline prüft das mit `-check` und bricht sonst ab.
+- `infrastructure/terraform/` ist eine Übergangsinsel für `envs/moodle` und
+  `envs/forgejo` (ADR 0010). Dort gilt weiter `terraform fmt`; neue
+  Infrastruktur gehört nach `infrastructure/tofu/`. Das Modul
+  `openstack_vm` liegt in beiden Bäumen — Änderungen in beide Kopien.
 
 ## Definition of Done
 
 - `.env.example` und Compose-Datei zusammen aktualisiert
-- Terraform formatiert
+- OpenTofu (und die Terraform-Übergangsinsel) formatiert
 - Harness geändert? `make harness-sync` gefahren, `make harness-test` grün,
   die erzeugten Kopien mitcommittet
 - Architekturentscheidung getroffen? ADR unter `docs/adr/` (Format: `docs/adr/README.md`)
@@ -71,11 +75,11 @@ abweicht, was die Pipeline erzeugt.
 
 - `.env` — nur `.env.example` wird gepflegt
 - Alles auf `*.pem` (Tool-Schlüssel, gehört nie ins Repo)
-- Kein Prod-Deploy und kein `terraform apply` gegen Staging von Hand
+- Kein Prod-Deploy und kein `tofu apply` (oder `terraform apply`) von Hand
 - Kein `git push --force`
 - `.claude/` — erzeugt aus `harness/`. Änderungen gehören in die Quelle, sonst
   sind sie beim nächsten `make harness-sync` weg.
 
-Geheimnisse, Produktions-Deploys, `terraform apply` und Pushes auf `main` sind
+Geheimnisse, Produktions-Deploys, `tofu apply`/`terraform apply` und Pushes auf `main` sind
 zusätzlich als deny-Regel in `.claude/settings.json` gesperrt. So ein Kommando
 scheitert ohne Nachfrage — das ist Absicht und kein Werkzeugfehler.

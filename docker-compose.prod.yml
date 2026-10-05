@@ -2,7 +2,7 @@
 # Production stack — STANDALONE, registry-only, always-latest.
 #
 # This is the production-VM compose file. It runs the full stack:
-# postgres (app DB), postgres-tfstate (Terraform state), keycloak
+# postgres (app DB), postgres-tfstate (OpenTofu state), keycloak
 # (+ its postgres), rabbitmq, redis, backend, worker, frontend,
 # nginx (TLS reverse proxy).
 #
@@ -67,9 +67,9 @@ services:
           memory: 512M
 
   # ----------------------------------------------------------------
-  # PostgreSQL Database (Terraform Remote State)
+  # PostgreSQL Database (OpenTofu Remote State)
   # ----------------------------------------------------------------
-  # Worker-only Postgres for Terraform's ``pg`` backend. Deliberately
+  # Worker-only Postgres for OpenTofu's ``pg`` backend. Deliberately
   # isolated from the application DB: the worker must never reach the
   # backend's data, only its own state store. One schema per deployment
   # (``deployment_<uuid>``) keeps the locking/state surface tight. Not
@@ -323,7 +323,7 @@ services:
   # Worker Service (Celery)
   # ----------------------------------------------------------------
   # Worker has NO access to the application DB — it only talks to
-  # RabbitMQ/Redis (Celery) and postgres-tfstate (Terraform state).
+  # RabbitMQ/Redis (Celery) and postgres-tfstate (OpenTofu state).
   worker:
     image: ghcr.io/dhbw-appstore/worker:latest
     pull_policy: always
@@ -336,7 +336,7 @@ services:
       # OpenStack credential decryption (must match backend)
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?CREDENTIAL_ENCRYPTION_KEY is required}
 
-      # Terraform pg backend — isolated DB, NOT the application DB.
+      # OpenTofu pg backend — isolated DB, NOT the application DB.
       # Worker uses one schema per deployment (deployment_<uuid>).
       TFSTATE_DATABASE_URL: postgresql://${TFSTATE_DB_USER}:${TFSTATE_DB_PASSWORD}@postgres-tfstate:5432/${TFSTATE_DB_NAME}?sslmode=disable
 

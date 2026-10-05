@@ -8,10 +8,10 @@ des Projekts nebeneinander, weil sie nur zusammen laufen:
 
 | Ordner | Rolle |
 |---|---|
-| `deployment/` | Einstiegspunkt. Compose-Stacks aller Umgebungen, Keycloak-Realm, Seed-Daten, Terraform, Ansible, ADRs |
+| `deployment/` | Einstiegspunkt. Compose-Stacks aller Umgebungen, Keycloak-Realm, Seed-Daten, OpenTofu, Ansible, ADRs |
 | `backend/` | FastAPI + SQLAlchemy + Alembic + Celery |
 | `frontend/` | Vue 3 + TypeScript + Pinia + Vite |
-| `worker/` | Celery-Worker: klont App-Repos, baut Packer-Images, fährt Terraform gegen OpenStack |
+| `worker/` | Celery-Worker: klont App-Repos, fährt OpenTofu gegen OpenStack |
 
 Backend, Frontend und Worker laufen **nicht standalone**, sondern nur als
 Dienste im Stack aus `deployment/docker-compose.dev.yml`.
@@ -33,7 +33,7 @@ Ein Commit gehört in genau ein Repo. Eine Änderung, die zwei Repos betrifft
 - **`.env`, `*.pem`, `*.key` sind tabu** — lesen wie schreiben. Gepflegt wird
   `.env.example`. Die deny-Regeln in `.claude/settings.json` setzen das hart
   durch, ein Hook erklärt den Grund.
-- **Kein Produktions-Deploy, kein `terraform apply` von Hand.** Staging läuft
+- **Kein Produktions-Deploy, kein `tofu apply` (oder `terraform apply`) von Hand.** Staging läuft
   über die Forgejo-Pipeline, Produktion über einen Menschen auf der
   Zielmaschine.
 - **Kein Push auf `main`, kein Force-Push.** Jeder Push fragt nach; auf `main`

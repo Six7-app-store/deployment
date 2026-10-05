@@ -240,6 +240,24 @@ class BashSchutz(unittest.TestCase):
         self.assertIn("deny", self.bash("echo bitte die " + DOT_NAME + " pflegen"))
 
 
+class IacFormatierer(unittest.TestCase):
+    def test_tofu_datei_formatiert_tofu(self):
+        self.assertEqual(guard.iac_formatter("envs/staging/main.tofu")[0], "tofu")
+
+    def test_tf_datei_formatiert_terraform(self):
+        # Terraform liest keine .tofu-Dateien; .tf gibt es nur noch in der
+        # Übergangsinsel infrastructure/terraform.
+        self.assertEqual(guard.iac_formatter("envs/moodle/main.tf")[0], "terraform")
+        self.assertEqual(guard.iac_formatter("x.tfvars")[0], "terraform")
+
+    def test_andere_dateien_gehen_nicht_an_iac(self):
+        self.assertIsNone(guard.iac_formatter("app/tasks.py"))
+        self.assertIsNone(guard.iac_formatter("tofu/README.md"))
+
+    def test_gate_kennt_beide_baeume(self):
+        self.assertEqual(dict(guard.IAC_TREES), {"tofu": "tofu", "terraform": "terraform"})
+
+
 class StopSchleifenschutz(unittest.TestCase):
     def test_zweiter_durchlauf_blockt_nicht(self):
         # Ohne diese Prüfung hängt eine Sitzung an einem Fehler fest, den

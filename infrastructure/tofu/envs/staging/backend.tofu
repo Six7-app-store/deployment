@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.13.0"
 
   # Der State liegt als Datei auf dem Runner, unter einem absoluten Pfad
   # ausserhalb des Workspace.
@@ -10,13 +10,13 @@ terraform {
   # dauerhaften VM gilt das nicht mehr, und Postgres wird zum Problem statt zur
   # Loesung: die State-Datenbank lief als Container `postgres-tfstate` im
   # Staging-Stack selbst. Seit dieser Workflow den Stack bei jedem Merge
-  # abreisst, wuerde `terraform destroy` die Datenbank mitloeschen, in der steht,
+  # abreisst, wuerde `tofu destroy` die Datenbank mitloeschen, in der steht,
   # was gerade geloescht wird. Der naechste Lauf startete mit leerem State,
   # saehe die verwaisten OpenStack-Ressourcen nicht und scheiterte beim Anlegen
   # am schon vergebenen Namen.
   #
-  # /var/lib/tf-state/ liegt auf der Runner-VM (`github-runner`). Die ist eine
-  # andere Maschine als die AppStore-VM und wird von diesem Terraform nicht
+  # /var/lib/tofu-state/ liegt auf der Runner-VM (`github-runner`). Die ist eine
+  # andere Maschine als die AppStore-VM und wird von diesem OpenTofu nicht
   # verwaltet — sie ueberlebt jedes destroy. actions/checkout raeumt nur den
   # Workspace, dieser Pfad bleibt unberuehrt.
   #
@@ -24,7 +24,10 @@ terraform {
   # concurrency-Gruppe `staging-deploy` im Workflow: GitHub laesst immer nur
   # einen Deploy-Job gleichzeitig laufen, und es gibt genau einen Runner.
   backend "local" {
-    path = "/var/lib/tf-state/staging/terraform.tfstate"
+    # Eigenes Verzeichnis statt /var/lib/tf-state/: der alte Terraform-State
+    # soll nie versehentlich von OpenTofu gelesen werden. Der Umstieg beginnt
+    # mit leerem State (ADR 0010).
+    path = "/var/lib/tofu-state/staging/terraform.tfstate"
   }
 
   required_providers {

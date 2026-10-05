@@ -5,7 +5,7 @@ Staging — ohne dass jemand einen Deploy startet.
 
 > **Seit dem self-hosted Runner gibt es dafür zwei Wege.** Der Hauptweg ist der
 > Deploy auf dem Runner: ein Merge in eines der vier Repositories reißt den
-> Staging-Stack ab und baut ihn vollständig neu auf, mit Terraform und Ansible.
+> Staging-Stack ab und baut ihn vollständig neu auf, mit OpenTofu und Ansible.
 > Siehe [ADR-0002](adr/0002-self-hosted-runner-auf-eigener-vm.md) und
 > [ADR-0003](adr/0003-staging-wird-bei-jedem-merge-neu-gebaut.md).
 >
@@ -40,7 +40,7 @@ Weil ein **gehosteter** GitHub-Runner die andere Richtung nicht kann:
 
 | Ziel | gehosteter Runner | Runner-VM im Campusnetz |
 |---|---|---|
-| OpenStack-API (für Terraform) | ❌ Timeout | ✅ |
+| OpenStack-API (für OpenTofu) | ❌ Timeout | ✅ |
 | SSH zur Staging-VM (für Ansible) | ❌ Port 22 nur aus dem Campusnetz | ✅ |
 | GHCR | ✅ | ✅ |
 
@@ -58,7 +58,7 @@ nur Container tauschen.
 **Er tauscht Container.** `backend`, `worker` und `frontend` werden auf das neue
 Image gehoben; ist das Backend dabei, laufen anschließend die Migrationen.
 
-**Er fasst keine Infrastruktur an.** Änderungen an Terraform, Ansible oder der
+**Er fasst keine Infrastruktur an.** Änderungen an OpenTofu, Ansible oder der
 Compose-Datei erfasst er nicht — dafür bleibt der Deploy über
 [`deploy.cmd`](../deploy.cmd) bzw. das [Runbook](deploy-runbook.md) zuständig.
 Das ist Absicht: Ein Skript, das sich seine eigene Ausführungsgrundlage

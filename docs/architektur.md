@@ -34,7 +34,7 @@ flowchart LR
   B -->|Launch-Daten<br/>DB 1| R
   B --> Q --> W
   W -->|Celery<br/>DB 0| R
-  W -->|Packer + Terraform| OS
+  W -->|OpenTofu| OS
 ```
 
 Neu gegenüber dem letzten Stand ist allein die Kante **Moodle → Backend**.
@@ -158,7 +158,7 @@ Umgebungen ein, Studierende bekommen Zugang.** Eine Studierende kann kein
 Deployment anlegen — der Endpunkt lehnt es mit `role_required` ab —, sieht
 dieselbe Liste unter dem Namen „Meine Umgebungen", und erhält über
 `/deployments/{id}/my-access` ausschließlich ihre **eigenen** Zugangsdaten;
-die der Teamkolleg:innen stecken in denselben Terraform-Outputs und werden
+die der Teamkolleg:innen stecken in denselben OpenTofu-Outputs und werden
 serverseitig herausgefiltert.
 
 Eine Trainerrolle in Moodle macht dabei niemanden zum Lehrenden im App Store.
@@ -168,8 +168,9 @@ Moodle-Kurs Trainer ist, darf darüber nicht entscheiden. Der Schalter dafür
 
 ## Was bewusst gleich geblieben ist
 
-- **Der Deployment-Pfad.** Packer → Terraform → OpenStack, unverändert. Ein
-  aus Moodle gestarteter Nutzer durchläuft dieselbe Kette wie jeder andere.
+- **Der Deployment-Pfad.** OpenTofu → OpenStack (seit ADR 0010 ohne
+  Packer). Ein aus Moodle gestarteter Nutzer durchläuft dieselbe Kette wie
+  jeder andere.
 - **Ein Satz Endpunkte.** Es gibt keine „LTI-Variante" der Fach-API. Der
   Unterschied endet bei der Authentifizierung.
 - **Eine Ansicht pro Seite.** Keine zweite Oberfläche für Studierende, sondern

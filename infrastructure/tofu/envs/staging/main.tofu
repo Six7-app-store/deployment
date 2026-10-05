@@ -55,7 +55,7 @@ module "vm" {
   # secondary_network_name = "DHBW"
   # secondary_subnet_name  = "DHBW-178"
 
-  # Referencing the resource rather than a bare name gives Terraform the
+  # Referencing the resource rather than a bare name gives OpenTofu the
   # dependency, so the group and its rules exist before the instance is built.
   security_groups = ["default", openstack_networking_secgroup_v2.appstore_vm.name]
 

@@ -29,7 +29,7 @@ reviewable, which is worth keeping for grading.
 | `.env.example` | instance config (not deploy secrets) |
 | `runner/config.yml` | runner labels, job network, tfstate volume |
 | `runner/entrypoint.sh` | register-once-then-daemon wrapper |
-| `job-image/Dockerfile` | image jobs execute in — terraform, ansible, trivy pre-baked |
+| `job-image/Dockerfile` | image jobs execute in — tofu, ansible, trivy pre-baked |
 | `../.forgejo/workflows/staging.yml` | the deploy workflow Forgejo runs (repo root, not here) |
 
 ## Setup
@@ -127,7 +127,7 @@ Phase 2 is for.
   `secret-scan.yml` show up in Forgejo's Actions tab, they will sit unassigned
   forever — no runner carries the `self-hosted` label. Harmless but noisy;
   check on the first sync.
-- **The job image is built and verified** (terraform 1.9.8, ansible-core 2.17.14,
+- **The job image is built and verified** (tofu 1.13.1, ansible-core 2.17.14,
   trivy 0.73.0, node 20.20.2, git/rsync/ssh). `geerlingguy.docker` 7.1.0 resolves
   from `/opt/ansible-roles` even with the repo's `ansible.cfg` in scope, and
   `infrastructure/ansible/staging.yml` passes `--syntax-check` inside it. What is

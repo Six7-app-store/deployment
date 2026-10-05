@@ -11,7 +11,10 @@
 FROM node:20-bookworm-slim
 
 ARG TARGETARCH=amd64
-ARG TERRAFORM_VERSION=1.9.8
+# Same OpenTofu release and SHA256 sums as worker/Dockerfile — bump together.
+ARG TOFU_VERSION=1.13.1
+ARG TOFU_SHA256_AMD64=8ccbc6f8ee21d2827715f3c6e08a9b3e0209b1e62057c05067ef117e047c1a80
+ARG TOFU_SHA256_ARM64=b9614df40575cc3fc10a8a25025b7245d961da279f715ea3efff4ddae8e6938a
 ARG TRIVY_VERSION=0.73.0
 ARG ANSIBLE_VERSION=10.5.0
 
@@ -23,10 +26,17 @@ RUN apt-get update \
       python3 python3-venv \
  && rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_${TARGETARCH}.zip" -o /tmp/tf.zip \
- && unzip -d /usr/local/bin /tmp/tf.zip \
- && rm /tmp/tf.zip \
- && terraform version
+RUN set -eu; \
+    case "${TARGETARCH}" in \
+      amd64) SHA="${TOFU_SHA256_AMD64}" ;; \
+      arm64) SHA="${TOFU_SHA256_ARM64}" ;; \
+      *) echo "unsupported TARGETARCH ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_linux_${TARGETARCH}.zip" -o /tmp/tofu.zip; \
+    echo "${SHA}  /tmp/tofu.zip" | sha256sum -c -; \
+    unzip -d /usr/local/bin /tmp/tofu.zip tofu; \
+    rm /tmp/tofu.zip; \
+    tofu version
 
 RUN set -eu; \
     case "${TARGETARCH}" in \

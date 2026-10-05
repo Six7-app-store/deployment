@@ -1,6 +1,6 @@
 # Lokales Dev Setup
 
-Der App Store ist ein Web-System, in dem Studierende und Dozierende vorgefertigte Cloud-Apps (Packer + Terraform in einem Git-Repo) per Klick auf OpenStack ausrollen. Lokal läuft alles in Docker: Vue-Frontend, FastAPI-Backend, Celery-Worker, Keycloak als Identity Provider sowie PostgreSQL, RabbitMQ und Redis als Infrastruktur. Diese Anleitung führt von einem leeren Arbeitsverzeichnis bis zum eingeloggten Browser.
+Der App Store ist ein Web-System, in dem Studierende und Dozierende vorgefertigte Cloud-Apps (OpenTofu-Code in einem Git-Repo) per Klick auf OpenStack ausrollen. Lokal läuft alles in Docker: Vue-Frontend, FastAPI-Backend, Celery-Worker, Keycloak als Identity Provider sowie PostgreSQL, RabbitMQ und Redis als Infrastruktur. Diese Anleitung führt von einem leeren Arbeitsverzeichnis bis zum eingeloggten Browser.
 
 ## Voraussetzungen
 
@@ -38,7 +38,7 @@ Verzeichnislayout nach dem Klonen:
 appstore/
 ├── frontend/        # Vue 3 + Vite
 ├── backend/         # FastAPI + Alembic
-├── worker/          # Celery + Terraform/Packer
+├── worker/          # Celery + OpenTofu
 ├── deployment/      # docker-compose.dev.yml, Makefile, .env.example, seed/, keycloak/
 └── org-docs/        # Dokumentation
 ```
@@ -291,3 +291,18 @@ make clean-all
 ```
 
 Nach `clean-all` baut der nächste `make dev-up` alle Images neu (kann 5–10 Minuten dauern).
+
+## Nach dem Umstieg auf OpenTofu: State-Volume neu anlegen
+
+Die State-Datenbank des Workers (`postgres-tfstate`) legt ihren Benutzer
+nur beim ersten Start eines Volumes an. Der Default heißt seit ADR 0010
+`tofu` statt `terraform`. Wer ein Volume von vorher hat, sieht im Worker
+`password authentication failed for user "tofu"` und legt es einmal neu an
+— es enthält nur OpenTofu-State, keine Anwendungsdaten:
+
+```bash
+docker compose -f docker-compose.dev.yml rm -sf postgres-tfstate
+docker volume ls --filter name=postgres_tfstate_data   # Namen ablesen
+docker volume rm <name aus der Zeile darüber>
+docker compose -f docker-compose.dev.yml up -d
+```

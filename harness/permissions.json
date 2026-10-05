@@ -55,6 +55,10 @@
       "Bash(scripts/deploy.sh *)",
       "Bash(./scripts/deploy.sh *)",
 
+      "Bash(tofu apply *)",
+      "Bash(tofu destroy *)",
+      "Bash(tofu state *)",
+      "Bash(tofu import *)",
       "Bash(terraform apply *)",
       "Bash(terraform destroy *)",
       "Bash(terraform state *)",
@@ -83,6 +87,7 @@
       "Bash(git reset --hard *)",
       "Bash(git clean *)",
       "Bash(git rebase *)",
+      "Bash(tofu plan *)",
       "Bash(terraform plan *)",
       "Bash(gh workflow run *)",
       "Bash(docker compose down *)",
@@ -140,6 +145,8 @@
       "Bash(gh run list *)",
       "Bash(gh run view *)",
 
+      "Bash(tofu fmt *)",
+      "Bash(tofu validate *)",
       "Bash(terraform fmt *)",
       "Bash(terraform validate *)",
 

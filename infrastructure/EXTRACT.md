@@ -1,6 +1,6 @@
 # Extracting the deploy tooling into another app repo
 
-This moves the **Terraform + Ansible + GitHub Actions** deploy machinery into a
+This moves the **OpenTofu + Ansible + GitHub Actions** deploy machinery into a
 different application repository. The playbooks rsync the repo root and run `docker compose up`, so no
 playbook changes are needed — only the steps below.
 
@@ -13,7 +13,7 @@ mkdir -p "$DEST/.github/workflows"
 # Infra tree. Excludes:
 #  - roles_external/      (geerlingguy.docker is fetched from Galaxy at deploy
 #                          time via requirements.yml; not vendored)
-#  - .terraform/          (provider cache; `terraform init` rebuilds it)
+#  - .terraform/          (provider cache; `tofu init` rebuilds it)
 #  - terraform.tfstate*   (local backend state — see step 5)
 #  - inventory.ini        (generated per-deploy)
 # KEEPS .terraform.lock.hcl (committed; reproducible provider versions).
@@ -45,11 +45,11 @@ printf '\n.secrets\n' >> "$DEST/.gitignore"
 |---|---|
 | Repo secrets `STAGING_OS_*`, `SSH_PRIVATE_KEY` | Recreate in the new repo's Settings → Secrets. |
 | Local `.secrets` (for `act`) | Rebuild from `.secrets.template`; it is git-ignored by design. |
-| `.terraform/` cache | Don't copy — `terraform init` rebuilds. |
+| `.terraform/` cache | Don't copy — `tofu init` rebuilds. |
 
 ## 3. SSH key
 
-`SSH_PRIVATE_KEY` must be an **unencrypted** private key. Terraform registers
+`SSH_PRIVATE_KEY` must be an **unencrypted** private key. OpenTofu registers
 its derived public half as the OpenStack keypair (`<name>-key`), so there's no
 separate keypair name to keep in sync. For local `act` runs, pass it on the CLI:
 
@@ -64,24 +64,24 @@ act -W .github/workflows/staging.yml --bind --secret-file .secrets \
 pinned `infrastructure/ansible/requirements.yml` into `roles_external/` (which
 `ansible.cfg`'s `roles_path` searches). For local runs:
 
-## 5. Terraform state decision
+## 5. OpenTofu state decision
 
 This repo uses a **local** backend; state lives in
-`infrastructure/terraform/envs/<env>/terraform.tfstate` (git-ignored). It is the
+`infrastructure/tofu/envs/<env>/terraform.tfstate` (git-ignored). It is the
 only record of the live VMs.
 
 - **Take over the existing VMs from the new repo** → also copy the state file:
   ```bash
-  cp infrastructure/terraform/envs/staging/terraform.tfstate \
-     "$DEST/infrastructure/terraform/envs/staging/terraform.tfstate"
+  cp infrastructure/tofu/envs/staging/terraform.tfstate \
+     "$DEST/infrastructure/tofu/envs/staging/terraform.tfstate"
   ```
-- **Start fresh** → don't copy it, but `terraform destroy` the current VM from
+- **Start fresh** → don't copy it, but `tofu destroy` the current VM from
   *this* repo first, or you'll orphan it and hit a keypair-name collision
   (`<name>-key` already exists) on the next apply.
 
 ## 6. Post-move checklist (in the destination repo)
 
-1. [ ] `terraform init` in each `envs/<env>` (picks up the copied lock file).
+1. [ ] `tofu init` in each `envs/<env>` (picks up the copied lock file).
 2. [ ] Recreate GitHub secrets.
 3. [ ] Root `.gitignore` has `.secrets`; create local `.secrets` from template.
 5. [ ] `git status` shows **no** `tfstate`, `.terraform/`, `.secrets`,

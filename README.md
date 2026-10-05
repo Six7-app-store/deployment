@@ -2,7 +2,7 @@
 
 Dieses Repository hält alles zusammen, was die Plattform zum Laufen braucht: die
 Compose-Stacks für die drei Umgebungen, den zentralen Makefile, den
-Keycloak-Realm, die Seed-Daten und die Terraform- und Ansible-Definitionen der
+Keycloak-Realm, die Seed-Daten und die OpenTofu- und Ansible-Definitionen der
 Infrastruktur.
 
 Die Anwendung selbst liegt in eigenen Repositories (`backend`, `frontend`,
@@ -54,7 +54,7 @@ Die wichtigsten im Alltag:
 | prod | `docker-compose.prod.yml` | nginx, Zertifikat selbst hinterlegt | `make prod-up` auf der Zielmaschine |
 
 Staging und Produktion unterscheiden sich nicht nur in der Größe: Staging
-entsteht vollständig aus Terraform und Ansible, Produktion wird bislang von Hand
+entsteht vollständig aus OpenTofu und Ansible, Produktion wird bislang von Hand
 aufgesetzt. Die Compose-Datei für Staging hat deshalb bewusst keine Make-Targets
 — sie soll nur über die Pipeline laufen, damit kein Arbeitsplatz von dem
 abweicht, was dort erzeugt wird.
@@ -70,8 +70,9 @@ deployment/
 ├── keycloak/                 # Realm-Export und dessen Template
 ├── seed/                     # Seed-Skript, Kurse, App-Beschreibungen
 ├── forgejo/                  # der Forge-Host: Compose-Stack und Setup-Skripte
-├── infrastructure/           # Terraform und Ansible
-│   ├── terraform/            # Modul und Umgebungen
+├── infrastructure/           # OpenTofu und Ansible
+│   ├── tofu/                 # Modul und Staging-Umgebung
+│   ├── terraform/            # Übergangsinsel: moodle, forgejo (ADR 0010)
 │   └── ansible/              # Playbooks für Staging und den Forge-Host
 ├── docs/                     # Architektur, Harness, Setup-Anleitungen, ADRs
 ├── .forgejo/workflows/       # der Deploy-Workflow, der tatsächlich läuft
@@ -83,7 +84,7 @@ Warum der Deploy in Forgejo liegt und nicht auf GitHub, steht in
 
 ## Weiterführend
 
-- [`infrastructure/README.md`](infrastructure/README.md) — Terraform-Modul, die
+- [`infrastructure/README.md`](infrastructure/README.md) — OpenTofu-Modul, die
   beiden Umgebungen, Adressierung, State-Backend und die CI/CD-Workflows
 - [`forgejo/SCRIPTS.md`](forgejo/SCRIPTS.md) — die Skripte, mit denen der
   Forge-Host aufgesetzt wurde, Schritt für Schritt

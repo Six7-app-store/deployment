@@ -15,13 +15,13 @@ Dev-Umgebung geprüft.
 | Erlaubt | Verboten |
 |---|---|
 | Staging-Workflow anstoßen — **nur nach Rückfrage bei einem Menschen** | Produktions-Deployment |
-| Health-Endpunkt abfragen | `terraform apply` / `destroy` von Hand |
+| Health-Endpunkt abfragen | `tofu apply` / `destroy` von Hand |
 | Erreichbarkeit über IPv4 und IPv6 prüfen | Rollback, `deploy.cmd`, `scripts/deploy.sh` |
 | Containerstatus und Logs lesen | Secrets lesen oder schreiben |
 | Pipeline-Ergebnis lesen | |
 
 Die Grenze läuft zwischen **dem Knopf, den die Pipeline anbietet** und **der
-Infrastruktur darunter**. Den Workflow starten: ja. Terraform von Hand gegen
+Infrastruktur darunter**. Den Workflow starten: ja. OpenTofu von Hand gegen
 OpenStack: nein. Dieselbe Regel, die auch für Menschen im Team gilt.
 
 **Es gibt keinen Trockenlauf mehr.** Bis zum Umbau am 19.09.2026 kannte der
@@ -30,7 +30,7 @@ gibt es nicht mehr. `.github/workflows/staging.yml` kennt heute zwei Eingaben:
 
 | Eingabe | Default | Wirkung |
 |---|---|---|
-| `recreate` | **true** | `terraform destroy -auto-approve`, dann Neuaufbau. Die Staging-VM ist danach eine andere Maschine |
+| `recreate` | **true** | `tofu destroy -auto-approve`, dann Neuaufbau. Die Staging-VM ist danach eine andere Maschine |
 | `seed` | false | legt Benutzer, Kurse und Apps an |
 
 **Jeder Lauf verändert also etwas.** Der schonendste ist
