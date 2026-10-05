@@ -10,12 +10,70 @@ Ein vollständiger Durchlauf dauert etwa **fünf bis zehn Minuten**.
 
 ---
 
+## Einmalig: Umstieg von Terraform auf OpenTofu
+
+Gilt nur für den Wechsel auf die `feat/opentofu`-Stände der vier Repos
+([ADR 0010](adr/0010-opentofu-statt-terraform-und-packer.md)). OpenTofu
+übernimmt keinen Terraform-State; alles, was Terraform angelegt hat, wird
+vorher abgerissen. Die Reihenfolge ist zwingend: Schritte 1 bis 3 laufen
+**mit dem alten Stand**, bevor gemergt wird.
+
+1. **App-Deployments zerstören.** Jedes laufende Deployment in der
+   Oberfläche löschen und warten, bis es verschwunden ist. Danach in Horizon
+   nachsehen, dass keine VM eines App-Deployments übrig ist. Der neue
+   Worker kann sie nicht mehr abräumen: er lehnt Apps mit `terraform/`
+   oder `packer/` ab.
+2. **Staging abreißen.** Auf der Runner-VM den State sichern und mit dem
+   alten Code zerstören:
+
+   ```bash
+   cp /var/lib/tf-state/staging/terraform.tfstate ~/tfstate-staging-vor-tofu.json
+   cd <checkout des alten Stands>/infrastructure/terraform/envs/staging
+   terraform destroy
+   ```
+
+   Ohne diesen Schritt legt der erste OpenTofu-Lauf eine zweite VM an und
+   scheitert am schon vergebenen Namen. Der neue State liegt unter
+   `/var/lib/tofu-state/staging/`; die alte Datei bleibt liegen und wird nie
+   gelesen.
+3. **State-Datenbank der App-Deployments leeren** (auf der Runner-VM,
+   ADR 0005). Erst sichern, dann die Schemata `deployment_*` löschen:
+
+   ```sql
+   -- psql gegen die State-Datenbank; erzeugt die DROP-Befehle
+   SELECT 'DROP SCHEMA ' || quote_ident(nspname) || ' CASCADE;'
+     FROM pg_namespace WHERE nspname LIKE 'deployment\_%';
+   ```
+
+4. **Mergen.** Die vier `feat/opentofu`-Branches auf `main`. Der
+   Staging-Workflow baut mit OpenTofu neu auf, Ansible fährt die
+   Migrationen (`alembic upgrade head`, darunter `661aa473b510` für
+   `userInputVar`).
+5. **Dev-Stacks.** Der Default-Benutzer der State-Datenbank heißt jetzt
+   `tofu`. Postgres legt ihn nur beim ersten Start eines Volumes an; wer
+   schon ein Volume hat, legt es neu an (es enthält nur State, keine
+   Anwendungsdaten):
+
+   ```bash
+   docker compose -f docker-compose.dev.yml rm -sf postgres-tfstate
+   docker volume ls --filter name=postgres_tfstate_data   # Namen ablesen
+   docker volume rm <name aus der Zeile darüber>
+   ```
+
+6. **App-Repos umbauen.** Bis eine App `tofu/` statt `terraform/` und
+   `packer/` mitbringt, ist sie nicht deploybar.
+
+`envs/moodle` und `envs/forgejo` sind davon ausgenommen und laufen weiter
+mit Terraform aus `infrastructure/terraform/`.
+
+---
+
 ## Der schnelle Weg: `deploy.cmd`
 
 Wer die Schritte nicht einzeln tippen will, startet **`deploy.cmd`** im
 Repository-Wurzelverzeichnis per Doppelklick. Das Skript führt genau die unten
 beschriebenen Schritte aus — nur in einem Container, sodass auf dem Rechner
-weder WSL noch Terraform oder Ansible installiert sein muss. Gebraucht wird nur
+weder WSL noch OpenTofu oder Ansible installiert sein muss. Gebraucht wird nur
 Docker Desktop.
 
 Einmalig vorbereiten:
@@ -31,12 +89,12 @@ Beim Start fragt das Skript, was passieren soll:
 
 | Auswahl | Wirkung |
 |---|---|
-| **Nur ansehen** | Führt den Terraform-Plan aus und zeigt ihn. Es wird nichts verändert. |
+| **Nur ansehen** | Führt den OpenTofu-Plan aus und zeigt ihn. Es wird nichts verändert. |
 | **Ausrollen** | Wendet die Änderungen an und startet danach Ansible. |
 
 Zwei Sicherungen sind eingebaut, und beide brechen den Lauf ab statt zu warnen:
 
-- **Ohne `PG_CONN_STR` startet es gar nicht.** Terraform würde sonst mit leerem
+- **Ohne `PG_CONN_STR` startet es gar nicht.** OpenTofu würde sonst mit leerem
   State beginnen, die laufende VM nicht erkennen und eine **zweite** anlegen.
 - **Ein Plan, der Ressourcen ersetzt oder löscht, stoppt den Lauf.** Bei einem
   gewöhnlichen Deploy darf das nicht vorkommen; die häufigste Ursache ist ein
@@ -59,11 +117,11 @@ curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 \
 
 `200` ist gut. `000` heißt: kein VPN.
 
-**Werkzeuge** — Terraform und Ansible. Ansible läuft nicht unter Windows; auf
+**Werkzeuge** — OpenTofu und Ansible. Ansible läuft nicht unter Windows; auf
 einem Windows-Rechner also WSL2 benutzen.
 
 ```bash
-terraform version    # >= 1.5
+tofu version         # >= 1.13
 ansible --version    # >= 2.15
 ```
 
@@ -74,7 +132,7 @@ ansible --version    # >= 2.15
 | `clouds.yaml` | `~/.config/openstack/clouds.yaml` |
 | SSH-Schlüssel für die VM | z. B. `~/.ssh/openstack-key`, Rechte `600` |
 | `.env` des Stacks | wird in Schritt 3 gebraucht |
-| Postgres-Verbindung für den Terraform-State | als `PG_CONN_STR` exportiert |
+| Postgres-Verbindung für den OpenTofu-State | als `PG_CONN_STR` exportiert |
 
 > Die `.env` und der SSH-Schlüssel liegen beim Team. Sie stehen bewusst nicht
 > im Repository — `.gitignore` und der Gitleaks-Scan in der CI sorgen dafür,
@@ -87,7 +145,7 @@ ansible --version    # >= 2.15
 ```bash
 cd deployment
 export OS_CLOUD=openstack
-export PG_CONN_STR='postgres://…'        # Backend für den Terraform-State
+export PG_CONN_STR='postgres://…'        # Backend für den OpenTofu-State
 export TF_VAR_ssh_public_key="$(ssh-keygen -y -f ~/.ssh/openstack-key)"
 ```
 
@@ -101,10 +159,10 @@ ein „Permission denied (publickey)" in Schritt 3.
 ## Schritt 1: Infrastruktur planen
 
 ```bash
-cd infrastructure/terraform/envs/staging
-terraform init
-terraform validate
-terraform plan -out=tfplan
+cd infrastructure/tofu/envs/staging
+tofu init
+tofu validate
+tofu plan -out=tfplan
 ```
 
 **Den Plan lesen, bevor du weitermachst.** Erwartet wird bei einem normalen
@@ -116,7 +174,7 @@ No changes. Your infrastructure matches the configuration.
 
 oder eine überschaubare Liste. Zwei Dinge sind ein Stoppsignal:
 
-- **`must be replaced`** an der VM — Terraform würde sie löschen und neu
+- **`must be replaced`** an der VM — OpenTofu würde sie löschen und neu
   anlegen. Alles auf der Maschine wäre weg.
 - **`destroy`** an einem Volume — dasselbe für die Daten.
 
@@ -128,20 +186,20 @@ Ursache.
 ## Schritt 2: Infrastruktur anwenden
 
 ```bash
-terraform apply tfplan
+tofu apply tfplan
 ```
 
 Danach die Adressen einsammeln, Ansible braucht sie gleich:
 
 ```bash
-export VM_IP=$(terraform output -raw vm_ip)
-export VM_IPV4=$(terraform output -raw vm_ipv4)
-export VM_IPV4_GATEWAY=$(terraform output -raw vm_ipv4_gateway)
-export VM_IPV4_MAC=$(terraform output -raw vm_ipv4_mac)
+export VM_IP=$(tofu output -raw vm_ip)
+export VM_IPV4=$(tofu output -raw vm_ipv4)
+export VM_IPV4_GATEWAY=$(tofu output -raw vm_ipv4_gateway)
+export VM_IPV4_MAC=$(tofu output -raw vm_ipv4_mac)
 echo "VM: $VM_IP"
 ```
 
-> Ist `VM_IP` leer, hat Terraform nichts ausgegeben. Dann nicht weitermachen —
+> Ist `VM_IP` leer, hat OpenTofu nichts ausgegeben. Dann nicht weitermachen —
 > Ansible liefe sonst mit „no hosts matched" grün durch und täte nichts.
 
 ---
@@ -247,7 +305,7 @@ Dann im Browser: über Keycloak anmelden, eine App ausrollen, durchklicken.
 | `Permission denied (publickey)` | `TF_VAR_ssh_public_key` passt nicht zum privaten Schlüssel aus Schritt 0 |
 | `no hosts matched` | `VM_IP` war leer, Inventory ist leer |
 | `host range must be begin:end` | IPv6 ohne Alias ins Inventory geschrieben |
-| Volume hängt in `creating` | Cinder-Problem. Es lässt sich nicht löschen und blockiert jedes `apply`. Ausweg: `terraform state rm 'module.vm.openstack_blockstorage_volume_v3.docker_data[0]'` — danach verwaltet Terraform es nicht mehr, weg ist es damit nicht. Aufräumen muss ein Operator. |
+| Volume hängt in `creating` | Cinder-Problem. Es lässt sich nicht löschen und blockiert jedes `apply`. Ausweg: `tofu state rm 'module.vm.openstack_blockstorage_volume_v3.docker_data[0]'` — danach verwaltet OpenTofu es nicht mehr, weg ist es damit nicht. Aufräumen muss ein Operator. |
 | `compose pull` findet das Image nicht | `IMAGE_NAMESPACE` zeigt auf einen Namespace ohne Images, siehe [`.env.staging.example`](../.env.staging.example) |
 
 ---
@@ -256,7 +314,7 @@ Dann im Browser: über Keycloak anmelden, eine App ausrollen, durchklicken.
 
 Dieses Runbook beginnt erst, wenn das Image bereits in GHCR liegt. Alles davor
 — Lint, Tests, Sicherheitsscans, Image-Build und -Push — erledigt die CI in
-`backend`, `frontend` und `worker` ohne Zutun. Die Terraform- und
+`backend`, `frontend` und `worker` ohne Zutun. Die OpenTofu- und
 Ansible-Dateien, die du hier ausführst, hat `CI - Infrastructure QA` in diesem
 Repository schon geprüft.
 

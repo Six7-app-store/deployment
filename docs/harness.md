@@ -146,7 +146,7 @@ geladene Datei, sondern in eine Skill unter `.claude/skills/<name>/SKILL.md`.
 | Debuggen | Container-Logs, Shells | `make dev-logs-backend`, `make shell-db` |
 | Qualitätssicherung (Python) | pytest, ruff, black, isort | `make test-backend-isolated`, `docker exec … poetry run …` |
 | Qualitätssicherung (Frontend) | vitest, vue-tsc | `docker exec frontend-dev sh -lc 'cd /app && npx vitest --run'` |
-| Qualitätssicherung (IaC) | terraform fmt, Trivy | in der Pipeline |
+| Qualitätssicherung (IaC) | tofu fmt (terraform fmt für die Übergangsinsel), Trivy | in der Pipeline |
 | Gegenprüfung | `/code-review` | Subagent in frischem Kontext, sieht nur den Diff |
 | Deployment | GitHub Actions, self-hosted Runner | automatisch bei Merge auf `main`; von Hand `gh workflow run staging.yml` |
 
@@ -195,7 +195,6 @@ Skills lädt er bei Bedarf.
 | `neuer-endpoint` | backend | Router, Schema, CRUD, Berechtigung, Test, Frontend-Aufruf |
 | `lti-flow` | backend | Launch-Ablauf, Sitzungsmodell, Rollen, lokale Testfallen |
 | `neue-view` | frontend | View/Store/API-Tripel, Route, Container-Neustart |
-| `packer-template` | worker | Welches Layout ein App-Repo haben muss |
 | `adr-schreiben` | deployment | Wann fällig, Format, Nummernvergabe |
 | `deployment-pruefen` | deployment | Lesende Prüfung, ob eine Umgebung läuft |
 | `pr-review` | alle (geteilt) | Diff gegen die Definition of Done des betroffenen Repos |
@@ -249,7 +248,7 @@ Fassung. Aktualisiert wird bewusst, in einem Commit.
 | `filesystem`, `docker` | Doppelt. Claude Code hat Datei-Werkzeuge eingebaut, und die Container-Befehle stehen als `make`-Targets in `AGENTS.md`. |
 
 Keine Server mit Schreibrechten auf Keycloak, Redis, RabbitMQ oder OpenStack,
-und keine, die `.env`, `*.pem`, Tokens oder Terraform-State an einen externen
+und keine, die `.env`, `*.pem`, Tokens oder OpenTofu-State an einen externen
 Dienst übertragen könnten.
 
 ### Deployment: anstoßen und nachweisen
@@ -260,13 +259,13 @@ Produktion bleibt beim Menschen.
 | Erlaubt | Verboten |
 |---|---|
 | Staging-Workflow von Hand anstoßen — nach Rückfrage | Produktions-Deployment |
-| `/health` abfragen, Erreichbarkeit über IPv4 und IPv6 prüfen | `terraform apply` / `destroy` von Hand |
+| `/health` abfragen, Erreichbarkeit über IPv4 und IPv6 prüfen | `tofu apply` / `destroy` von Hand |
 | Containerstatus und Logs lesen | `deploy.cmd` / `scripts/deploy.sh` von Hand |
 | Pipeline-Ergebnis lesen | Secrets lesen oder schreiben |
 
 Die Grenze läuft nicht zwischen *lesen* und *schreiben*, sondern zwischen
 **dem Knopf, den die Pipeline anbietet** und **der Infrastruktur darunter**.
-Der Agent darf den Workflow starten; Terraform von Hand gegen OpenStack
+Der Agent darf den Workflow starten; OpenTofu von Hand gegen OpenStack
 laufen zu lassen bleibt ihm verwehrt. Damit gilt für ihn genau dieselbe
 Regel wie für uns.
 
@@ -277,7 +276,7 @@ Agent darf, ist der GitHub-Workflow.
 
 **Achtung, seit dem 19.09.2026 anders:** Die frühere Eingabe `mode` mit
 Default `plan` gibt es nicht mehr. Der heutige Workflow kennt `recreate`
-(Default **true**, fährt `terraform destroy` und baut neu) und `seed`. Einen
+(Default **true**, fährt `tofu destroy` und baut neu) und `seed`. Einen
 Trockenlauf gibt es nicht — jeder Lauf verändert etwas.
 
 Vertretbar bleibt es aus zwei anderen Gründen. Erstens ist Staging bewusst
@@ -313,8 +312,8 @@ leitet die geltende Regel aus dem Pfad der bearbeiteten Datei ab.
 | `PreToolUse` auf Edit/Write | Blockt Schreibzugriffe auf `.env`, `*.pem`, `*.key` — in **allen** Repos, nicht nur in deployment. `.env.example` bleibt erlaubt |
 | `PreToolUse` auf Edit/Write | Blockt Änderungen an **bestehenden** Alembic-Migrationen; neue bleiben erlaubt |
 | `PreToolUse` auf Bash | Blockt Kommandos, die eine Geheimnisdatei lesen würden. Die deny-Regeln greifen am Read-Werkzeug, eine Shell geht daran vorbei |
-| `PostToolUse` auf Edit/Write | backend: `ruff --fix`. worker: ruff, black, isort. `*.tf`: `terraform fmt`. frontend: bewusst nichts |
-| `Stop` | Turn-Ende blockiert, solange das Gate des Repos rot ist: ruff (backend), ruff/black/isort (worker), `vue-tsc` (frontend), `terraform fmt -check` (deployment) |
+| `PostToolUse` auf Edit/Write | backend: `ruff --fix`. worker: ruff, black, isort. `*.tofu`: `tofu fmt`, `*.tf`: `terraform fmt`. frontend: bewusst nichts |
+| `Stop` | Turn-Ende blockiert, solange das Gate des Repos rot ist: ruff (backend), ruff/black/isort (worker), `vue-tsc` (frontend), `tofu fmt -check` auf `infrastructure/tofu` und `terraform fmt -check` auf `infrastructure/terraform` (deployment) |
 
 Die Skripte liegen als lesbare Python-Dateien unter `.claude/hooks/`, nicht
 als Einzeiler im JSON. Sie sind damit im Pull Request review-fähig und
@@ -354,13 +353,13 @@ Code selbst durchsetzt: der `permissions`-Block in `.claude/settings.json`.
 Was hart gesperrt ist: Lesen **und** Schreiben von `.env`, `*.pem`, `*.key`
 und `clouds.yaml`; `git push --force` und jeder Push auf `main`;
 `gh pr merge`; `make prod*` und Compose gegen die Prod- und Staging-Stacks;
-`deploy.cmd` und `scripts/deploy.sh`; `terraform apply|destroy|state|import`;
+`deploy.cmd` und `scripts/deploy.sh`; `tofu apply|destroy|state|import` und dasselbe für `terraform`;
 `docker system prune`, `docker volume rm`, `rm -rf`. Dazu `docker exec
 <container> env`, weil die Secret-Sperre sonst über den Container zu umgehen
 wäre.
 
 Was nachfragt statt zu sperren: jeder `git push`, `git reset --hard`,
-`git rebase`, `terraform plan`, `gh workflow run`, `docker compose down`,
+`git rebase`, `tofu plan`, `terraform plan`, `gh workflow run`, `docker compose down`,
 die zurücksetzenden `make`-Targets.
 
 Das **Lesen** der Secrets mitzusperren ist der Punkt, der vorher fehlte. Ein
@@ -407,7 +406,7 @@ Bash-Kommandos sind nicht auto-approved, alles Unbekannte fragt nach.
 ### Was er nicht darf
 
 - Kein Produktions-Deployment
-- Kein `terraform apply` gegen Staging von Hand — nur über die Pipeline
+- Kein `tofu apply` gegen Staging von Hand — nur über die Pipeline
 - Kein Schreiben in `.env` oder `*.pem`
 - Kein Bearbeiten bestehender Alembic-Migrationen
 - Kein `git push --force`
@@ -439,7 +438,7 @@ User Story
    └─ Pipeline                     lint → test → coverage → security
             │                              → build → image-scan
             │
-            └─ main  ──►  Staging-Deploy (Terraform + Ansible, self-hosted Runner)
+            └─ main  ──►  Staging-Deploy (OpenTofu + Ansible, self-hosted Runner)
 ```
 
 Eine brauchbare `SPEC.md` ist selbsttragend: sie benennt die beteiligten

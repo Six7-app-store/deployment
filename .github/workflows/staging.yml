@@ -1,6 +1,6 @@
 name: CD - Staging Deployment
 
-# Baut den kompletten Staging-Stack bei jedem Merge neu auf: Terraform reisst
+# Baut den kompletten Staging-Stack bei jedem Merge neu auf: OpenTofu reisst
 # die alte VM ab und legt sie neu an, Ansible richtet sie ein. Nichts wird
 # aktualisiert, alles wird ersetzt - der Stack ist danach in genau dem Zustand,
 # den dieses Repository beschreibt, ohne von Hand gewachsene Reste.
@@ -11,8 +11,8 @@ name: CD - Staging Deployment
 # laeuft dort in einen Timeout. Der Runner steht im Netz, der Rest nicht.
 #
 # Runner-VM und AppStore-VM sind bewusst zwei verschiedene Maschinen. Der Runner
-# haelt den Terraform-State unter /var/lib/tf-state/staging/ und wird von diesem
-# Terraform nie angefasst - sonst wuerde `destroy` die eigene Grundlage
+# haelt den OpenTofu-State unter /var/lib/tofu-state/staging/ und wird von diesem
+# OpenTofu nie angefasst - sonst wuerde `destroy` die eigene Grundlage
 # wegraeumen.
 
 on:
@@ -66,9 +66,9 @@ jobs:
       OS_AUTH_TYPE: v3applicationcredential
       OS_IDENTITY_API_VERSION: '3'
 
-      # Terraform laeuft ohne Terminal: kein Farbcode-Muell im Log, und eine
+      # OpenTofu laeuft ohne Terminal: kein Farbcode-Muell im Log, und eine
       # fehlende Variable bricht ab statt auf eine Eingabe zu warten, die nie
-      # kommt.
+      # kommt. OpenTofu liest dieselben TF_*-Variablen wie Terraform.
       TF_IN_AUTOMATION: 'true'
       TF_INPUT: '0'
       TF_CLI_ARGS: '-no-color'
@@ -82,6 +82,16 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      # Pro Lauf installiert statt auf der Runner-VM: die Version steht damit
+      # hier im Repository und ist dieselbe wie im Worker-Image
+      # (TOFU_VERSION in worker/Dockerfile). Ohne Wrapper, weil die Schritte
+      # unten `tofu output -raw` direkt in Variablen lesen.
+      - name: OpenTofu installieren
+        uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: 1.13.1
+          tofu_wrapper: false
 
       - name: Ausloeser protokollieren
         run: |
@@ -98,28 +108,30 @@ jobs:
       # hier auffallen und nicht zwanzig Minuten spaeter mitten im apply.
       - name: Werkzeuge pruefen
         run: |
-          terraform version
+          tofu version
           ansible --version | head -1
           trivy --version | head -1
           nsupdate -V | head -1
           dig -v 2>&1 | head -1
 
-      - name: Terraform Format Check
-        working-directory: infrastructure/terraform
-        run: terraform fmt -check -recursive
+      - name: OpenTofu Format Check
+        working-directory: infrastructure/tofu
+        run: tofu fmt -check -recursive
 
       # Staging ist absichtlich nicht blockierend: HIGH/CRITICAL-Funde werden
       # sichtbar gemacht, halten den Deploy aber nicht auf.
-      - name: Terraform Security Scan (Trivy)
+      # Trivy liest .tofu-Dateien als Terraform-Konfiguration (geprueft mit
+      # 0.75.0: dieselben Befunde wie vorher an den .tf-Dateien).
+      - name: OpenTofu Security Scan (Trivy)
         continue-on-error: true
-        run: trivy config --severity HIGH,CRITICAL infrastructure/terraform
+        run: trivy config --severity HIGH,CRITICAL infrastructure/tofu
 
-      - name: Terraform Security Scan (Trivy, SARIF)
+      - name: OpenTofu Security Scan (Trivy, SARIF)
         if: always()
         continue-on-error: true
         run: |
           trivy config --severity HIGH,CRITICAL \
-            --format sarif --output trivy-iac.sarif infrastructure/terraform
+            --format sarif --output trivy-iac.sarif infrastructure/tofu
 
       - name: Trivy-Ergebnisse an GitHub Security
         if: always()
@@ -148,14 +160,23 @@ jobs:
           ssh-keygen -y -P '' -f ~/.ssh/openstack-key > ~/.ssh/openstack-key.pub
           echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/openstack-key.pub)" >> "$GITHUB_ENV"
 
-      # Der State liegt unter /var/lib/tf-state/staging/ auf dem Runner, nicht
+      # Der State liegt unter /var/lib/tofu-state/staging/ auf dem Runner, nicht
       # im Workspace: actions/checkout raeumt den Workspace vor jedem Lauf, der
-      # State muss aber ueber Laeufe hinweg bestehen. Siehe backend.tf.
-      - name: Terraform Init & Validate
-        working-directory: infrastructure/terraform/envs/staging
+      # State muss aber ueber Laeufe hinweg bestehen. Siehe backend.tofu.
+      #
+      # Das Verzeichnis wird beim ersten Lauf angelegt und dem Runner-Nutzer
+      # uebereignet - dieselbe Bauart wie /var/lib/caddy-backup weiter unten.
+      # Der alte Terraform-State unter /var/lib/tf-state/ bleibt unberuehrt
+      # (ADR 0010).
+      - name: OpenTofu Init & Validate
+        working-directory: infrastructure/tofu/envs/staging
         run: |
-          terraform init
-          terraform validate
+          if [ ! -d /var/lib/tofu-state/staging ]; then
+            sudo mkdir -p /var/lib/tofu-state/staging
+            sudo chown -R "$(id -u):$(id -g)" /var/lib/tofu-state
+          fi
+          tofu init
+          tofu validate
 
       # Ohne diesen Schritt fordert Caddy nach jedem Neuaufbau ein neues
       # Zertifikat an: sein Datenverzeichnis liegt in einem Docker-Volume auf
@@ -163,17 +184,17 @@ jobs:
       # ACME-Durchlauf, der erfahrungsgemaess beim ersten Versuch haengt.
       #
       # Die Sicherung landet auf der Runner-VM, also ausserhalb - dieselbe
-      # Ueberlegung wie beim Terraform-State in ADR-0003.
+      # Ueberlegung wie beim State in ADR-0003.
       #
       # continue-on-error, weil ein fehlender Vorgaenger kein Fehler ist: beim
       # allerersten Lauf gibt es keine alte VM, und ein neues Zertifikat
       # anzufordern ist dann richtig.
       - name: Caddy-Zertifikat der alten VM sichern
         continue-on-error: true
-        working-directory: infrastructure/terraform/envs/staging
+        working-directory: infrastructure/tofu/envs/staging
         run: |
           set -uo pipefail
-          alt=$(terraform output -raw vm_ip 2>/dev/null || true)
+          alt=$(tofu output -raw vm_ip 2>/dev/null || true)
           if [ -z "$alt" ]; then
             echo "Keine alte VM im State - nichts zu sichern."
             exit 0
@@ -186,7 +207,7 @@ jobs:
           # Zertifikat. Genau das, was dieser Schritt verhindern soll.
           #
           # Einmal anlegen und uebereignen; danach ist es ein gewoehnliches
-          # Verzeichnis des Runner-Nutzers. Dieselbe Bauart wie /var/lib/tf-state.
+          # Verzeichnis des Runner-Nutzers. Dieselbe Bauart wie /var/lib/tofu-state.
           if [ ! -d /var/lib/caddy-backup ]; then
             sudo mkdir -p /var/lib/caddy-backup
             sudo chown "$(id -u):$(id -g)" /var/lib/caddy-backup
@@ -219,20 +240,20 @@ jobs:
       #
       # Beim allerersten Lauf ist der State leer und destroy ein No-op - das
       # ist kein Fehler.
-      - name: Terraform Destroy (alten Stack abreissen)
+      - name: OpenTofu Destroy (alten Stack abreissen)
         if: github.event_name != 'workflow_dispatch' || inputs.recreate
-        working-directory: infrastructure/terraform/envs/staging
-        run: terraform destroy -auto-approve
+        working-directory: infrastructure/tofu/envs/staging
+        run: tofu destroy -auto-approve
 
-      - name: Terraform Plan & Apply (neuen Stack aufbauen)
-        working-directory: infrastructure/terraform/envs/staging
+      - name: OpenTofu Plan & Apply (neuen Stack aufbauen)
+        working-directory: infrastructure/tofu/envs/staging
         run: |
-          terraform plan -out=tfplan
-          terraform apply tfplan
-          echo "VM_IP=$(terraform output -raw vm_ip)" >> "$GITHUB_ENV"
-          echo "VM_IPV4=$(terraform output -raw vm_ipv4)" >> "$GITHUB_ENV"
-          echo "VM_IPV4_GATEWAY=$(terraform output -raw vm_ipv4_gateway)" >> "$GITHUB_ENV"
-          echo "VM_IPV4_MAC=$(terraform output -raw vm_ipv4_mac)" >> "$GITHUB_ENV"
+          tofu plan -out=tfplan
+          tofu apply tfplan
+          echo "VM_IP=$(tofu output -raw vm_ip)" >> "$GITHUB_ENV"
+          echo "VM_IPV4=$(tofu output -raw vm_ipv4)" >> "$GITHUB_ENV"
+          echo "VM_IPV4_GATEWAY=$(tofu output -raw vm_ipv4_gateway)" >> "$GITHUB_ENV"
+          echo "VM_IPV4_MAC=$(tofu output -raw vm_ipv4_mac)" >> "$GITHUB_ENV"
 
       # Ohne diesen Schritt ist der Neuaufbau wertlos: die neue VM bekommt eine
       # neue IPv6-Adresse, der AAAA-Record zeigt aber weiter auf die alte, und
@@ -318,7 +339,7 @@ jobs:
           echo "AAAA-Record steht auf $gesetzt."
           echo "APP_HOSTNAME=$hostname" >> "$GITHUB_ENV"
 
-      # Terraform meldet die VM als fertig, sobald Nova sie als ACTIVE fuehrt.
+      # OpenTofu meldet die VM als fertig, sobald Nova sie als ACTIVE fuehrt.
       # Bis der SSH-Dienst darin antwortet, vergehen noch einige Sekunden -
       # ohne dieses Warten scheitert Ansible am ersten Verbindungsversuch.
       - name: Auf SSH der neuen VM warten
@@ -344,11 +365,11 @@ jobs:
       - name: Ansible-Inventar erzeugen
         working-directory: infrastructure/ansible
         run: |
-          # Leer heisst: terraform hat keinen Output geliefert. ansible-playbook
+          # Leer heisst: tofu hat keinen Output geliefert. ansible-playbook
           # wuerde dann mit "no hosts matched" gruen durchlaufen und nichts
           # ausrollen - ein gruener Lauf ohne Deploy ist schlimmer als ein roter.
           if [ -z "$VM_IP" ]; then
-            echo "::error::VM_IP ist leer - terraform output hat nichts geliefert." >&2
+            echo "::error::VM_IP ist leer - tofu output hat nichts geliefert." >&2
             exit 1
           fi
           # Die Adresse steht in ansible_host hinter einem Alias, nicht als

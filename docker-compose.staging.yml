@@ -2,7 +2,7 @@
 # Staging stack — STANDALONE, GHCR-pulled, version-pinnable.
 #
 # Pulls pre-built images from GHCR and runs the full stack:
-# postgres (app DB), keycloak - der Terraform-State liegt ausserhalb (ADR-0005)
+# postgres (app DB), keycloak - der OpenTofu-State liegt ausserhalb (ADR-0005)
 # (+ its postgres), rabbitmq, redis, backend, worker, frontend,
 # caddy (TLS reverse proxy).
 #
@@ -43,25 +43,25 @@ services:
   # PostgreSQL Database (application)
   # ----------------------------------------------------------------
   # postgres (Anwendungsdaten) und keycloak-postgres liegen seit ADR-0006
-  # ausserhalb dieser VM, auf derselben Maschine wie der Terraform-State.
+  # ausserhalb dieser VM, auf derselben Maschine wie der OpenTofu-State.
   #
   # Der Grund ist derselbe wie in ADR-0005, nur teurer: hier stehen die
   # Deployments, Benutzer, Kurse und Zugangsdaten. Am 19.09.2026 hat ein
   # Merge sie geloescht - die Windows-VMs liefen weiter, aber die
-  # Oberflaeche kannte sie nicht mehr, obwohl ihre Terraform-States
+  # Oberflaeche kannte sie nicht mehr, obwohl ihre OpenTofu-States
   # gerettet waren.
 
   # ----------------------------------------------------------------
-  # PostgreSQL Database (Terraform Remote State)
+  # PostgreSQL Database (OpenTofu Remote State)
   # ----------------------------------------------------------------
-  # Worker-only Postgres for Terraform's `pg` backend. Deliberately
+  # Worker-only Postgres for OpenTofu's `pg` backend. Deliberately
   # isolated from the application DB: the worker must never reach
   # the backend's data, only its own state store. One schema per
   # deployment (`deployment_<uuid>`) keeps the locking/state surface
   # tight. Not exposed on the host — internal to worker-network.
   # postgres-tfstate stand hier und laeuft jetzt ausserhalb dieser VM.
   #
-  # Der Grund steht in ADR-0005: die Datenbank hielt den Terraform-State
+  # Der Grund steht in ADR-0005: die Datenbank hielt den OpenTofu-State
   # jedes App-Deployments - und damit die einzige Kenntnis davon, welche VMs
   # die Plattform angelegt hat, samt der Passwoerter der Studierenden. Sie
   # lief dabei auf der VM, die der Staging-Deploy selbst verwaltet. Seit
@@ -74,7 +74,7 @@ services:
   # verwaltbar. Bei Linux-Apps hiess das ein paar Minuten Neuaufbau, bei
   # Windows-Apps 30 bis 60 Minuten je Deployment.
   #
-  # Die Datenbank laeuft jetzt auf der Runner-VM, die dieses Terraform nicht
+  # Die Datenbank laeuft jetzt auf der Runner-VM, die dieses OpenTofu nicht
   # verwaltet - dieselbe Ueberlegung wie beim Staging-State in ADR-0003.
   # Adresse und Zugang kommen ueber TFSTATE_DB_HOST aus der .env.
 
@@ -318,7 +318,7 @@ services:
   # Worker Service (Celery)
   # ----------------------------------------------------------------
   # Worker has NO access to the application DB — it only talks to
-  # RabbitMQ/Redis (Celery) and postgres-tfstate (Terraform state).
+  # RabbitMQ/Redis (Celery) and postgres-tfstate (OpenTofu state).
   worker:
     image: ghcr.io/${IMAGE_NAMESPACE:-dhbw-appstore}/worker:${WORKER_VERSION:-latest}
     container_name: worker-prod
@@ -330,7 +330,7 @@ services:
       # OpenStack credential decryption (must match backend)
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?CREDENTIAL_ENCRYPTION_KEY is required}
 
-      # Terraform pg backend — isolated DB, NOT the application DB.
+      # OpenTofu pg backend — isolated DB, NOT the application DB.
       # Worker uses one schema per deployment (deployment_<uuid>).
       # Zeigt auf die Datenbank ausserhalb dieser VM, siehe ADR-0005.
       # TFSTATE_DB_HOST gehoert in die .env; der Default ist die Runner-VM
@@ -352,7 +352,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      # Kein depends_on fuer den Terraform-State mehr: die Datenbank liegt
+      # Kein depends_on fuer den OpenTofu-State mehr: die Datenbank liegt
       # ausserhalb dieser Compose-Datei und kann von hier aus nicht
       # abgewartet werden. Ist sie nicht erreichbar, scheitert das erste
       # Deployment mit einem Verbindungsfehler statt beim Start.

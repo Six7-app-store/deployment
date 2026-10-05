@@ -33,7 +33,7 @@
 # docs/deploy-runbook.md
 #
 # Was sich ohne OpenStack prüfen lässt, wird hier geprüft — und zwar bei
-# jedem Push und jedem Pull Request, damit ein Fehler in Terraform oder
+# jedem Push und jedem Pull Request, damit ein Fehler in OpenTofu, Terraform oder
 # Ansible auffällt, bevor jemand ihn auf die VM trägt.
 name: CI - Infrastructure QA
 
@@ -53,23 +53,43 @@ permissions:
 # wird aber auf `develop` entwickelt.
 jobs:
   qa:
-    name: "🔍 Terraform, Ansible, IaC-Scan"
+    name: "🔍 OpenTofu, Terraform, Ansible, IaC-Scan"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
+      # Gleiche Version wie im Worker-Image und im Staging-Workflow.
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: 1.13.1
+          tofu_wrapper: false
+
+      - name: OpenTofu Format
+        run: tofu fmt -check -recursive infrastructure/tofu
+
+      # -backend=false: Der echte State liegt auf der Runner-VM, die ohne
+      # DHBW-Netz nicht erreichbar ist. Für eine reine Syntax- und
+      # Typprüfung braucht es ihn nicht.
+      - name: OpenTofu Validate
+        run: |
+          for env in infrastructure/tofu/envs/*/; do
+            echo "--- $env"
+            tofu -chdir="$env" init -backend=false -input=false
+            tofu -chdir="$env" validate
+          done
+
+      # Übergangsinsel: envs/moodle und envs/forgejo verwalten laufende VMs
+      # und bleiben vorerst bei Terraform (ADR 0010). Fällt weg, sobald sie
+      # nach infrastructure/tofu umgezogen sind.
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
 
-      - name: Terraform Format
+      - name: Terraform Format (moodle, forgejo)
         run: terraform fmt -check -recursive infrastructure/terraform
 
-      # -backend=false: Der echte State liegt in Postgres, das ohne
-      # Credentials und ohne DHBW-Netz nicht erreichbar ist. Für eine
-      # reine Syntax- und Typprüfung braucht es ihn nicht.
-      - name: Terraform Validate
+      - name: Terraform Validate (moodle, forgejo)
         run: |
           for env in infrastructure/terraform/envs/*/; do
             echo "--- $env"
@@ -111,7 +131,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
-          scan-ref: infrastructure/terraform
+          scan-ref: infrastructure
           severity: HIGH,CRITICAL
 
       - name: Trivy IaC-Scan (SARIF)
@@ -119,7 +139,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
-          scan-ref: infrastructure/terraform
+          scan-ref: infrastructure
           severity: HIGH,CRITICAL
           format: sarif
           output: trivy-iac.sarif

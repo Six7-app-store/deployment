@@ -3,7 +3,7 @@ REM ======================================================================
 REM  App Store - Deploy nach OpenStack (Doppelklick)
 REM ----------------------------------------------------------------------
 REM  Startet den Deploy in einem Container, damit auf diesem Rechner weder
-REM  WSL noch Terraform oder Ansible installiert sein muss. Gebraucht wird
+REM  WSL noch OpenTofu oder Ansible installiert sein muss. Gebraucht wird
 REM  nur Docker Desktop.
 REM
 REM  Vor dem ersten Mal: deploy.local.env.example nach deploy.local.env

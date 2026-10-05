@@ -49,7 +49,7 @@
     auto_update_interval: "5min"
 
   pre_tasks:
-    # Das zweite Interface hängt Terraform an die laufende VM, konfiguriert ist
+    # Das zweite Interface hängt OpenTofu an die laufende VM, konfiguriert ist
     # es damit nicht - cloud-init läuft nur beim ersten Boot.
     #
     # Die eigene Routing-Tabelle ist nicht optional: Antworten von der
@@ -735,7 +735,7 @@
     # abgeschottet. GHCR erreichen beide Seiten. Also holt die Maschine sich,
     # was sie braucht, statt dass jemand hereinkommt.
     #
-    # Was der Timer NICHT kann: Aenderungen an Terraform, Ansible oder der
+    # Was der Timer NICHT kann: Aenderungen an OpenTofu, Ansible oder der
     # Compose-Datei. Dafuer bleibt dieses Playbook zustaendig.
     - name: Update-Skript auf die VM legen
       ansible.builtin.copy:

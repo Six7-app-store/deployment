@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
 #
-# tf-local.sh — local Terraform driver for CloudStore-Collective infrastructure.
+# tofu-local.sh — local OpenTofu driver for CloudStore-Collective infrastructure.
 #
 # Encapsulates everything we worked out by hand:
 #   * loads the per-environment OpenStack application credential from .secrets
 #     and maps <ENV>_OS_* -> OS_* (stripping the surrounding quotes / CR that
 #     broke the manual `export` loop),
-#   * supplies the `ssh_public_key` variable the Terraform config requires,
-#   * runs terraform in the correct env directory.
+#   * supplies the `ssh_public_key` variable the OpenTofu config requires,
+#   * runs tofu in the correct env directory.
 #
 # It mirrors what the GitHub Actions workflows do, for single-operator local
 # use via the local state backend (see infrastructure/README.md).
 #
 # Usage:
-#   infrastructure/scripts/tf-local.sh <staging|production> <action> [extra terraform args...]
+#   infrastructure/scripts/tofu-local.sh <staging|production> <action> [extra tofu args...]
 #
 #   action = init | plan | plan-destroy | apply | destroy
 #
 # Examples:
-#   infrastructure/scripts/tf-local.sh staging plan-destroy
-#   infrastructure/scripts/tf-local.sh staging destroy -auto-approve
+#   infrastructure/scripts/tofu-local.sh staging plan-destroy
+#   infrastructure/scripts/tofu-local.sh staging destroy -auto-approve
 #   SSH_KEY_FILE=~/.ssh/openstack-key \
-#     infrastructure/scripts/tf-local.sh staging apply
+#     infrastructure/scripts/tofu-local.sh staging apply
 #
 # SSH key handling:
 #   * destroy / plan / plan-destroy / init: a dummy key is fine (resources are
@@ -32,8 +32,8 @@
 #
 set -euo pipefail
 
-ENV="${1:?Usage: tf-local.sh <staging|production> <init|plan|plan-destroy|apply|destroy> [args...]}"
-ACTION="${2:?Usage: tf-local.sh <staging|production> <init|plan|plan-destroy|apply|destroy> [args...]}"
+ENV="${1:?Usage: tofu-local.sh <staging|production> <init|plan|plan-destroy|apply|destroy> [args...]}"
+ACTION="${2:?Usage: tofu-local.sh <staging|production> <init|plan|plan-destroy|apply|destroy> [args...]}"
 shift 2
 
 case "$ENV" in
@@ -44,7 +44,7 @@ esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SECRETS_FILE="$REPO_ROOT/.secrets"
-ENV_DIR="$REPO_ROOT/infrastructure/terraform/envs/$ENV"
+ENV_DIR="$REPO_ROOT/infrastructure/tofu/envs/$ENV"
 
 [ -f "$SECRETS_FILE" ] || { echo "ERROR: $SECRETS_FILE not found" >&2; exit 1; }
 [ -d "$ENV_DIR" ]      || { echo "ERROR: $ENV_DIR not found" >&2; exit 1; }
@@ -68,7 +68,7 @@ done < "$SECRETS_FILE"
 : "${OS_AUTH_URL:?no ${PREFIX}AUTH_URL found in .secrets — check the env prefix}"
 echo ">> OpenStack credentials loaded for '$ENV' (region: ${OS_REGION_NAME:-unset})"
 
-# ssh_public_key — required by the Terraform config (variable has no default).
+# ssh_public_key — required by the OpenTofu config (variable has no default).
 if [ -z "${TF_VAR_ssh_public_key:-}" ]; then
   if [ -n "${SSH_KEY_FILE:-}" ]; then
     TF_VAR_ssh_public_key="$(ssh-keygen -y -f "$SSH_KEY_FILE")"
@@ -85,13 +85,13 @@ if [ -z "${TF_VAR_ssh_public_key:-}" ]; then
 fi
 
 cd "$ENV_DIR"
-terraform init -input=false
+tofu init -input=false
 
 case "$ACTION" in
   init)         : ;;
-  plan)         terraform plan "$@" ;;
-  plan-destroy) terraform plan -destroy "$@" ;;
-  apply)        terraform apply "$@" ;;
-  destroy)      terraform destroy "$@" ;;
+  plan)         tofu plan "$@" ;;
+  plan-destroy) tofu plan -destroy "$@" ;;
+  apply)        tofu apply "$@" ;;
+  destroy)      tofu destroy "$@" ;;
   *) echo "ERROR: unknown action '$ACTION' (init|plan|plan-destroy|apply|destroy)" >&2; exit 1 ;;
 esac

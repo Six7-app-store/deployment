@@ -13,7 +13,7 @@
 # Ablauf sich um: Niemand kommt herein, die Maschine schaut selbst nach.
 #
 # WAS DAS NICHT KANN
-# Nur Container werden getauscht. Aenderungen an Terraform, Ansible oder der
+# Nur Container werden getauscht. Aenderungen an OpenTofu, Ansible oder der
 # Compose-Datei erfasst dieses Skript NICHT - dafuer bleibt der Deploy ueber
 # deploy.cmd bzw. das Runbook zustaendig. Der Grund ist Absicht: Ein Skript,
 # das sich seine eigene Ausfuehrungsgrundlage nachlaedt, ist nicht mehr

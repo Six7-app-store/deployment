@@ -33,7 +33,8 @@ also selbst nachziehen:
 
 | Werkzeug | Version | Quelle |
 |---|---|---|
-| Terraform | 1.16.3 | apt, `apt.releases.hashicorp.com` |
+| OpenTofu | 1.13.1 | **nicht** auf der VM: jeder Lauf installiert es über `opentofu/setup-opentofu` |
+| Terraform | 1.16.3 | apt, `apt.releases.hashicorp.com` — nur noch für `envs/moodle` (ADR 0010) |
 | Ansible | core 2.21.4 | `pip3 --break-system-packages` |
 | Trivy | 0.74.0 | Installskript nach `/usr/local/bin` |
 | nsupdate, dig | 9.18 | apt, `bind9-dnsutils` |
@@ -49,29 +50,34 @@ dafür benutzte TSIG-Schlüssel ist derselbe, den Caddy für die
 dns-01-Prüfung verwendet — er steht als `DNS_TSIG_KEY` in `STAGING_ENV_FILE`
 und darf nachweislich auch `AAAA` schreiben.
 
-## Der Terraform-State
+## Der OpenTofu-State
 
-Liegt unter `/var/lib/tf-state/staging/terraform.tfstate`, gehört `ubuntu`.
+Liegt unter `/var/lib/tofu-state/staging/terraform.tfstate`, gehört `ubuntu`.
+Der erste OpenTofu-Lauf legt das Verzeichnis an. Unter
+`/var/lib/tf-state/staging/` liegt noch der State aus der Terraform-Zeit; er
+wird nicht mehr gelesen und ist nach dem Umstieg (siehe
+`docs/deploy-runbook.md`) nur noch Sicherung. `/var/lib/tf-state/moodle/`
+dagegen ist weiter in Gebrauch — Moodle bleibt vorerst bei Terraform.
 
 Der Pfad liegt **außerhalb** des Runner-Workspace: `actions/checkout` räumt den
 Workspace vor jedem Lauf. Und er liegt auf der **Runner**-VM, nicht auf der
-AppStore-VM — sonst würde `terraform destroy` die Datei mitlöschen, in der
+AppStore-VM — sonst würde `tofu destroy` die Datei mitlöschen, in der
 steht, was gerade gelöscht wird.
 
 **Diese Datei ist der wunde Punkt des Aufbaus.** Geht sie verloren, sieht
-Terraform die laufenden Ressourcen nicht mehr und scheitert beim Anlegen am
+OpenTofu die laufenden Ressourcen nicht mehr und scheitert beim Anlegen am
 schon vergebenen Namen `staging-dhbw-appstore`. Aufräumen geht dann nur von Hand
 in Horizon. Vor einem Eingriff an der Runner-VM also sichern:
 
 ```bash
 ssh ubuntu@2001:7c0:1b20:c913:1::3f0 \
-  'cat /var/lib/tf-state/staging/terraform.tfstate' > tfstate-sicherung.json
+  'cat /var/lib/tofu-state/staging/terraform.tfstate' > tfstate-sicherung.json
 ```
 
-## Die Terraform-State-Datenbank
+## Die State-Datenbank der App-Deployments
 
 Seit [ADR-0005](adr/0005-tfstate-der-app-deployments-gehoert-von-der-staging-vm-herunter.md)
-läuft auf dieser VM zusätzlich Postgres. Es hält den Terraform-State **jedes
+läuft auf dieser VM zusätzlich Postgres. Es hält den OpenTofu-State **jedes
 App-Deployments** — und damit die einzige Kenntnis darüber, welche VMs die
 Plattform angelegt hat, samt der Passwörter der Studierenden.
 
@@ -79,7 +85,7 @@ Plattform angelegt hat, samt der Passwörter der Studierenden.
 |---|---|
 | Version | PostgreSQL 16, über `apt` |
 | Lauscht auf | `10.200.1.55` und `localhost`, Port 5432 |
-| Datenbank | `tfstate`, Eigentümer `terraform` |
+| Datenbank | `tfstate`, Eigentümer `terraform` (Rollenname aus der Terraform-Zeit, unverändert) |
 | Erreichbar aus | `10.200.0.0/19`, Security Group `tfstate-db` |
 | Konfiguration | `/etc/postgresql/16/main/` |
 
@@ -88,7 +94,7 @@ Der Worker auf der Staging-VM verbindet sich über `TFSTATE_DB_HOST` aus der
 muss der Wert nachgezogen werden.
 
 **Diese Datenbank ist die zweite Stelle auf dieser Maschine, deren Verlust
-teuer ist.** Beim Terraform-State von Staging geht es um eine VM; hier um jedes
+teuer ist.** Beim OpenTofu-State von Staging geht es um eine VM; hier um jedes
 laufende Deployment. Ein verlorenes Windows-Deployment kostet 30 bis 60 Minuten
 Neuaufbau je Studierendem. Sichern:
 
@@ -159,7 +165,7 @@ Alle am Repository `Six7-app-store/deployment`:
 | `STAGING_ENV_FILE` | `secrets/staging.env`, vollständiger Inhalt |
 
 Der öffentliche Schlüssel wird im Workflow aus `SSH_PRIVATE_KEY` abgeleitet und
-als `TF_VAR_ssh_public_key` an Terraform gereicht. Dadurch passt das
+als `TF_VAR_ssh_public_key` an OpenTofu gereicht. Dadurch passt das
 OpenStack-Keypair immer zu dem Schlüssel, mit dem Ansible sich gleich verbindet
 — es gibt keinen zweiten Ort, an dem beide auseinanderlaufen könnten.
 
@@ -172,7 +178,7 @@ Repositories. Damit schicken frontend, backend und worker ihren
 
 Ein Lauf blockiert alle folgenden — die `concurrency`-Gruppe `staging-deploy`
 bricht nichts ab, sie stellt in eine Schlange. Das ist gewollt: ein halb
-abgebrochener `terraform apply` ist schlimmer als ein wartender Job.
+abgebrochener `tofu apply` ist schlimmer als ein wartender Job.
 
 Hängt tatsächlich etwas, den Lauf in der GitHub-Oberfläche abbrechen und danach
 den State prüfen:
@@ -180,10 +186,20 @@ den State prüfen:
 ```bash
 ssh ubuntu@2001:7c0:1b20:c913:1::3f0
 cd /tmp && git clone https://github.com/Six7-app-store/deployment
-cd deployment/infrastructure/terraform/envs/staging
+cd deployment/infrastructure/tofu/envs/staging
 export OS_AUTH_TYPE=v3applicationcredential OS_IDENTITY_API_VERSION=3
 # OS_* aus secrets/os-env.sh setzen
-terraform init && terraform plan
+tofu init && tofu plan
+```
+
+`tofu` liegt auf der VM nicht im `PATH` — der Workflow installiert es nur für
+seinen Lauf. Für die Fehlersuche einmalig nach `~/bin` holen, Version und
+Summe wie in `worker/Dockerfile`:
+
+```bash
+v=1.13.1; sha=8ccbc6f8ee21d2827715f3c6e08a9b3e0209b1e62057c05067ef117e047c1a80
+curl -fsSLo /tmp/tofu.zip "https://github.com/opentofu/opentofu/releases/download/v$v/tofu_${v}_linux_amd64.zip"
+echo "$sha  /tmp/tofu.zip" | sha256sum -c - && mkdir -p ~/bin && unzip -o /tmp/tofu.zip tofu -d ~/bin
 ```
 
 Steht im Plan etwas, das niemand erklären kann, ist der State nicht mehr in

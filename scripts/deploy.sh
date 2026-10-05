@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rollt den Store auf die Staging-VM aus. Läuft im Deploy-Container
 # (forgejo/job-image/Dockerfile), damit weder WSL noch lokal installiertes
-# Terraform oder Ansible nötig ist.
+# OpenTofu oder Ansible nötig ist.
 #
 # Nicht direkt aufrufen — deploy.cmd (Windows) bzw. deploy.sh im Repo-Wurzel
 # starten den Container und rufen dann dieses Skript auf.
@@ -32,14 +32,14 @@ ok "OpenStack-Credentials vorhanden"
 
 # Der wichtigste Check des ganzen Skripts.
 #
-# Der Terraform-State liegt in Postgres (envs/staging/backend.tf, Schema
-# "staging"). Fehlt die Verbindung, fällt Terraform auf einen leeren lokalen
+# Der OpenTofu-State liegt in Postgres (envs/staging/backend.tofu, Schema
+# "staging"). Fehlt die Verbindung, fällt OpenTofu auf einen leeren lokalen
 # State zurück — es sieht die laufende VM dann NICHT und legt eine zweite an.
 # Das kostet Quota, bricht das DNS und ist mühsam zurückzudrehen.
 [ -n "${PG_CONN_STR:-}" ] || die \
 "PG_CONN_STR fehlt.
 
-Ohne diese Verbindung kennt Terraform den bestehenden Zustand nicht und
+Ohne diese Verbindung kennt OpenTofu den bestehenden Zustand nicht und
 würde eine ZWEITE Staging-VM anlegen statt der vorhandenen.
 
 Der Wert steht im Team-Passwortspeicher und gehört in deploy.local.env."
@@ -97,21 +97,21 @@ cleanup() {
 trap cleanup EXIT
 
 # ----------------------------------------------------------------------
-# 2. Terraform
+# 2. OpenTofu
 # ----------------------------------------------------------------------
-cd /repo/infrastructure/terraform/envs/staging
+cd /repo/infrastructure/tofu/envs/staging
 
-say "Terraform initialisieren"
-terraform init -input=false
-terraform validate
+say "OpenTofu initialisieren"
+tofu init -input=false
+tofu validate
 ok "Konfiguration gültig"
 
-say "Terraform-Plan"
-terraform plan -input=false -out=tfplan
+say "OpenTofu-Plan"
+tofu plan -input=false -out=tfplan
 
 # Ein Plan, der die VM ersetzt oder ein Volume löscht, vernichtet Daten.
 # Das soll niemand übersehen, nur weil die Ausgabe lang ist.
-PLAIN=$(terraform show -no-color tfplan)
+PLAIN=$(tofu show -no-color tfplan)
 DANGER=0
 echo "$PLAIN" | grep -q "must be replaced"      && { warn "Der Plan will Ressourcen ERSETZEN"; DANGER=1; }
 echo "$PLAIN" | grep -qE "^  # .* will be destroyed" && { warn "Der Plan will Ressourcen LÖSCHEN";  DANGER=1; }
@@ -140,15 +140,15 @@ if [ "$MODE" != "apply" ]; then
   exit 0
 fi
 
-say "Terraform anwenden"
-terraform apply -input=false tfplan
+say "OpenTofu anwenden"
+tofu apply -input=false tfplan
 ok "Infrastruktur auf Stand"
 
-VM_IP=$(terraform output -raw vm_ip)
-[ -n "$VM_IP" ] || die "terraform output lieferte keine Adresse."
-VM_IPV4=$(terraform output -raw vm_ipv4 2>/dev/null || echo "")
-VM_IPV4_GATEWAY=$(terraform output -raw vm_ipv4_gateway 2>/dev/null || echo "")
-VM_IPV4_MAC=$(terraform output -raw vm_ipv4_mac 2>/dev/null || echo "")
+VM_IP=$(tofu output -raw vm_ip)
+[ -n "$VM_IP" ] || die "tofu output lieferte keine Adresse."
+VM_IPV4=$(tofu output -raw vm_ipv4 2>/dev/null || echo "")
+VM_IPV4_GATEWAY=$(tofu output -raw vm_ipv4_gateway 2>/dev/null || echo "")
+VM_IPV4_MAC=$(tofu output -raw vm_ipv4_mac 2>/dev/null || echo "")
 ok "VM: $VM_IP"
 
 # ----------------------------------------------------------------------
