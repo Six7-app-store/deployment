@@ -195,6 +195,14 @@ jobs:
         run: |
           set -uo pipefail
           alt=$(tofu output -raw vm_ip 2>/dev/null || true)
+          # Solange der alte Terraform-Stack noch steht (siehe den naechsten
+          # Schritt), laeuft Staging auf dessen VM, und nur sein State kennt
+          # ihre Adresse. Ohne diesen Rueckgriff ginge das Zertifikat beim
+          # Abriss verloren.
+          tf_alt=/var/lib/tf-state/staging/terraform.tfstate
+          if [ -z "$alt" ] && [ -f "$tf_alt" ]; then
+            alt=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("outputs",{}).get("vm_ip",{}).get("value",""))' "$tf_alt" || true)
+          fi
           if [ -z "$alt" ]; then
             echo "Keine alte VM im State - nichts zu sichern."
             exit 0
@@ -233,6 +241,61 @@ jobs:
             echo "::warning::Kein Caddy-Zertifikat gesichert - der Neuaufbau bestellt ein frisches."
             echo "Nichts gesichert - vorhandene Sicherung bleibt unangetastet."
           fi
+
+      # Einmalig, Nachtrag zu ADR 0010. Die ADR setzt voraus, dass Staging vor
+      # dem Umstieg mit Terraform abgerissen wurde, und laesst OpenTofu mit
+      # leerem State in /var/lib/tofu-state/ beginnen. Abgerissen wurde aber
+      # nie: der letzte Terraform-Lauf (4.10., 8b808f1) hat VM, Schluessel und
+      # Security Group angelegt, die nur im alten State stehen. Fuer OpenTofu
+      # sind sie unsichtbar - sein destroy laesst sie stehen, sein apply
+      # scheitert am vergebenen Schluesselnamen (409 "Key pair
+      # 'staging-dhbw-appstore-key' already exists"), seit dem 5.10. bei
+      # jedem Lauf. Staging lief derweil auf der alten VM weiter.
+      #
+      # Dieser Schritt reisst den alten Stack mit dem Code ab, der ihn
+      # angelegt hat, und benennt den State danach um. Damit ist er beim
+      # naechsten Lauf ein No-op und kann dann entfernt werden.
+      #
+      # Kein continue-on-error: scheitert der Abriss, wuerde das apply danach
+      # ohnehin am selben Namen scheitern.
+      - name: Alten Terraform-Stack abreissen (einmalig, ADR 0010)
+        if: github.event_name != 'workflow_dispatch' || inputs.recreate
+        run: |
+          set -euo pipefail
+          state=/var/lib/tf-state/staging/terraform.tfstate
+          if [ ! -f "$state" ]; then
+            echo "Kein alter Terraform-State - nichts abzureissen."
+            exit 0
+          fi
+          anzahl=$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1])).get("resources",[])))' "$state")
+          echo "Alter Terraform-State: $anzahl Ressourcen."
+
+          if [ "$anzahl" != 0 ]; then
+            # Der Code, der den Stack angelegt hat: der letzte Stand vor der
+            # Umstellung. Die heutige Kopie unter infrastructure/terraform/
+            # enthaelt envs/staging nicht mehr.
+            alt_code="$RUNNER_TEMP/terraform-staging-alt"
+            rm -rf "$alt_code" && mkdir -p "$alt_code"
+            git fetch --no-tags --depth 1 origin 8b808f12a162bb2cebd8ec7cd038c2a805386109
+            git archive FETCH_HEAD infrastructure/terraform | tar -x -C "$alt_code"
+
+            # Mit dem Werkzeug, das den State geschrieben hat, solange es auf
+            # dem Runner liegt. OpenTofu liest Terraform-States ebenfalls und
+            # ist der Rueckfall.
+            tf=terraform
+            command -v terraform >/dev/null || tf=tofu
+            echo "Abriss mit: $($tf version | head -1)"
+
+            cd "$alt_code/infrastructure/terraform/envs/staging"
+            "$tf" init
+            "$tf" destroy -auto-approve
+          fi
+
+          # Umbenennen statt loeschen: falls doch etwas schiefging, bleibt
+          # nachvollziehbar, was in diesem State stand.
+          ziel="$state.abgerissen-$(date +%Y%m%d-%H%M%S)"
+          mv "$state" "$ziel" 2>/dev/null || sudo mv "$state" "$ziel"
+          echo "Alter State umbenannt - dieser Schritt ist ab jetzt ein No-op."
 
       # Der eigentliche Punkt dieses Workflows: die alte VM verschwindet
       # vollstaendig, bevor die neue entsteht. Kein In-place-Update, keine
