@@ -128,6 +128,11 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER is required}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+      # Celery quittiert einen Task erst an dessen Ende (task_acks_late), und
+      # ein Deploy wartet bis zu 90 Minuten auf die Einrichtung seiner VMs.
+      # Nach dem Standard von 30 Minuten gaebe RabbitMQ ihn mittendrin
+      # erneut aus - der Deploy liefe doppelt. 3 Stunden, ADR 0011.
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit consumer_timeout 10800000"
     ports:
       - "${RABBITMQ_PORT:-5672}:5672"
       - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
