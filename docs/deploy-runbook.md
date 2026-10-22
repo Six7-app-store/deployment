@@ -17,8 +17,8 @@ Die einmaligen Schritte von damals stehen in der Git-Historie dieser Datei.
 Wer einen Dev-Stack aus der Terraform-Zeit hat, findet den Hinweis zum
 State-Volume in [dev-setup.md](dev-setup.md).
 
-`envs/moodle` ist davon ausgenommen und läuft weiter
-mit Terraform aus `infrastructure/terraform/`.
+Alle Umgebungen liegen unter `infrastructure/tofu/`, auch `envs/moodle`
+(ADR 0015).
 
 ---
 

@@ -71,8 +71,7 @@ deployment/
 ├── seed/                     # Seed-Skript, Kurse, App-Beschreibungen
 ├── deploy-image/             # Image für `deploy.cmd`: OpenTofu, Ansible, Trivy
 ├── infrastructure/           # OpenTofu und Ansible
-│   ├── tofu/                 # Modul und Staging-Umgebung
-│   ├── terraform/            # Übergangsinsel: moodle (ADR 0010)
+│   ├── tofu/                 # Modul, Staging- und Moodle-Umgebung
 │   └── ansible/              # Playbooks für Staging und Moodle
 ├── docs/                     # Architektur, Harness, Setup-Anleitungen, ADRs
 └── .github/workflows/        # Staging-Deploy (self-hosted Runner) und CI

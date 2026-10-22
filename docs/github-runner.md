@@ -34,7 +34,6 @@ also selbst nachziehen:
 | Werkzeug | Version | Quelle |
 |---|---|---|
 | OpenTofu | 1.13.2 | **nicht** auf der VM: jeder Lauf installiert es über `opentofu/setup-opentofu` |
-| Terraform | 1.16.3 | apt, `apt.releases.hashicorp.com` — nur noch für `envs/moodle` (ADR 0010) |
 | Ansible | core 2.21.4 | `pip3 --break-system-packages` |
 | Trivy | 0.74.0 | Installskript nach `/usr/local/bin` |
 | nsupdate, dig | 9.18 | apt, `bind9-dnsutils` |
@@ -53,11 +52,11 @@ und darf nachweislich auch `AAAA` schreiben.
 ## Der OpenTofu-State
 
 Liegt unter `/var/lib/tofu-state/staging/terraform.tfstate`, gehört `ubuntu`.
-Der erste OpenTofu-Lauf legt das Verzeichnis an. Unter
-`/var/lib/tf-state/staging/` liegt noch der State aus der Terraform-Zeit; er
-wird nicht mehr gelesen und ist nach dem Umstieg (siehe
-`docs/deploy-runbook.md`) nur noch Sicherung. `/var/lib/tf-state/moodle/`
-dagegen ist weiter in Gebrauch — Moodle bleibt vorerst bei Terraform.
+Der erste OpenTofu-Lauf legt das Verzeichnis an. Der State der Moodle-Umgebung
+liegt analog unter `/var/lib/tofu-state/moodle/`. Unter `/var/lib/tf-state/`
+liegen noch die States aus der Terraform-Zeit; sie werden von nichts mehr
+gelesen und sind nur noch Sicherung. Terraform selbst gehört nicht mehr auf
+diese VM (ADR 0015).
 
 Der Pfad liegt **außerhalb** des Runner-Workspace: `actions/checkout` räumt den
 Workspace vor jedem Lauf. Und er liegt auf der **Runner**-VM, nicht auf der

@@ -65,3 +65,4 @@ Das ist Teil der Definition of Done in den `AGENTS.md` aller vier Repos.
 | [0012](0012-design-v2-tokens-als-einzige-quelle.md) | Das Design v2 hat die Tokens als einzige Quelle, Light ist Standard | Angenommen |
 | [0013](0013-develop-ist-staging-main-ist-produktion.md) | `develop` ist Staging, `main` ist Produktion | Angenommen |
 | [0014](0014-forgejo-wird-nicht-weiterbetrieben.md) | Forgejo wird nicht weiterbetrieben | Angenommen |
+| [0015](0015-terraform-uebergangsinsel-ist-aufgeloest.md) | Die Terraform-Übergangsinsel ist aufgelöst | Angenommen |

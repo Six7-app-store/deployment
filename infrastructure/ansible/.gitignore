@@ -1,4 +1,4 @@
-# Generated per-deploy by the CI workflow from `terraform output -raw vm_ip`.
+# Generated per-deploy by the CI workflow from `tofu output -raw vm_ip`.
 # Contains a live server IP; never commit it.
 inventory.ini
 

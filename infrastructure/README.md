@@ -3,8 +3,6 @@
 Infrastructure-as-code in two layers:
 
 - **OpenTofu** (`tofu/`) — provisions OpenStack VMs (one Docker host).
-  `terraform/` is a transitional island: it still holds `envs/moodle`, which
-  manages a running VM and stays on Terraform until it is moved (ADR 0010).
 - **Ansible** (`ansible/`) — installs Docker on the VM and deploys the application via Docker Compose.
 
 GitHub Actions (`.github/workflows/`) chains the two together: OpenTofu applies the
@@ -15,14 +13,14 @@ output and writes a small `inventory.ini` that Ansible then deploys onto. The tw
 > **Networking note:** on the current OpenStack the VM's *fixed* IP is already
 > publicly routable  so **no floating IP is allocated** (`assign_floating_ip = false`).
 > The OpenStack **API** (Keystone), however, is reachable **only from VPN** — so
-> every `tofu` / `terraform` / `act` run must be on the VPN.
+> every `tofu` / `act` run must be on the VPN.
 
 ## Environments
 
 | Environment | IaC dir                                | Ansible playbook | Inventory                         | Trigger                          |
 |-------------|----------------------------------------|------------------|-----------------------------------|----------------------------------|
 | staging     | `tofu/envs/staging` (OpenTofu)         | `staging.yml`    | generated `inventory.ini`         | push to `develop`, dispatch (GitHub Actions) |
-| moodle      | `terraform/envs/moodle` (Terraform)    | `moodle.yml`     | by hand                           | run by hand from the runner VM   |
+| moodle      | `tofu/envs/moodle` (OpenTofu)          | `moodle.yml`     | by hand                           | run by hand from the runner VM   |
 
 > A separate production environment is documented as future work in
 > the project plan but not yet wired into the codebase. The OpenTofu
@@ -36,12 +34,8 @@ tofu/
 ├── modules/openstack_vm/             # reusable VM module (keypair + instance + optional floating IP,
 │                                     # optional Cinder data volume, optional second interface)
 └── envs/
-    └── staging/                      # the application stack (gp1.large)
-
-terraform/                            # transitional island, Terraform (ADR 0010)
-├── modules/openstack_vm/             # copy of the module above — change both until the island is gone
-└── envs/
-    └── moodle/                       # the Moodle test instance
+    ├── staging/                      # the application stack (gp1.large)
+    └── moodle/                       # the Moodle test instance (kept, never rebuilt on merge)
 ```
 
 ## Addressing
