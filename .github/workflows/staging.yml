@@ -1,10 +1,19 @@
 name: CD - Staging Deployment
 
-# Baut den kompletten Staging-Stack bei jedem Merge auf `develop` neu auf
-# (develop ist Staging, main ist Produktion - ADR 0013): OpenTofu reisst
-# die alte VM ab und legt sie neu an, Ansible richtet sie ein. Nichts wird
+# Baut einen Stand des Stacks bei jedem Merge neu auf: OpenTofu reisst die
+# alte VM ab und legt sie neu an, Ansible richtet sie ein. Nichts wird
 # aktualisiert, alles wird ersetzt - der Stack ist danach in genau dem Zustand,
 # den dieses Repository beschreibt, ohne von Hand gewachsene Reste.
+#
+# Es gibt zwei Staende, je Branch einen (ADR 0014):
+#
+#   develop  Staging. Eigene VM, eigener Hostname, eigene Datenbanken,
+#            Images :develop.
+#   main     Der Stand unter der bisherigen Staging-Adresse. Images :latest.
+#            VM, State und Hostname sind dieselben wie vor ADR 0014.
+#
+# Welcher Stand gebaut wird, bestimmt der Branch des Ausloesers. Die
+# Produktion aus docker-compose.prod.yml faehrt weiterhin eine Person von Hand.
 #
 # Laeuft auf dem self-hosted Runner (VM `github-runner`, 2001:7c0:1b20:c913:1::3f0).
 # Das ist keine Vorliebe, sondern Notwendigkeit: die OpenStack-API der DHBW ist
@@ -12,23 +21,28 @@ name: CD - Staging Deployment
 # laeuft dort in einen Timeout. Der Runner steht im Netz, der Rest nicht.
 #
 # Runner-VM und AppStore-VM sind bewusst zwei verschiedene Maschinen. Der Runner
-# haelt den OpenTofu-State unter /var/lib/tofu-state/staging/ und wird von diesem
+# haelt den OpenTofu-State unter /var/lib/tofu-state/<stand>/ und wird von diesem
 # OpenTofu nie angefasst - sonst wuerde `destroy` die eigene Grundlage
 # wegraeumen.
 
 on:
-  # Merge auf develop in diesem Repository. main ist Produktion und loest
-  # hier nichts aus.
+  # Merge in diesem Repository. Der Branch ist der Stand.
   push:
-    branches: [develop]
+    branches: [develop, main]
 
-  # Merge auf develop in frontend, backend oder worker. Die schicken von ihrer CI
-  # aus einen repository_dispatch hierher, sobald ihr Image in GHCR liegt.
+  # Merge in frontend, backend oder worker. Die schicken von ihrer CI aus einen
+  # repository_dispatch hierher, sobald ihr Image in GHCR liegt, und nennen in
+  # client_payload.ref den Branch, auf dem gemergt wurde.
   repository_dispatch:
     types: [trigger-deployment]
 
   workflow_dispatch:
     inputs:
+      stand:
+        description: "Welcher Stand neu gebaut wird"
+        type: choice
+        options: [develop, main]
+        default: develop
       recreate:
         description: "VM vorher zerstoeren (aus = nur Aenderungen anwenden)"
         type: boolean
@@ -47,20 +61,32 @@ permissions:
   contents: read
   security-events: write
 
-# Zwei Merges kurz hintereinander duerfen sich nicht ueberholen. Abgebrochen
-# wird nichts: ein laufender destroy/apply ist nichts, das man auf halber
-# Strecke stehen laesst.
-concurrency:
-  group: staging-deploy
-  cancel-in-progress: false
-
 jobs:
   deploy:
-    name: Staging Deploy
+    name: Staging Deploy (${{ github.event_name == 'workflow_dispatch' && inputs.stand || (github.event_name == 'push' && github.ref_name == 'main' && 'main') || (github.event.client_payload.ref == 'refs/heads/main' && 'main') || 'develop' }})
     runs-on: [self-hosted, deploy]
     timeout-minutes: 90
 
+    # Zwei Merges kurz hintereinander duerfen sich nicht ueberholen. Abgebrochen
+    # wird nichts: ein laufender destroy/apply ist nichts, das man auf halber
+    # Strecke stehen laesst.
+    #
+    # Eine Gruppe je Stand, nicht eine fuer beide: GitHub haelt je Gruppe nur
+    # einen wartenden Lauf und verwirft den aelteren. Mit einer gemeinsamen
+    # Gruppe koennte ein develop-Merge den wartenden main-Deploy verdraengen.
+    # Gleichzeitig laufen beide trotzdem nicht - es gibt genau einen Runner.
+    concurrency:
+      group: staging-deploy-${{ github.event_name == 'workflow_dispatch' && inputs.stand || (github.event_name == 'push' && github.ref_name == 'main' && 'main') || (github.event.client_payload.ref == 'refs/heads/main' && 'main') || 'develop' }}
+      cancel-in-progress: false
+
     env:
+      # Der Stand dieses Laufs, develop oder main. Dieselbe Ableitung wie im
+      # Namen und in der concurrency-Gruppe oben: workflow_dispatch nennt ihn
+      # ausdruecklich, push ueber den Branch, repository_dispatch ueber
+      # client_payload.ref. Alles Unbekannte ist develop - ein Ausloeser ohne
+      # Branchangabe soll nie den main-Stand abreissen.
+      STAND: ${{ github.event_name == 'workflow_dispatch' && inputs.stand || (github.event_name == 'push' && github.ref_name == 'main' && 'main') || (github.event.client_payload.ref == 'refs/heads/main' && 'main') || 'develop' }}
+
       OS_AUTH_URL: ${{ secrets.STAGING_OS_AUTH_URL }}
       OS_APPLICATION_CREDENTIAL_ID: ${{ secrets.STAGING_OS_APPLICATION_CREDENTIAL_ID }}
       OS_APPLICATION_CREDENTIAL_SECRET: ${{ secrets.STAGING_OS_APPLICATION_CREDENTIAL_SECRET }}
@@ -82,8 +108,15 @@ jobs:
       ANSIBLE_FORCE_COLOR: 'True'
 
     steps:
+      # Gebaut wird mit Compose-Datei, OpenTofu und Playbook des Stands, nicht
+      # mit denen des Workflows. repository_dispatch und workflow_dispatch
+      # laufen immer mit dem Workflow vom Standardbranch (develop); ohne `ref`
+      # baute ein main-Deploy aus fremden Repos mit der Konfiguration von
+      # develop. Bei push ist es genau der gemergte Commit.
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.sha || env.STAND }}
 
       # Pro Lauf installiert statt auf der Runner-VM: die Version steht damit
       # hier im Repository und ist dieselbe wie im Worker-Image
@@ -97,33 +130,167 @@ jobs:
 
       - name: Ausloeser protokollieren
         run: |
+          echo "Stand:      $STAND"
           echo "Ereignis:   ${{ github.event_name }}"
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
             echo "Ausgeloest von: ${{ github.event.client_payload.repository }}"
+            echo "Branch:         ${{ github.event.client_payload.ref }}"
             echo "Commit:         ${{ github.event.client_payload.sha }}"
             echo "Nachricht:      ${{ github.event.client_payload.message }}"
           else
             echo "Commit:         ${{ github.sha }}"
           fi
 
-      # Staging ist develop (ADR 0013). Steht in STAGING_ENV_FILE noch
-      # *_VERSION=latest aus der alten Vorlage, zieht die VM den Stand von main -
-      # den Produktionsstand -, und Merges auf develop kommen nie an. Die Werte
-      # sind Image-Tags, kein Geheimnis. Ausgegeben als "NAME: wert", nicht als
-      # "NAME=wert": GitHub maskiert ein mehrzeiliges Secret Zeile fuer Zeile,
-      # und die Zeile selbst kaeme als *** im Log an.
-      - name: Image-Tags pruefen
-        env:
-          STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
+      # Alles, worin sich die beiden Staende unterscheiden, an einer Stelle.
+      #
+      # main behaelt Namen, State, Zertifikatssicherung und Hostname von vor
+      # ADR 0014 - deshalb steht dort "staging" und nicht "main". Umbenennen
+      # hiesse, den State umzuziehen, ohne dass sich irgendetwas verbessert.
+      - name: Stand festlegen
         run: |
           set -euo pipefail
+          case "$STAND" in
+            main)
+              prefix=staging
+              tag=latest
+              caddy=/var/lib/caddy-backup/caddy_data.tgz
+              ;;
+            develop)
+              prefix=develop
+              tag=develop
+              caddy=/var/lib/caddy-backup/develop/caddy_data.tgz
+              ;;
+            *)
+              echo "::error::Unbekannter Stand '$STAND'." >&2
+              exit 1
+              ;;
+          esac
+          {
+            echo "TF_VAR_name_prefix=$prefix"
+            echo "STATE_DIR=/var/lib/tofu-state/$prefix"
+            echo "IMAGE_TAG=$tag"
+            echo "CADDY_BACKUP=$caddy"
+          } | tee -a "$GITHUB_ENV"
+
+      # Beide Staende kommen aus demselben Secret STAGING_ENV_FILE. Fuer develop
+      # wird daraus eine eigene .env abgeleitet, damit niemand ein zweites
+      # Secret mit denselben dreissig Werten von Hand pflegen muss:
+      #
+      #   - der Hostname wird ueberall ersetzt, wo er vorkommt (APP_HOSTNAME,
+      #     APP_BASE_URL, VITE_*, CORS_ORIGINS). Default ist "staging." vor der
+      #     Zone des main-Hostnamens, abweichend ueber die Repository-Variable
+      #     DEVELOP_APP_HOSTNAME.
+      #   - DB_NAME, KEYCLOAK_DB_NAME und TFSTATE_DB_NAME bekommen "_develop"
+      #     angehaengt. Die drei Datenbanken liegen fuer beide Staende in
+      #     derselben Postgres-Instanz auf dem Runner (ADR 0005, 0006). Teilten
+      #     sie sich eine Datenbank, migrierte develop die Daten von main, und
+      #     der develop-Worker saehe die OpenTofu-States der Deployments von
+      #     main - und koennte sie abreissen.
+      #
+      # Wer develop doch anders konfigurieren will, legt das Secret
+      # DEVELOP_ENV_FILE an; dann gilt es unveraendert.
+      #
+      # Die Image-Tags setzt der Stand, nicht das Secret: develop zieht
+      # :develop, main zieht :latest. Ein Tag im Secret wird ueberschrieben.
+      - name: Env-Datei des Stands erzeugen
+        env:
+          STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
+          DEVELOP_ENV_FILE: ${{ secrets.DEVELOP_ENV_FILE }}
+          DEVELOP_APP_HOSTNAME: ${{ vars.DEVELOP_APP_HOSTNAME }}
+        run: |
+          set -euo pipefail
+          umask 077
+          datei="$RUNNER_TEMP/stand.env"
+          wert() { grep -E "^$1=" "$datei" | head -1 | cut -d= -f2- || true; }
+
+          if [ "$STAND" = develop ] && [ -n "$DEVELOP_ENV_FILE" ]; then
+            printf '%s\n' "$DEVELOP_ENV_FILE" > "$datei"
+            echo "develop: DEVELOP_ENV_FILE gilt unveraendert."
+          else
+            printf '%s\n' "$STAGING_ENV_FILE" > "$datei"
+          fi
+
+          if [ "$STAND" = develop ] && [ -z "$DEVELOP_ENV_FILE" ]; then
+            alt=$(wert APP_HOSTNAME)
+            if [ -z "$alt" ]; then
+              echo "::error::APP_HOSTNAME fehlt in STAGING_ENV_FILE." >&2
+              exit 1
+            fi
+            neu=${DEVELOP_APP_HOSTNAME:-staging.${alt#*.}}
+            if [ "$neu" = "$alt" ]; then
+              echo "::error::develop bekaeme denselben Hostnamen wie main ($alt)." >&2
+              exit 1
+            fi
+            # Punkte im Muster maskieren, sonst passt "." auf jedes Zeichen.
+            muster=$(printf '%s' "$alt" | sed 's/[.]/\\./g')
+            sed -i "s/$muster/$neu/g" "$datei"
+            echo "Hostname: $alt -> $neu"
+
+            for v in DB_NAME KEYCLOAK_DB_NAME TFSTATE_DB_NAME; do
+              name=$(wert "$v")
+              if [ -z "$name" ]; then
+                echo "::error::$v fehlt in STAGING_ENV_FILE." >&2
+                exit 1
+              fi
+              sed -i "s/^$v=.*/$v=${name}_develop/" "$datei"
+              echo "$v: ${name}_develop"
+            done
+          fi
+
+          sed -i -E '/^(BACKEND|WORKER|FRONTEND)_VERSION=/d' "$datei"
           for v in BACKEND_VERSION WORKER_VERSION FRONTEND_VERSION; do
-            wert=$(printf '%s\n' "$STAGING_ENV_FILE" | grep -E "^$v=" | head -1 | cut -d= -f2- || true)
-            echo "$v: ${wert:-develop (Default aus docker-compose.staging.yml)}"
-            if [ "$wert" = "latest" ]; then
-              echo "::warning::$v steht in STAGING_ENV_FILE auf latest - Staging zieht damit den Produktionsstand. Zeile loeschen oder auf develop setzen (ADR 0013)."
+            echo "$v=$IMAGE_TAG" >> "$datei"
+          done
+          # "NAME: wert", nicht "NAME=wert": GitHub maskiert ein mehrzeiliges
+          # Secret Zeile fuer Zeile, und die Zeile kaeme als *** im Log an.
+          echo "Image-Tags: $IMAGE_TAG"
+          echo "APP_HOSTNAME: $(wert APP_HOSTNAME)"
+          echo "STAND_ENV_FILE=$datei" >> "$GITHUB_ENV"
+
+      # develop hat eigene Datenbanken in der Postgres-Instanz des Runners
+      # (siehe oben). Sie werden hier angelegt, sobald es sie nicht gibt -
+      # beim ersten develop-Lauf also, danach ist der Schritt ein No-op.
+      # Eigentuemer sind dieselben Rollen wie bei main; neue Rollen braeuchten
+      # neue Passwoerter, und die stuenden dann doch wieder in einem Secret.
+      #
+      # Fuer main laeuft der Schritt nicht. Dessen Datenbanken gibt es, und
+      # nichts in diesem Workflow soll sie anfassen.
+      - name: Datenbanken fuer develop anlegen
+        if: env.STAND == 'develop'
+        run: |
+          set -euo pipefail
+          wert() { grep -E "^$1=" "$STAND_ENV_FILE" | head -1 | cut -d= -f2- || true; }
+
+          # Die Datenbanken liegen nur dann auf dieser Maschine, wenn die .env
+          # auf den Runner zeigt (Default in docker-compose.staging.yml).
+          for h in DB_HOST KEYCLOAK_DB_HOST TFSTATE_DB_HOST; do
+            ziel=$(wert "$h")
+            if [ -n "$ziel" ] && [ "$ziel" != 10.200.1.55 ]; then
+              echo "::error::$h zeigt auf $ziel, nicht auf den Runner - die develop-Datenbanken lassen sich hier nicht anlegen. DEVELOP_ENV_FILE mit eigenen Datenbanken setzen." >&2
+              exit 1
             fi
           done
+
+          for paar in DB_NAME:DB_USER KEYCLOAK_DB_NAME:KEYCLOAK_DB_USER TFSTATE_DB_NAME:TFSTATE_DB_USER; do
+            db=$(wert "${paar%%:*}")
+            rolle=$(wert "${paar##*:}")
+            vorhanden=$(sudo -n -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$db'")
+            if [ "$vorhanden" = 1 ]; then
+              echo "$db: vorhanden"
+            else
+              # createdb statt CREATE DATABASE: Name und Eigentuemer gehen als
+              # Argumente hinein, nicht als SQL-Text.
+              sudo -n -u postgres createdb --owner="$rolle" "$db"
+              echo "$db: angelegt, Eigentuemer $rolle"
+            fi
+          done
+
+          # pg_hba.conf entscheidet, ob die VM die neuen Datenbanken ueberhaupt
+          # erreichen darf. Steht dort statt "all" eine Liste von
+          # Datenbanknamen, scheitert spaeter Backend oder Keycloak mit "no
+          # pg_hba.conf entry". Die Datei enthaelt keine Geheimnisse.
+          echo "Aktive Zeilen in pg_hba.conf:"
+          sudo -n grep -vE '^[[:space:]]*(#|$)' /etc/postgresql/16/main/pg_hba.conf || true
 
       # Billiger Kanarienvogel: wenn auf dem Runner ein Werkzeug fehlt, soll das
       # hier auffallen und nicht zwanzig Minuten spaeter mitten im apply.
@@ -134,6 +301,7 @@ jobs:
           trivy --version | head -1
           nsupdate -V | head -1
           dig -v 2>&1 | head -1
+          psql --version
 
       - name: OpenTofu Format Check
         working-directory: infrastructure/tofu
@@ -181,9 +349,13 @@ jobs:
           ssh-keygen -y -P '' -f ~/.ssh/openstack-key > ~/.ssh/openstack-key.pub
           echo "TF_VAR_ssh_public_key=$(cat ~/.ssh/openstack-key.pub)" >> "$GITHUB_ENV"
 
-      # Der State liegt unter /var/lib/tofu-state/staging/ auf dem Runner, nicht
+      # Der State liegt unter /var/lib/tofu-state/<stand>/ auf dem Runner, nicht
       # im Workspace: actions/checkout raeumt den Workspace vor jedem Lauf, der
       # State muss aber ueber Laeufe hinweg bestehen. Siehe backend.tofu.
+      #
+      # Beide Staende benutzen dasselbe envs/staging, nur der State-Pfad
+      # unterscheidet sich - der kommt ueber -backend-config, weil ein
+      # backend-Block keine Variablen kennt.
       #
       # Das Verzeichnis wird beim ersten Lauf angelegt und dem Runner-Nutzer
       # uebereignet - dieselbe Bauart wie /var/lib/caddy-backup weiter unten.
@@ -192,11 +364,11 @@ jobs:
       - name: OpenTofu Init & Validate
         working-directory: infrastructure/tofu/envs/staging
         run: |
-          if [ ! -d /var/lib/tofu-state/staging ]; then
-            sudo mkdir -p /var/lib/tofu-state/staging
+          if [ ! -d "$STATE_DIR" ]; then
+            sudo mkdir -p "$STATE_DIR"
             sudo chown -R "$(id -u):$(id -g)" /var/lib/tofu-state
           fi
-          tofu init
+          tofu init -reconfigure -backend-config="path=$STATE_DIR/terraform.tfstate"
           tofu validate
 
       # Ohne diesen Schritt fordert Caddy nach jedem Neuaufbau ein neues
@@ -219,9 +391,10 @@ jobs:
           # Solange der alte Terraform-Stack noch steht (siehe den naechsten
           # Schritt), laeuft Staging auf dessen VM, und nur sein State kennt
           # ihre Adresse. Ohne diesen Rueckgriff ginge das Zertifikat beim
-          # Abriss verloren.
+          # Abriss verloren. Nur fuer main: der alte Stack ist dessen VM, und
+          # develop wuerde sonst das Zertifikat von main als seines sichern.
           tf_alt=/var/lib/tf-state/staging/terraform.tfstate
-          if [ -z "$alt" ] && [ -f "$tf_alt" ]; then
+          if [ -z "$alt" ] && [ "$STAND" = main ] && [ -f "$tf_alt" ]; then
             alt=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("outputs",{}).get("vm_ip",{}).get("value",""))' "$tf_alt" || true)
           fi
           if [ -z "$alt" ]; then
@@ -237,9 +410,12 @@ jobs:
           #
           # Einmal anlegen und uebereignen; danach ist es ein gewoehnliches
           # Verzeichnis des Runner-Nutzers. Dieselbe Bauart wie /var/lib/tofu-state.
-          if [ ! -d /var/lib/caddy-backup ]; then
-            sudo mkdir -p /var/lib/caddy-backup
-            sudo chown "$(id -u):$(id -g)" /var/lib/caddy-backup
+          # Je Stand eine eigene Datei (CADDY_BACKUP): das Zertifikat gilt nur
+          # fuer dessen Hostnamen.
+          verzeichnis=$(dirname "$CADDY_BACKUP")
+          if [ ! -d "$verzeichnis" ]; then
+            sudo mkdir -p "$verzeichnis"
+            sudo chown "$(id -u):$(id -g)" /var/lib/caddy-backup "$verzeichnis"
           fi
           # In eine Nebendatei schreiben und erst bei Erfolg umbenennen. Sonst
           # ueberschreibt ein fehlgeschlagener Versuch eine brauchbare
@@ -248,14 +424,13 @@ jobs:
               -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 \
               -i ~/.ssh/openstack-key "ubuntu@$alt" \
             'sudo docker run --rm -v app_caddy_data:/d alpine tar czf - -C /d .' \
-            > /var/lib/caddy-backup/caddy_data.tgz.neu 2>/dev/null || true
+            > "$CADDY_BACKUP.neu" 2>/dev/null || true
 
-          if [ -s /var/lib/caddy-backup/caddy_data.tgz.neu ]; then
-            mv /var/lib/caddy-backup/caddy_data.tgz.neu \
-               /var/lib/caddy-backup/caddy_data.tgz
-            echo "Gesichert: $(du -h /var/lib/caddy-backup/caddy_data.tgz | cut -f1)"
+          if [ -s "$CADDY_BACKUP.neu" ]; then
+            mv "$CADDY_BACKUP.neu" "$CADDY_BACKUP"
+            echo "Gesichert: $(du -h "$CADDY_BACKUP" | cut -f1)"
           else
-            rm -f /var/lib/caddy-backup/caddy_data.tgz.neu
+            rm -f "$CADDY_BACKUP.neu"
             # Als Annotation, nicht als blosse Zeile im Log. Ein stiller
             # Fehlschlag hier kostet beim naechsten Mal eine ACME-Bestellung,
             # und die kann minutenlang haengen.
@@ -279,8 +454,11 @@ jobs:
       #
       # Kein continue-on-error: scheitert der Abriss, wuerde das apply danach
       # ohnehin am selben Namen scheitern.
+      #
+      # Nur fuer main - der alte Stack ist dessen Vorgaenger, develop hatte nie
+      # einen Terraform-Stack.
       - name: Alten Terraform-Stack abreissen (einmalig, ADR 0010)
-        if: github.event_name != 'workflow_dispatch' || inputs.recreate
+        if: env.STAND == 'main' && (github.event_name != 'workflow_dispatch' || inputs.recreate)
         run: |
           set -euo pipefail
           state=/var/lib/tf-state/staging/terraform.tfstate
@@ -350,18 +528,19 @@ jobs:
       #
       # Caddy benutzt denselben TSIG-Schluessel fuer den TXT-Record der
       # dns-01-Pruefung. Er darf nachweislich auch AAAA schreiben.
+      #
+      # Die Werte kommen aus der .env des Stands. Fuer develop ist das der
+      # abgeleitete Hostname, der Schluessel ist derselbe - beide Namen liegen
+      # in derselben Zone.
       - name: DNS-Eintrag auf die neue VM zeigen lassen
-        env:
-          STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
         run: |
           set -euo pipefail
           umask 077
-          envfile=$(mktemp)
+          envfile="$STAND_ENV_FILE"
           keyfile=$(mktemp)
-          # Beide Dateien enthalten Geheimnisse und verschwinden auch dann,
-          # wenn nsupdate abbricht.
-          trap 'rm -f "$envfile" "$keyfile"' EXIT
-          printf '%s\n' "$STAGING_ENV_FILE" > "$envfile"
+          # Die Schluesseldatei verschwindet auch dann, wenn nsupdate abbricht.
+          # Die .env des Stands raeumt der letzte Schritt weg.
+          trap 'rm -f "$keyfile"' EXIT
 
           wert() { grep -E "^$1=" "$envfile" | head -1 | cut -d= -f2- || true; }
           hostname=$(wert APP_HOSTNAME)
@@ -470,7 +649,6 @@ jobs:
       - name: Ansible Playbook ausfuehren
         working-directory: infrastructure/ansible
         env:
-          STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
           # Bei einem frisch aufgebauten Stack existieren noch keine Benutzer,
           # Kurse oder Apps - der Keycloak-Realm bringt nur das Dienstkonto des
           # Backends mit. Nach einem destroy/apply muss also geseedet werden,
@@ -483,10 +661,16 @@ jobs:
           # Wirkung. So herum steht der Default links und wird nur dann
           # ausgewertet, wenn es kein workflow_dispatch ist.
           SEED: ${{ github.event_name != 'workflow_dispatch' && 'true' || inputs.seed }}
+        # Das Playbook liest die .env aus STAGING_ENV_FILE - der Name bleibt,
+        # der Inhalt ist die .env des Stands. caddy_backup_file kennt ein
+        # Playbook von vor ADR 0014 nicht; es nimmt dann den alten Pfad, und
+        # der ist der von main.
         run: |
+          STAGING_ENV_FILE="$(cat "$STAND_ENV_FILE")" \
           ansible-playbook -i inventory.ini \
             --private-key ~/.ssh/openstack-key \
             -e seed_data=${SEED} \
+            -e "caddy_backup_file=${CADDY_BACKUP}" \
             -e "secondary_ipv4=${VM_IPV4}" \
             -e "secondary_gateway=${VM_IPV4_GATEWAY}" \
             -e "secondary_mac=${VM_IPV4_MAC}" \
@@ -496,12 +680,13 @@ jobs:
         if: success()
         run: |
           {
-            echo "### Staging neu aufgebaut"
+            echo "### Stand ${STAND} neu aufgebaut"
             echo ""
             echo "**https://${APP_HOSTNAME}**"
             echo ""
             echo "| | |"
             echo "|---|---|"
+            echo "| Stand | ${STAND} (Images \`:${IMAGE_TAG}\`) |"
             echo "| VM-Adresse | \`${VM_IP}\` |"
             echo "| Ausgeloest durch | ${{ github.event_name }} |"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -513,4 +698,5 @@ jobs:
         run: |
           rm -f ~/.ssh/openstack-key ~/.ssh/openstack-key.pub
           rm -f infrastructure/ansible/inventory.ini
+          rm -f "$RUNNER_TEMP/stand.env"
           echo "Zugangsdaten des Laufs entfernt."

@@ -21,16 +21,18 @@ Frontend und Worker laufen nur über die Stacks hier.
 | Umgebung | Branch | Compose-Datei | Ausrollen |
 |---|---|---|---|
 | dev | beliebig | `docker-compose.dev.yml` | `make dev-up` am eigenen Rechner |
-| staging | `develop` | `docker-compose.staging.yml` | **nur** über die Pipeline, nie von Hand |
+| staging | `develop` | `docker-compose.staging.yml` | **nur** über die Pipeline, nie von Hand — eigene VM, `staging.<zone>` |
+| main-Stand | `main` | `docker-compose.staging.yml` | **nur** über die Pipeline — die bisherige Staging-VM und -Adresse (ADR 0014) |
 | prod | `main` | `docker-compose.prod.yml` | `make prod-*` auf der Zielmaschine, manuell |
 
 Der Staging-Deploy läuft in **GitHub Actions** auf dem self-hosted Runner im
 Campusnetz (`.github/workflows/staging.yml`, ADR 0002) — von außen ist die
-OpenStack-API der DHBW nicht erreichbar. Ausgelöst von Push auf `develop`, von
-`repository_dispatch` aus der CI der drei anderen Repos auf `develop`, oder
-von Hand. Ein Merge auf `main` löst nichts aus: `main` ist Produktion
-(ADR 0013). Jeder Lauf
-reißt die VM ab und baut sie neu (ADR 0003); einen Trockenlauf gibt es nicht.
+OpenStack-API der DHBW nicht erreichbar. Ausgelöst von Push auf `develop`
+oder `main`, von `repository_dispatch` aus der CI der drei anderen Repos, oder
+von Hand. Der Branch des Auslösers bestimmt, welcher der beiden Stände neu
+gebaut wird (ADR 0014); jeder hat eigene VM, eigenen State und eigene
+Datenbanken. Jeder Lauf reißt die VM ab und baut sie neu (ADR 0003); einen
+Trockenlauf gibt es nicht.
 
 **Bewusst kein `pull_request`-Trigger.** Das Repository ist öffentlich, und ein
 self-hosted Runner an einem Fork-PR gäbe Fremden eine Ausführungsumgebung mit
