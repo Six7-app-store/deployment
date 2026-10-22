@@ -33,7 +33,7 @@ also selbst nachziehen:
 
 | Werkzeug | Version | Quelle |
 |---|---|---|
-| OpenTofu | 1.13.1 | **nicht** auf der VM: jeder Lauf installiert es über `opentofu/setup-opentofu` |
+| OpenTofu | 1.13.2 | **nicht** auf der VM: jeder Lauf installiert es über `opentofu/setup-opentofu` |
 | Terraform | 1.16.3 | apt, `apt.releases.hashicorp.com` — nur noch für `envs/moodle` (ADR 0010) |
 | Ansible | core 2.21.4 | `pip3 --break-system-packages` |
 | Trivy | 0.74.0 | Installskript nach `/usr/local/bin` |
@@ -197,7 +197,7 @@ seinen Lauf. Für die Fehlersuche einmalig nach `~/bin` holen, Version und
 Summe wie in `worker/Dockerfile`:
 
 ```bash
-v=1.13.1; sha=8ccbc6f8ee21d2827715f3c6e08a9b3e0209b1e62057c05067ef117e047c1a80
+v=1.13.2; sha=723bebb0df8411daff1e5fc3862e28ff5581fe5634087f4c29a9aa41d78208b5
 curl -fsSLo /tmp/tofu.zip "https://github.com/opentofu/opentofu/releases/download/v$v/tofu_${v}_linux_amd64.zip"
 echo "$sha  /tmp/tofu.zip" | sha256sum -c - && mkdir -p ~/bin && unzip -o /tmp/tofu.zip tofu -d ~/bin
 ```
