@@ -46,7 +46,7 @@ und wird auch in die `AGENTS.md` aller sechs lokalen Repositories verteilt:
 - **`.env`, `*.pem`, `*.key` sind tabu** — lesen wie schreiben. Gepflegt wird
   `.env.example`. Die deny-Regeln in `.claude/settings.json` setzen das hart
   durch, ein Hook erklärt den Grund.
-- **Kein Produktions-Deploy, kein `tofu apply` (oder `terraform apply`) von Hand.** Staging baut
+- **Kein Produktions-Deploy, kein `tofu apply` von Hand.** Staging baut
   `develop` und läuft über GitHub Actions auf dem self-hosted Runner
   (ADR-0002, ADR-0013); Produktion ist `main` und wird von einem Menschen auf
   der Zielmaschine ausgerollt.

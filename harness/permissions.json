@@ -43,6 +43,7 @@
       "Bash(git push * master)",
       "Bash(git push * HEAD:main)",
       "Bash(git push origin main)",
+      "Bash(git push dhbw *)",
       "Bash(gh pr merge *)",
 
       "Bash(make prod*)",
@@ -88,7 +89,6 @@
       "Bash(git clean *)",
       "Bash(git rebase *)",
       "Bash(tofu plan *)",
-      "Bash(terraform plan *)",
       "Bash(gh workflow run *)",
       "Bash(docker compose down *)",
       "Bash(make db-reset-dev*)",
@@ -147,8 +147,6 @@
 
       "Bash(tofu fmt *)",
       "Bash(tofu validate *)",
-      "Bash(terraform fmt *)",
-      "Bash(terraform validate *)",
 
       "Bash(curl -sS http://localhost:8000/health)",
       "Bash(curl http://localhost:8000/health)",

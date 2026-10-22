@@ -145,7 +145,7 @@ geladene Datei, sondern in eine Skill unter `.claude/skills/<name>/SKILL.md`.
 | Debuggen | Container-Logs, Shells | `make dev-logs-backend`, `make shell-db` |
 | Qualitätssicherung (Python) | pytest, ruff, black, isort | `make test-backend-isolated`, `docker exec … poetry run …` |
 | Qualitätssicherung (Frontend) | vitest, vue-tsc | `docker exec frontend-dev sh -lc 'cd /app && npx vitest --run'` |
-| Qualitätssicherung (IaC) | tofu fmt (terraform fmt für die Übergangsinsel), Trivy | in der Pipeline |
+| Qualitätssicherung (IaC) | tofu fmt, Trivy | in der Pipeline |
 | Gegenprüfung | `/code-review` | Subagent in frischem Kontext, sieht nur den Diff |
 | Deployment | GitHub Actions, self-hosted Runner | Staging automatisch bei Merge auf `develop`; von Hand `gh workflow run staging.yml` |
 
@@ -311,8 +311,8 @@ leitet die geltende Regel aus dem Pfad der bearbeiteten Datei ab.
 | `PreToolUse` auf Edit/Write | Blockt Schreibzugriffe auf `.env`, `*.pem`, `*.key` — in **allen** Repos, nicht nur in deployment. `.env.example` bleibt erlaubt |
 | `PreToolUse` auf Edit/Write | Blockt Änderungen an **bestehenden** Alembic-Migrationen; neue bleiben erlaubt |
 | `PreToolUse` auf Bash | Blockt Kommandos, die eine Geheimnisdatei lesen würden. Die deny-Regeln greifen am Read-Werkzeug, eine Shell geht daran vorbei |
-| `PostToolUse` auf Edit/Write | backend: `ruff --fix`. worker: ruff, black, isort. `*.tofu`: `tofu fmt`, `*.tf`: `terraform fmt`. frontend: bewusst nichts |
-| `Stop` | Turn-Ende blockiert, solange das Gate des Repos rot ist: ruff (backend), ruff/black/isort (worker), `vue-tsc` (frontend), `tofu fmt -check` auf `infrastructure/tofu` und `terraform fmt -check` auf `infrastructure/terraform` (deployment) |
+| `PostToolUse` auf Edit/Write | backend: `ruff --fix`. worker: ruff, black, isort. `*.tofu`: `tofu fmt`. frontend: bewusst nichts |
+| `Stop` | Turn-Ende blockiert, solange das Gate des Repos rot ist: ruff (backend), ruff/black/isort (worker), `vue-tsc` (frontend), `tofu fmt -check` auf `infrastructure/tofu` (deployment) |
 
 Die Skripte liegen als lesbare Python-Dateien unter `.claude/hooks/`, nicht
 als Einzeiler im JSON. Sie sind damit im Pull Request review-fähig und
@@ -350,7 +350,7 @@ Code selbst durchsetzt: der `permissions`-Block in `.claude/settings.json`.
 | `permissions.deny` | hart, vor jedem Werkzeugaufruf | Der Aufruf findet nicht statt |
 
 Was hart gesperrt ist: Lesen **und** Schreiben von `.env`, `*.pem`, `*.key`
-und `clouds.yaml`; `git push --force` und jeder Push auf `main`;
+und `clouds.yaml`; `git push --force`, jeder Push auf `main` und jeder Push an das Remote `dhbw` (E6, DHBW-AppStore);
 `gh pr merge`; `make prod*` und Compose gegen die Prod- und Staging-Stacks;
 `deploy.cmd` und `scripts/deploy.sh`; `tofu apply|destroy|state|import` und dasselbe für `terraform`;
 `docker system prune`, `docker volume rm`, `rm -rf`. Dazu `docker exec
@@ -358,7 +358,7 @@ und `clouds.yaml`; `git push --force` und jeder Push auf `main`;
 wäre.
 
 Was nachfragt statt zu sperren: jeder `git push`, `git reset --hard`,
-`git rebase`, `tofu plan`, `terraform plan`, `gh workflow run`, `docker compose down`,
+`git rebase`, `tofu plan`, `gh workflow run`, `docker compose down`,
 die zurücksetzenden `make`-Targets.
 
 Das **Lesen** der Secrets mitzusperren ist der Punkt, der vorher fehlte. Ein
