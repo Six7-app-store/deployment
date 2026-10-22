@@ -39,9 +39,9 @@ name: CI - Infrastructure QA
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
 
 permissions:
@@ -49,8 +49,8 @@ permissions:
   security-events: write
 
 # Der Claude-Harness wird nicht hier geprueft, sondern in
-# harness-check.yml: dieser Workflow laeuft nur auf `main`, der Harness
-# wird aber auf `develop` entwickelt.
+# harness-check.yml: der laeuft bei jedem Pull Request, auch gegen
+# Feature-Branches, und dieselbe Quelle pruefen dort die drei anderen Repos.
 jobs:
   qa:
     name: "🔍 OpenTofu, Terraform, Ansible, IaC-Scan"
@@ -62,7 +62,7 @@ jobs:
       # Gleiche Version wie im Worker-Image und im Staging-Workflow.
       - uses: opentofu/setup-opentofu@v2
         with:
-          tofu_version: 1.13.1
+          tofu_version: 1.13.2
           tofu_wrapper: false
 
       - name: OpenTofu Format

@@ -1,6 +1,6 @@
 # Staging aktualisiert sich selbst
 
-Nach einem Merge auf `main` steht wenige Minuten später der neue Stand auf
+Nach einem Merge auf `develop` steht wenige Minuten später der neue Stand auf
 Staging — ohne dass jemand einen Deploy startet.
 
 > **Seit dem self-hosted Runner gibt es dafür zwei Wege.** Der Hauptweg ist der
@@ -17,13 +17,13 @@ Staging — ohne dass jemand einen Deploy startet.
 ## Wie der Timer läuft
 
 ```
-  Merge auf main
+  Merge auf develop
         │
         ▼
   GitHub Actions: Lint, Tests, Scans, Build
         │
         ▼
-  Image nach ghcr.io/six7-app-store/<dienst>:latest
+  Image nach ghcr.io/six7-app-store/<dienst>:develop
         │
         │   ⟵ hier endet, was GitHub tun kann
         ▼

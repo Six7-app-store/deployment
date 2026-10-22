@@ -25,7 +25,7 @@ Die Kette steht schon. Was fehlt, sind zwei Handgriffe, nicht zwei Bausteine.
 | Gegenprüfung | `/code-review` im frischen Kontext, `pr-review` gegen die DoD | unverändert |
 | Pull Request öffnen | Mensch | Agent |
 | **Merge** | **Mensch** | **Mensch — bleibt so** |
-| Staging-Deploy anstoßen | läuft bei jedem Merge auf `main` von selbst | unverändert |
+| Staging-Deploy anstoßen | läuft bei jedem Merge auf `develop` von selbst | unverändert |
 | Nachweis, dass es läuft | Agent prüft lesend (`deployment-pruefen`) | unverändert |
 | **Produktion** | **Mensch** | **Mensch — bleibt so** |
 
@@ -45,7 +45,7 @@ desselben Formats.
 
 Den Punkt „Staging-Deploy anstoßen" hat der Umbau vom 19.09.2026 erledigt,
 bevor er eine Lücke werden konnte: Staging baut sich seit `52d931f` bei jedem
-Merge auf `main` selbst neu auf (ADR 0003). Angestoßen werden muss nichts mehr.
+Merge selbst neu auf (ADR 0003), seit ADR 0013 bei jedem Merge auf `develop`. Angestoßen werden muss nichts mehr.
 Ein Token für den früheren Forgejo-Workflow braucht es damit auch nicht.
 
 ### Was bewusst außerhalb bleibt
@@ -148,7 +148,7 @@ geladene Datei, sondern in eine Skill unter `.claude/skills/<name>/SKILL.md`.
 | Qualitätssicherung (Frontend) | vitest, vue-tsc | `docker exec frontend-dev sh -lc 'cd /app && npx vitest --run'` |
 | Qualitätssicherung (IaC) | tofu fmt (terraform fmt für die Übergangsinsel), Trivy | in der Pipeline |
 | Gegenprüfung | `/code-review` | Subagent in frischem Kontext, sieht nur den Diff |
-| Deployment | GitHub Actions, self-hosted Runner | automatisch bei Merge auf `main`; von Hand `gh workflow run staging.yml` |
+| Deployment | GitHub Actions, self-hosted Runner | Staging automatisch bei Merge auf `develop`; von Hand `gh workflow run staging.yml` |
 
 Die vollständige, jeweils gültige Liste steht in der `AGENTS.md` des
 betreffenden Repositories — nicht hier, damit es nur eine Quelle gibt.
@@ -282,8 +282,8 @@ Trockenlauf gibt es nicht — jeder Lauf verändert etwas.
 Vertretbar bleibt es aus zwei anderen Gründen. Erstens ist Staging bewusst
 wegwerfbar: es wird ohnehin bei jedem Merge neu gebaut (ADR 0003), ein
 zusätzlicher Lauf zerstört also nichts, was nicht ohnehin verginge. Zweitens
-deployt Staging nur, was schon in `main` steht, und dorthin kommt nichts ohne
-menschlichen Merge. Dazu kommt das Gate im Harness: `gh workflow run` steht in
+deployt Staging nur, was schon in `develop` steht, und dorthin kommt nichts
+ohne menschlichen Merge. Dazu kommt das Gate im Harness: `gh workflow run` steht in
 `permissions.ask`, ein Mensch bestätigt jeden Lauf von Hand.
 
 Ein Agent, der auf das Ergebnis seiner eigenen Arbeit schauen kann, arbeitet
@@ -438,7 +438,7 @@ User Story
    └─ Pipeline                     lint → test → coverage → security
             │                              → build → image-scan
             │
-            └─ main  ──►  Staging-Deploy (OpenTofu + Ansible, self-hosted Runner)
+            └─ develop  ──►  Staging-Deploy (OpenTofu + Ansible, self-hosted Runner)
 ```
 
 Eine brauchbare `SPEC.md` ist selbsttragend: sie benennt die beteiligten

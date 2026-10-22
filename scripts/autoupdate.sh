@@ -3,7 +3,7 @@
 # Holt neue Images aus GHCR und startet die betroffenen Dienste neu.
 #
 # Laeuft auf der Staging-VM, angestossen von appstore-autoupdate.timer. Damit
-# aktualisiert sich Staging nach einem Merge auf main von selbst, ohne dass
+# aktualisiert sich Staging nach einem Merge auf develop von selbst, ohne dass
 # jemand einen Deploy ausloest.
 #
 # WARUM DIE VM ZIEHT, STATT DASS JEMAND SCHIEBT
@@ -59,7 +59,7 @@ printf '%s' "$GIT_ACCESS_TOKEN" \
 
 # Der Vergleich laeuft ueber die Image-ID vor und nach dem Pull, nicht ueber die
 # Ausgabe von `compose pull`. Deren Text ist nicht stabil genug, um darauf eine
-# Entscheidung zu gruenden, und `latest` behaelt beim Ueberschreiben denselben
+# Entscheidung zu gruenden, und `develop` behaelt beim Ueberschreiben denselben
 # Namen - nur die ID wechselt.
 changed=""
 for svc in $SERVICES; do
