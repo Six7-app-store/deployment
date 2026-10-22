@@ -50,7 +50,7 @@ Die wichtigsten im Alltag:
 | Umgebung | Compose-Datei | Reverse Proxy | Wie sie ausgerollt wird |
 |---|---|---|---|
 | dev | `docker-compose.dev.yml` | keiner, Dienste direkt auf Ports | `make dev-up` auf dem eigenen Rechner |
-| staging | `docker-compose.staging.yml` | Caddy, Zertifikat über dns-01 | Workflow im eigenen Forgejo, siehe [Staging Setup](docs/staging-setup.md) |
+| staging | `docker-compose.staging.yml` | Caddy, Zertifikat über dns-01 | GitHub-Workflow auf dem self-hosted Runner, siehe [Staging Setup](docs/staging-setup.md) |
 | prod | `docker-compose.prod.yml` | nginx, Zertifikat selbst hinterlegt | `make prod-up` auf der Zielmaschine |
 
 Staging und Produktion unterscheiden sich nicht nur in der Größe: Staging
@@ -69,22 +69,19 @@ deployment/
 ├── nginx/                    # Reverse Proxy für Produktion
 ├── keycloak/                 # Realm-Export und dessen Template
 ├── seed/                     # Seed-Skript, Kurse, App-Beschreibungen
-├── forgejo/                  # der Forge-Host: Compose-Stack und Setup-Skripte
+├── deploy-image/             # Image für `deploy.cmd`: OpenTofu, Ansible, Trivy
 ├── infrastructure/           # OpenTofu und Ansible
 │   ├── tofu/                 # Modul und Staging-Umgebung
-│   ├── terraform/            # Übergangsinsel: moodle, forgejo (ADR 0010)
-│   └── ansible/              # Playbooks für Staging und den Forge-Host
+│   ├── terraform/            # Übergangsinsel: moodle (ADR 0010)
+│   └── ansible/              # Playbooks für Staging und Moodle
 ├── docs/                     # Architektur, Harness, Setup-Anleitungen, ADRs
-├── .forgejo/workflows/       # der Deploy-Workflow, der tatsächlich läuft
-└── .github/workflows/        # das Gegenstück für GitHub, hier ohne Wirkung
+└── .github/workflows/        # Staging-Deploy (self-hosted Runner) und CI
 ```
 
-Warum der Deploy in Forgejo liegt und nicht auf GitHub, steht in
-[Staging Setup](docs/staging-setup.md) unter „Warum ein eigenes Forgejo".
+Warum der Deploy auf einem self-hosted Runner läuft, steht in
+[ADR 0002](docs/adr/0002-self-hosted-runner-auf-eigener-vm.md).
 
 ## Weiterführend
 
 - [`infrastructure/README.md`](infrastructure/README.md) — OpenTofu-Modul, die
   beiden Umgebungen, Adressierung, State-Backend und die CI/CD-Workflows
-- [`forgejo/SCRIPTS.md`](forgejo/SCRIPTS.md) — die Skripte, mit denen der
-  Forge-Host aufgesetzt wurde, Schritt für Schritt

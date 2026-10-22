@@ -3,9 +3,8 @@
 Infrastructure-as-code in two layers:
 
 - **OpenTofu** (`tofu/`) — provisions OpenStack VMs (one Docker host).
-  `terraform/` is a transitional island: it still holds `envs/moodle` and
-  `envs/forgejo`, which manage running VMs and stay on Terraform until they
-  are moved (ADR 0010).
+  `terraform/` is a transitional island: it still holds `envs/moodle`, which
+  manages a running VM and stays on Terraform until it is moved (ADR 0010).
 - **Ansible** (`ansible/`) — installs Docker on the VM and deploys the application via Docker Compose.
 
 GitHub Actions (`.github/workflows/`) chains the two together: OpenTofu applies the
@@ -22,12 +21,8 @@ output and writes a small `inventory.ini` that Ansible then deploys onto. The tw
 
 | Environment | IaC dir                                | Ansible playbook | Inventory                         | Trigger                          |
 |-------------|----------------------------------------|------------------|-----------------------------------|----------------------------------|
-| staging     | `tofu/envs/staging` (OpenTofu)         | `staging.yml`    | generated `inventory.ini`         | manual dispatch (Forgejo Actions) |
-| forgejo     | `terraform/envs/forgejo` (Terraform)   | `forgejo.yml`    | `inventory-forgejo.sh`            | run by hand from a workstation   |
-
-`forgejo` is bootstrap infrastructure: it hosts the forge, its database and the
-Actions runner that deploys staging. It therefore cannot be deployed by that
-runner, and its state backend is local rather than the database this host runs.
+| staging     | `tofu/envs/staging` (OpenTofu)         | `staging.yml`    | generated `inventory.ini`         | push to `develop`, dispatch (GitHub Actions) |
+| moodle      | `terraform/envs/moodle` (Terraform)    | `moodle.yml`     | by hand                           | run by hand from the runner VM   |
 
 > A separate production environment is documented as future work in
 > the project plan but not yet wired into the codebase. The OpenTofu
@@ -46,7 +41,6 @@ tofu/
 terraform/                            # transitional island, Terraform (ADR 0010)
 ├── modules/openstack_vm/             # copy of the module above — change both until the island is gone
 └── envs/
-    ├── forgejo/                      # the forge, its database and the Actions runner (gp1.medium)
     └── moodle/                       # the Moodle test instance
 ```
 

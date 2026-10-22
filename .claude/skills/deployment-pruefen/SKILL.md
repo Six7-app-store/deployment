@@ -79,8 +79,7 @@ ist kein Fehler.
 ## Pipeline-Ergebnis
 
 Der Staging-Deploy läuft seit `52d931f` in **GitHub Actions**, auf dem
-self-hosted Runner im Campusnetz (VM `github-runner`). Der frühere
-Forgejo-Workflow ist gelöscht. Warum ein eigener Runner nötig ist: die
+self-hosted Runner im Campusnetz (VM `github-runner`). Warum ein eigener Runner nötig ist: die
 OpenStack-API der DHBW ist von außen nicht erreichbar —
 `docs/adr/0002-self-hosted-runner-auf-eigener-vm.md`.
 

@@ -60,8 +60,8 @@ abweicht, was die Pipeline erzeugt.
 - Redis: DB 0 gehört Celery, DB 1 der LTI-Sitzungsablage. Nicht mischen.
 - OpenTofu-Änderungen mit `tofu fmt -recursive infrastructure/tofu`
   formatieren — die Pipeline prüft das mit `-check` und bricht sonst ab.
-- `infrastructure/terraform/` ist eine Übergangsinsel für `envs/moodle` und
-  `envs/forgejo` (ADR 0010). Dort gilt weiter `terraform fmt`; neue
+- `infrastructure/terraform/` ist eine Übergangsinsel für `envs/moodle`
+  (ADR 0010). Dort gilt weiter `terraform fmt`; neue
   Infrastruktur gehört nach `infrastructure/tofu/`. Das Modul
   `openstack_vm` liegt in beiden Bäumen — Änderungen in beide Kopien.
 

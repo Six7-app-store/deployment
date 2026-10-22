@@ -79,17 +79,17 @@ jobs:
             tofu -chdir="$env" validate
           done
 
-      # Übergangsinsel: envs/moodle und envs/forgejo verwalten laufende VMs
-      # und bleiben vorerst bei Terraform (ADR 0010). Fällt weg, sobald sie
+      # Übergangsinsel: envs/moodle verwaltet eine laufende VM
+      # und bleibt vorerst bei Terraform (ADR 0010). Fällt weg, sobald sie
       # nach infrastructure/tofu umgezogen sind.
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
 
-      - name: Terraform Format (moodle, forgejo)
+      - name: Terraform Format (moodle)
         run: terraform fmt -check -recursive infrastructure/terraform
 
-      - name: Terraform Validate (moodle, forgejo)
+      - name: Terraform Validate (moodle)
         run: |
           for env in infrastructure/terraform/envs/*/; do
             echo "--- $env"

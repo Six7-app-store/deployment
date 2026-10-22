@@ -49,8 +49,7 @@ und wird auch in die `AGENTS.md` aller sechs lokalen Repositories verteilt:
 - **Kein Produktions-Deploy, kein `tofu apply` (oder `terraform apply`) von Hand.** Staging baut
   `develop` und läuft über GitHub Actions auf dem self-hosted Runner
   (ADR-0002, ADR-0013); Produktion ist `main` und wird von einem Menschen auf
-  der Zielmaschine ausgerollt. Der Forgejo-Stack unter
-  `deployment/forgejo/` ist ein Versuchsaufbau, keine laufende Pipeline.
+  der Zielmaschine ausgerollt.
 - **Neue Arbeit zweigt von `develop` ab und geht per Pull Request nach
   `develop`.** Kein Push auf `main`, kein Force-Push. Jeder Push fragt nach;
   Pull Requests mergt und auf `main` pusht eine Person.

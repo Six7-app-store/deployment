@@ -1,52 +1,31 @@
 # Staging Setup
 
-Staging läuft auf einer eigenen OpenStack-VM und wird nicht von Hand ausgerollt,
-sondern über einen Workflow in eurem eigenen Forgejo. Ein Lauf macht beides:
-OpenTofu bringt die Infrastruktur auf Stand, Ansible konfiguriert die VM und
-startet den Stack.
+Staging läuft auf einer eigenen OpenStack-VM und wird nicht von Hand
+ausgerollt, sondern über einen Workflow in GitHub Actions
+(`.github/workflows/staging.yml`). Ein Lauf macht beides: OpenTofu bringt die
+Infrastruktur auf Stand, Ansible konfiguriert die VM und startet den Stack.
 
 Diese Anleitung beschreibt den eingerichteten Zustand. Wie die VM entsteht,
 steht in `infrastructure/README.md`.
 
-## Warum ein eigenes Forgejo
+## Wo der Deploy läuft
 
-Das Projekt beschäftigt sich damit, Infrastruktur aus Vorlagen auszurollen. Es
-wäre wenig überzeugend, ausgerechnet die Plattform selbst von Hand aufzusetzen —
-deshalb entsteht auch sie aus OpenTofu und Ansible, mit denselben Werkzeugen und
-demselben Review wie eine App-Vorlage.
-
-Das verlangt einen Runner, der die VM erreicht und die Zugangsdaten zu OpenStack
-hält. Auf GitHub wäre das ein self-hosted Runner an einem **öffentlichen**
-Repository, und davon rät GitHub in aller Deutlichkeit ab:
-
-> Self-hosted runners should almost never be used for public repositories on
-> GitHub, because any user can open pull requests against the repository and
-> compromise the environment.
->
-> — GitHub, [Secure use reference](https://docs.github.com/en/actions/reference/security/secure-use),
-> Abschnitt „Hardening for self-hosted runners"
-
-Dieselbe Stelle mahnt zur Vorsicht auch bei privaten und internen Repositories:
-wer sie forken und einen Pull Request öffnen kann, erreicht damit die Umgebung
-des Runners samt seiner Secrets. Für ein offenes Projekt ist das keine
-theoretische Sorge — jeder Fremde könnte einen Fork anlegen.
-
-Beides zusammen führt zu der Aufteilung, die hier beschrieben ist. Der Code
-bleibt öffentlich einsehbar; der Runner und die Deploy-Secrets liegen in einer
-Forgejo-Instanz, deren Zugriff ihr selbst kontrolliert. Der Workflow auf GitHub
-existiert weiter, lässt sich dort aber mangels Secrets und Runner nicht
-auslösen.
+Auf einem self-hosted GitHub-Runner im Campusnetz, weil die OpenStack-API der
+DHBW von außen nicht erreichbar ist. Warum der Runner an genau diesem
+Repository hängt und der Workflow bewusst keinen `pull_request`-Trigger hat,
+steht in [ADR 0002](adr/0002-self-hosted-runner-auf-eigener-vm.md), der Betrieb
+in [github-runner.md](github-runner.md). Ausgelöst wird der Lauf durch einen
+Push auf `develop` ([ADR 0013](adr/0013-develop-ist-staging-main-ist-produktion.md)),
+durch den `repository_dispatch` der anderen drei Repos oder von Hand.
 
 ## Voraussetzungen
 
-**Zugang zum Forgejo**, in dem das `deployment`-Repository liegt. Der Deploy
-wird dort ausgelöst, nicht auf GitHub — der Fork dort hat weder Secrets noch
-einen Runner, ein Push dorthin bewirkt nichts.
+**Schreibzugriff auf `Six7-app-store/deployment`**, um den Workflow von Hand
+zu starten.
 
-**Der Runner läuft** und hat sein Job-Image. `runs-on: deploy` wählt den Runner,
-`docker://forgejo-deploy-job:latest` das Image dahinter. Es bringt OpenTofu,
-Ansible, Trivy und die Galaxy-Rollen mit; gebaut wird es von
-`forgejo/02-configure.sh`.
+**Der Runner läuft.** `runs-on: [self-hosted, deploy]` wählt ihn. OpenTofu holt
+jeder Lauf selbst über `opentofu/setup-opentofu`; Ansible, Trivy und die übrigen
+Werkzeuge liegen auf der Runner-VM (Tabelle in [github-runner.md](github-runner.md)).
 
 **Die Secrets sind hinterlegt**, im Repository oder in der Organisation unter
 **Settings → Actions → Secrets**:
@@ -59,27 +38,24 @@ Ansible, Trivy und die Galaxy-Rollen mit; gebaut wird es von
 | `STAGING_OS_REGION_NAME` | Region |
 | `SSH_PRIVATE_KEY` | privater Schlüssel für den Ansible-Zugang zur VM |
 | `STAGING_ENV_FILE` | vollständige `.env` des Stacks |
-| `PG_CONN_STR` | OpenTofu-State-Backend |
 
 **Du bist im Campusnetz oder im VPN.** Die Security-Group lässt SSH nur aus dem
 Campusbereich zu.
 
 ## Schritt 1: Deploy auslösen
 
-Im Forgejo unter **Actions → CD - Staging Deployment (Forgejo) → Run workflow**.
+Auf GitHub unter **Actions → CD - Staging Deployment → Run workflow**.
 Es gibt zwei Eingaben:
 
 | Eingabe | Bedeutung |
 |---|---|
-| `mode` | `plan` hält vor jeder Änderung an, `apply` rollt aus. Standard ist `plan`. |
+| `recreate` | Standard `an`: die VM wird vorher zerstört und neu gebaut (ADR 0003). Aus = nur Änderungen anwenden. |
 | `seed` | legt Seed-Nutzer, Kurse und Apps an. Nur bei leerer Datenbank nötig. |
 
-Ein Lauf mit `plan` ist der übliche erste Schritt: er prüft Runner, Image,
-Checkout, alle Secrets und eine echte Anmeldung an OpenStack, ändert aber nichts.
-Erwartet wird `0 to add, 0 to change, 0 to destroy` und **keine** Zeile mit
-`must be replaced`.
-
-Stimmt der Plan, denselben Workflow mit `mode: apply` starten.
+Einen Trockenlauf gibt es nicht: Jeder Lauf mit `recreate` reißt die VM ab und
+baut sie neu. Der Plan im Log zeigt, was OpenTofu anlegt; eine Zeile mit
+`must be replaced` beim Lauf ohne `recreate` heißt, dass eine Änderung die VM
+ersetzt.
 
 ## Schritt 2: Was dabei passiert
 

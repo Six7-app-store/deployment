@@ -46,7 +46,6 @@ desselben Formats.
 Den Punkt „Staging-Deploy anstoßen" hat der Umbau vom 19.09.2026 erledigt,
 bevor er eine Lücke werden konnte: Staging baut sich seit `52d931f` bei jedem
 Merge selbst neu auf (ADR 0003), seit ADR 0013 bei jedem Merge auf `develop`. Angestoßen werden muss nichts mehr.
-Ein Token für den früheren Forgejo-Workflow braucht es damit auch nicht.
 
 ### Was bewusst außerhalb bleibt
 

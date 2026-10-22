@@ -17,7 +17,7 @@ Die einmaligen Schritte von damals stehen in der Git-Historie dieser Datei.
 Wer einen Dev-Stack aus der Terraform-Zeit hat, findet den Hinweis zum
 State-Volume in [dev-setup.md](dev-setup.md).
 
-`envs/moodle` und `envs/forgejo` sind davon ausgenommen und laufen weiter
+`envs/moodle` ist davon ausgenommen und läuft weiter
 mit Terraform aus `infrastructure/terraform/`.
 
 ---
