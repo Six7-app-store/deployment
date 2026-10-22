@@ -17,6 +17,10 @@ Zusätzlich liegen hier `Ubuntu-App/` (App-Template) und `self-service-ui/`
 (Portal mit React/Mantine). Die gemeinsame Git-Regel gilt für alle sechs
 Repositories; Hooks und Stack-Befehle gelten für die vier Stack-Repos.
 
+Zusätzlich liegen hier `Ubuntu-App/` (App-Template) und `self-service-ui/`
+(Portal mit React/Mantine). Die gemeinsame Git-Regel gilt für alle sechs
+Repositories; Hooks und Stack-Befehle gelten für die vier Stack-Repos.
+
 Backend, Frontend und Worker laufen **nicht standalone**, sondern nur als
 Dienste im Stack aus `deployment/docker-compose.dev.yml`.
 
@@ -43,8 +47,9 @@ auch in die `AGENTS.md` aller sechs lokalen Repositories verteilt:
   `.env.example`. Die deny-Regeln in `.claude/settings.json` setzen das hart
   durch, ein Hook erklärt den Grund.
 - **Kein Produktions-Deploy, kein `tofu apply` (oder `terraform apply`) von Hand.** Staging läuft
-  über die Forgejo-Pipeline, Produktion über einen Menschen auf der
-  Zielmaschine.
+  über GitHub Actions auf dem self-hosted Runner (ADR-0002), Produktion über
+  einen Menschen auf der Zielmaschine. Der Forgejo-Stack unter
+  `deployment/forgejo/` ist ein Versuchsaufbau, keine laufende Pipeline.
 - **Kein Push auf `main`, kein Force-Push.** Jeder Push fragt nach; auf `main`
   pusht eine Person.
 - **Architekturentscheidung getroffen?** ADR nach `deployment/docs/adr/`, im
