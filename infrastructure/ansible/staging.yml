@@ -47,6 +47,10 @@
     auto_update: true
     # Wie oft nachgesehen wird. systemd-Zeitangabe.
     auto_update_interval: "5min"
+    # Wo der Workflow das Caddy-Datenverzeichnis der alten VM abgelegt hat, auf
+    # dem Runner. Je Stand eine Datei, vom Workflow ueber -e gesetzt; der
+    # Default ist der Pfad von main (ADR 0014).
+    caddy_backup_file: /var/lib/caddy-backup/caddy_data.tgz
 
   pre_tasks:
     # Das zweite Interface hängt OpenTofu an die laufende VM, konfiguriert ist
@@ -436,7 +440,7 @@
     # delegiert wird.
     - name: Gesichertes Caddy-Datenverzeichnis vorhanden?
       ansible.builtin.stat:
-        path: /var/lib/caddy-backup/caddy_data.tgz
+        path: "{{ caddy_backup_file }}"
       delegate_to: localhost
       become: false
       register: caddy_sicherung
@@ -444,7 +448,7 @@
 
     - name: Sicherung auf die VM legen
       ansible.builtin.copy:
-        src: /var/lib/caddy-backup/caddy_data.tgz
+        src: "{{ caddy_backup_file }}"
         dest: /tmp/caddy_data.tgz
         mode: '0600'
       when: caddy_sicherung.stat.exists
