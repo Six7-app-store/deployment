@@ -84,8 +84,9 @@ Forgejo-Workflow ist gelöscht. Warum ein eigener Runner nötig ist: die
 OpenStack-API der DHBW ist von außen nicht erreichbar —
 `docs/adr/0002-self-hosted-runner-auf-eigener-vm.md`.
 
-Ausgelöst wird er von einem Push auf `main`, von einem `repository_dispatch`
-aus der CI von frontend, backend oder worker, oder von Hand. Der Workflow gibt
+Ausgelöst wird er von einem Push auf `develop`, von einem `repository_dispatch`
+aus der CI von frontend, backend oder worker auf `develop`, oder von Hand.
+`main` ist Produktion und löst keinen Staging-Deploy aus (ADR 0013). Der Workflow gibt
 am Ende `docker compose ps` aus; dort sollten alle Dienste mit Healthcheck
 `healthy` sein. Das Log ist die verlässlichste Quelle dafür, *warum* etwas
 schiefging.

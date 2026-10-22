@@ -33,8 +33,8 @@ verbindlich. Diese Datei hier ersetzt sie nicht, sie ordnet nur ein.
 Ein Commit gehört in genau ein Repo. Eine Änderung, die zwei Repos betrifft
 (z. B. neuer Endpunkt + Frontend-Aufruf), sind zwei Commits in zwei Repos.
 
-Die gemeinsame Regel für gebündelte Commits und Pushes steht hier und wird
-auch in die `AGENTS.md` aller sechs lokalen Repositories verteilt:
+Die gemeinsame Git-Regel (Branches, gebündelte Commits und Pushes) steht hier
+und wird auch in die `AGENTS.md` aller sechs lokalen Repositories verteilt:
 
 @deployment/harness/git-workflow.md
 
@@ -46,12 +46,14 @@ auch in die `AGENTS.md` aller sechs lokalen Repositories verteilt:
 - **`.env`, `*.pem`, `*.key` sind tabu** — lesen wie schreiben. Gepflegt wird
   `.env.example`. Die deny-Regeln in `.claude/settings.json` setzen das hart
   durch, ein Hook erklärt den Grund.
-- **Kein Produktions-Deploy, kein `tofu apply` (oder `terraform apply`) von Hand.** Staging läuft
-  über GitHub Actions auf dem self-hosted Runner (ADR-0002), Produktion über
-  einen Menschen auf der Zielmaschine. Der Forgejo-Stack unter
+- **Kein Produktions-Deploy, kein `tofu apply` (oder `terraform apply`) von Hand.** Staging baut
+  `develop` und läuft über GitHub Actions auf dem self-hosted Runner
+  (ADR-0002, ADR-0013); Produktion ist `main` und wird von einem Menschen auf
+  der Zielmaschine ausgerollt. Der Forgejo-Stack unter
   `deployment/forgejo/` ist ein Versuchsaufbau, keine laufende Pipeline.
-- **Kein Push auf `main`, kein Force-Push.** Jeder Push fragt nach; auf `main`
-  pusht eine Person.
+- **Neue Arbeit zweigt von `develop` ab und geht per Pull Request nach
+  `develop`.** Kein Push auf `main`, kein Force-Push. Jeder Push fragt nach;
+  Pull Requests mergt und auf `main` pusht eine Person.
 - **Architekturentscheidung getroffen?** ADR nach `deployment/docs/adr/`, im
   selben Commit. Format: `deployment/docs/adr/README.md`.
 

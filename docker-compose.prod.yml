@@ -14,11 +14,11 @@
 #     override. ``pull_policy: always`` on every service from this
 #     repo's images so each ``compose up`` re-pulls. Combined with
 #     the CI workflow tagging ``main`` as ``:latest``, this gives a
-#     continuous-delivery pipeline: merge to main → image rebuilt
-#     and pushed → ``compose up`` pulls and rolls.
-#   - The staging.yml variant keeps ``${BACKEND_VERSION:-latest}`` so a
-#     staging operator can pin a specific commit SHA / tag for a
-#     reproducible rollout before promoting to prod. Prod intentionally
+#     continuous-delivery pipeline: release merged to main → image
+#     rebuilt and pushed → ``compose up`` pulls and rolls.
+#   - The staging.yml variant uses ``${BACKEND_VERSION:-develop}``:
+#     staging runs develop (ADR 0013), and an operator can pin a
+#     specific commit SHA / tag for a reproducible rollout. Prod intentionally
 #     cannot pin — if you need a pin, use staging.yml on a separate VM.
 #
 # Everything else (resource limits, log rotation, nginx TLS,

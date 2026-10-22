@@ -1,6 +1,7 @@
 name: CD - Staging Deployment
 
-# Baut den kompletten Staging-Stack bei jedem Merge neu auf: OpenTofu reisst
+# Baut den kompletten Staging-Stack bei jedem Merge auf `develop` neu auf
+# (develop ist Staging, main ist Produktion - ADR 0013): OpenTofu reisst
 # die alte VM ab und legt sie neu an, Ansible richtet sie ein. Nichts wird
 # aktualisiert, alles wird ersetzt - der Stack ist danach in genau dem Zustand,
 # den dieses Repository beschreibt, ohne von Hand gewachsene Reste.
@@ -16,11 +17,12 @@ name: CD - Staging Deployment
 # wegraeumen.
 
 on:
-  # Merge auf main in diesem Repository.
+  # Merge auf develop in diesem Repository. main ist Produktion und loest
+  # hier nichts aus.
   push:
-    branches: [main]
+    branches: [develop]
 
-  # Merge auf main in frontend, backend oder worker. Die schicken von ihrer CI
+  # Merge auf develop in frontend, backend oder worker. Die schicken von ihrer CI
   # aus einen repository_dispatch hierher, sobald ihr Image in GHCR liegt.
   repository_dispatch:
     types: [trigger-deployment]
@@ -103,6 +105,25 @@ jobs:
           else
             echo "Commit:         ${{ github.sha }}"
           fi
+
+      # Staging ist develop (ADR 0013). Steht in STAGING_ENV_FILE noch
+      # *_VERSION=latest aus der alten Vorlage, zieht die VM den Stand von main -
+      # den Produktionsstand -, und Merges auf develop kommen nie an. Die Werte
+      # sind Image-Tags, kein Geheimnis. Ausgegeben als "NAME: wert", nicht als
+      # "NAME=wert": GitHub maskiert ein mehrzeiliges Secret Zeile fuer Zeile,
+      # und die Zeile selbst kaeme als *** im Log an.
+      - name: Image-Tags pruefen
+        env:
+          STAGING_ENV_FILE: ${{ secrets.STAGING_ENV_FILE }}
+        run: |
+          set -euo pipefail
+          for v in BACKEND_VERSION WORKER_VERSION FRONTEND_VERSION; do
+            wert=$(printf '%s\n' "$STAGING_ENV_FILE" | grep -E "^$v=" | head -1 | cut -d= -f2- || true)
+            echo "$v: ${wert:-develop (Default aus docker-compose.staging.yml)}"
+            if [ "$wert" = "latest" ]; then
+              echo "::warning::$v steht in STAGING_ENV_FILE auf latest - Staging zieht damit den Produktionsstand. Zeile loeschen oder auf develop setzen (ADR 0013)."
+            fi
+          done
 
       # Billiger Kanarienvogel: wenn auf dem Runner ein Werkzeug fehlt, soll das
       # hier auffallen und nicht zwanzig Minuten spaeter mitten im apply.

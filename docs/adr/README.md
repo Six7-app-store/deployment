@@ -63,3 +63,4 @@ Das ist Teil der Definition of Done in den `AGENTS.md` aller vier Repos.
 | [0010](0010-opentofu-statt-terraform-und-packer.md) | Die Plattform verwaltet Infrastruktur nur noch mit OpenTofu, ohne Image-Bau | Angenommen |
 | [0011](0011-deploy-wartet-auf-die-einrichtung-der-vms.md) | Ein Deploy ist erst fertig, wenn cloud-init in allen VMs durchgelaufen ist | Angenommen |
 | [0012](0012-design-v2-tokens-als-einzige-quelle.md) | Das Design v2 hat die Tokens als einzige Quelle, Light ist Standard | Angenommen |
+| [0013](0013-develop-ist-staging-main-ist-produktion.md) | `develop` ist Staging, `main` ist Produktion | Angenommen |

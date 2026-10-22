@@ -9,9 +9,9 @@
 #   docker compose -f docker-compose.staging.yml up -d
 #
 # Difference vs ``docker-compose.prod.yml``: the three repo-owned
-# services (backend / worker / frontend) use ``${SERVICE_VERSION:-latest}``
-# so a staging operator can pin a specific commit SHA / tag for a
-# reproducible rollout before promoting to prod. Prod uses hardcoded
+# services (backend / worker / frontend) use ``${SERVICE_VERSION:-develop}``:
+# staging runs what is on develop (ADR 0013), and a staging operator can
+# pin a specific commit SHA / tag for a reproducible rollout. Prod uses hardcoded
 # ``:latest`` with ``pull_policy: always`` — no pinning, just CD.
 #
 # DB migrations are NOT part of this compose file — the Ansible
@@ -183,7 +183,7 @@ services:
   # not re-introduce a backend-migrate init-container here — that
   # pattern hides migration failures inside the compose output.
   backend:
-    image: ghcr.io/${IMAGE_NAMESPACE:-dhbw-appstore}/backend:${BACKEND_VERSION:-latest}
+    image: ghcr.io/${IMAGE_NAMESPACE:-dhbw-appstore}/backend:${BACKEND_VERSION:-develop}
     container_name: backend-prod
     # The backend image's venv is built at /build/.venv and copied to
     # /app/.venv, so the console scripts (`uvicorn`, `alembic`) carry a
@@ -327,7 +327,7 @@ services:
   # Worker has NO access to the application DB — it only talks to
   # RabbitMQ/Redis (Celery) and postgres-tfstate (OpenTofu state).
   worker:
-    image: ghcr.io/${IMAGE_NAMESPACE:-dhbw-appstore}/worker:${WORKER_VERSION:-latest}
+    image: ghcr.io/${IMAGE_NAMESPACE:-dhbw-appstore}/worker:${WORKER_VERSION:-develop}
     container_name: worker-prod
     environment:
       # Celery (broker = RabbitMQ, result backend = Redis)
@@ -440,7 +440,7 @@ services:
   # Frontend (Vue 3 SPA, served by nginx in the image)
   # ----------------------------------------------------------------
   frontend:
-    image: ghcr.io/${IMAGE_NAMESPACE:-dhbw-appstore}/frontend:${FRONTEND_VERSION:-latest}
+    image: ghcr.io/${IMAGE_NAMESPACE:-dhbw-appstore}/frontend:${FRONTEND_VERSION:-develop}
     container_name: frontend-prod
     environment:
       NODE_ENV: production
