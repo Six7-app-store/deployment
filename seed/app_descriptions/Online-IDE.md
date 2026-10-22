@@ -20,14 +20,16 @@ eines Teams erhält einen eigenen Port ab 8080 (aufsteigend pro Nutzer). Flavor:
 
 ## Deployment-Dauer
 
-| Phase | Dauer |
-|---|---|
-| Packer Image Build (einmalig) | ca. 15–20 Min |
-| Terraform Apply | ca. 2–5 Min |
-| VM-Boot + cloud-init (User-Anlage, code-server-Start) | ca. 2–4 Min |
-| **Gesamt erstmalig** | **ca. 20–30 Min** |
+Ein Deployment läuft in zwei Phasen:
 
-Bei vorhandenem Packer-Image entfällt der Build — dann ca. **5–10 Minuten** gesamt.
+1. `tofu apply` legt VM, Netzanschluss und Floating IP an.
+2. Beim ersten Start richtet cloud-init die VM ein (Phase `VM_SETUP`). Der Store
+   meldet das Deployment erst als fertig, wenn diese Einrichtung abgeschlossen
+   ist.
+
+Es gibt kein vorgebautes Image mehr: Die Software wird bei jedem Deployment
+installiert. Die Dauer hängt deshalb von der Einrichtung ab und ist länger als
+bei früheren Ständen. Messwerte folgen nach der Abnahme auf Staging.
 
 ## Konfigurierbare Variablen
 

@@ -55,10 +55,13 @@ Jeder Nutzer findet nach dem Login unter `~/linux-kurs/` folgende Struktur vor:
 
 ## Deployment-Dauer
 
-| Schritt | Dauer (ca.) |
-|---|---|
-| Packer Image Build | 10–15 min |
-| Terraform apply | 3–5 min |
-| **Gesamt (Erstdeployment)** | **13–20 min** |
+Ein Deployment läuft in zwei Phasen:
 
-Bei Folge-Deployments (Image bereits gebaut) nur Terraform: **3–5 min**.
+1. `tofu apply` legt VM, Netzanschluss und Floating IP an.
+2. Beim ersten Start richtet cloud-init die VM ein (Phase `VM_SETUP`). Der Store
+   meldet das Deployment erst als fertig, wenn diese Einrichtung abgeschlossen
+   ist.
+
+Es gibt kein vorgebautes Image mehr: Die Software wird bei jedem Deployment
+installiert. Die Dauer hängt deshalb von der Einrichtung ab und ist länger als
+bei früheren Ständen. Messwerte folgen nach der Abnahme auf Staging.

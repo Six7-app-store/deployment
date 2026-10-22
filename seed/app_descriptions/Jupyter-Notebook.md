@@ -12,14 +12,16 @@ Es wird **eine gemeinsame VM** für alle Nutzer und alle Teams deployed — unab
 
 ## Deployment-Dauer
 
-| Phase | Dauer |
-|---|---|
-| Packer Image Build (einmalig) | ca. 10–15 Min |
-| Terraform Apply | ca. 1–2 Min |
-| VM-Boot + cloud-init (User-Anlage, JupyterHub-Start) | ca. 2–4 Min |
-| **Gesamt erstmalig** | **ca. 15–22 Min** |
+Ein Deployment läuft in zwei Phasen:
 
-Bei vorhandenem Packer-Image entfällt der Build — dann ca. **3–6 Minuten** gesamt.
+1. `tofu apply` legt VM, Netzanschluss und Floating IP an.
+2. Beim ersten Start richtet cloud-init die VM ein (Phase `VM_SETUP`). Der Store
+   meldet das Deployment erst als fertig, wenn diese Einrichtung abgeschlossen
+   ist.
+
+Es gibt kein vorgebautes Image mehr: Die Software wird bei jedem Deployment
+installiert. Die Dauer hängt deshalb von der Einrichtung ab und ist länger als
+bei früheren Ständen. Messwerte folgen nach der Abnahme auf Staging.
 
 ## Konfigurierbare Variablen
 
