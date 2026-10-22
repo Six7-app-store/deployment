@@ -18,8 +18,9 @@ Aufruf:
     python deployment/harness/sync.py            # verteilen
     python deployment/harness/sync.py --check    # nur prüfen, Exit 1 bei Drift
 
-Was das Skript **nicht** anfasst: die `AGENTS.md` der Repos, ihre eigenen
-Skills und alles, was nicht in `harness/` steht. `enabledPlugins` und andere
+In `AGENTS.md` wird nur der markierte Git-Arbeitsablauf synchronisiert;
+repo-eigene Anweisungen bleiben erhalten. Eigene Skills und alles, was
+nicht in `harness/` steht, bleiben unangetastet. `enabledPlugins` und andere
 eigene Schlüssel in einer `settings.json` bleiben erhalten — ersetzt werden
 nur `permissions` und `hooks`.
 """
@@ -33,6 +34,9 @@ DEPLOYMENT = os.path.dirname(HARNESS)
 ROOT = os.path.dirname(DEPLOYMENT)
 
 REPOS = ("backend", "frontend", "worker", "deployment")
+INSTRUCTION_REPOS = REPOS + ("Ubuntu-App", "self-service-ui")
+GIT_RULE_START = "<!-- BEGIN HARNESS GIT WORKFLOW -->"
+GIT_RULE_END = "<!-- END HARNESS GIT WORKFLOW -->"
 
 # Welche Hook-Modi ein Ziel braucht. `lint` steht nur dort, wo es etwas tut —
 # ein Prozessstart pro Edit für einen No-Op ist verschenkte Zeit.
@@ -162,6 +166,44 @@ def copy_tree(source: str, destination: str, check: bool, changed: list) -> None
                 )
 
 
+def git_instructions(existing: str) -> str:
+    """Replace only the managed block, preserving repository instructions."""
+    with open(os.path.join(HARNESS, "git-workflow.md"), encoding="utf-8") as handle:
+        rule = handle.read().rstrip()
+    block = (
+        f"{GIT_RULE_START}\n"
+        "<!-- Quelle: deployment/harness/git-workflow.md; mit harness-sync verteilen. -->\n"
+        f"{rule}\n{GIT_RULE_END}"
+    )
+    starts = existing.count(GIT_RULE_START)
+    ends = existing.count(GIT_RULE_END)
+    if starts == ends == 0:
+        prefix = existing.rstrip()
+        return (prefix + "\n\n" if prefix else "") + block + "\n"
+    if starts != 1 or ends != 1:
+        raise ValueError("AGENTS.md: unvollstaendiger oder mehrfacher Harness-Git-Block")
+    start = existing.index(GIT_RULE_START)
+    end_start = existing.index(GIT_RULE_END)
+    if end_start < start:
+        raise ValueError("AGENTS.md: Harness-Git-Marker in falscher Reihenfolge")
+    end = end_start + len(GIT_RULE_END)
+    return existing[:start] + block + existing[end:]
+
+
+def sync_instructions(base: str, check: bool, changed: list) -> None:
+    path = os.path.join(base, "AGENTS.md")
+    existing = ""
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as handle:
+            existing = handle.read()
+    write_if_changed(path, git_instructions(existing), check, changed)
+    # Existing CLAUDE.md files remain repo-owned. New repositories use the
+    # same import as the four original repos so Claude reads the shared rule.
+    claude_path = os.path.join(base, "CLAUDE.md")
+    if not os.path.isfile(claude_path):
+        write_if_changed(claude_path, "@AGENTS.md\n", check, changed)
+
+
 def sync_target(target: str, base: str, check: bool, changed: list) -> bool:
     """Ein Ziel abgleichen. Gibt zurueck, ob es ueberhaupt geprueft wurde.
 
@@ -220,6 +262,11 @@ def main() -> int:
             print(f"! {repo} fehlt in {ROOT} — uebersprungen")
             continue
         geprueft += sync_target(repo, base, check, changed)
+
+    for repo in INSTRUCTION_REPOS:
+        base = os.path.join(ROOT, repo)
+        if os.path.isdir(base):
+            sync_instructions(base, check, changed)
 
     if check and not geprueft:
         print("Kein einziges Ziel mit .claude gefunden — nichts geprueft.")

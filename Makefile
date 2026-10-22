@@ -568,7 +568,7 @@ prod-reset: ## ⚠️  STOP prod + DELETE all volumes (DBs, Keycloak, RabbitMQ).
 
 HARNESS_PY := $(shell command -v python 2>/dev/null || command -v python3 2>/dev/null)
 
-harness-sync: ## Hooks, Berechtigungen und geteilte Skills in alle 4 Repos + Arbeitsordner verteilen
+harness-sync: ## Hooks/Skills in 4 Stack-Repos + Arbeitsordner, Git-Regeln in alle 6 Repos verteilen
 	@if [ -z "$(HARNESS_PY)" ]; then echo "Kein python gefunden."; exit 1; fi
 	@$(HARNESS_PY) harness/sync.py
 
