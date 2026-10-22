@@ -51,7 +51,7 @@ Das ist Teil der Definition of Done in den `AGENTS.md` aller vier Repos.
 
 | Nr. | Titel | Status |
 |---|---|---|
-| [0001](0001-keine-windows-apps.md) | Windows-Apps werden nicht unterstützt | Angenommen |
+| [0001](0001-keine-windows-apps.md) | Windows-Apps werden nicht unterstützt | Abgelöst durch ADR-0016 |
 | [0002](0002-self-hosted-runner-auf-eigener-vm.md) | Der Staging-Deploy läuft auf einem self-hosted GitHub-Runner auf eigener VM | Angenommen |
 | [0003](0003-staging-wird-bei-jedem-merge-neu-gebaut.md) | Staging wird bei jedem Merge abgerissen und neu gebaut | Angenommen |
 | [0004](0004-staging-kommt-ohne-cinder-volume-aus.md) | Staging kommt ohne Cinder-Volume aus | Angenommen |
@@ -66,3 +66,4 @@ Das ist Teil der Definition of Done in den `AGENTS.md` aller vier Repos.
 | [0013](0013-develop-ist-staging-main-ist-produktion.md) | `develop` ist Staging, `main` ist Produktion | Angenommen |
 | [0014](0014-forgejo-wird-nicht-weiterbetrieben.md) | Forgejo wird nicht weiterbetrieben | Angenommen |
 | [0015](0015-terraform-uebergangsinsel-ist-aufgeloest.md) | Die Terraform-Übergangsinsel ist aufgelöst | Angenommen |
+| [0016](0016-windows-apps-werden-unterstuetzt.md) | Windows-Apps werden unterstützt | Angenommen |
