@@ -41,7 +41,7 @@
     # Systemplatte.
     docker_data_device: ""
     # Installiert den Timer, der neue Images aus GHCR selbst nachzieht. Damit
-    # aktualisiert sich Staging nach einem Merge auf main ohne Deploy.
+    # aktualisiert sich Staging nach einem Merge auf develop ohne Deploy.
     # Auf false setzen, um ihn wieder abzuschalten - die Tasks am Playbook-Ende
     # halten den Dienst dann an und entfernen ihn.
     auto_update: true
@@ -727,7 +727,7 @@
     # Selbstaktualisierung
     # ----------------------------------------------------------------
     # Ein Timer auf der VM zieht neue Images aus GHCR und startet die
-    # betroffenen Dienste neu. Damit wird ein Merge auf main auf Staging
+    # betroffenen Dienste neu. Damit wird ein Merge auf develop auf Staging
     # sichtbar, ohne dass jemand einen Deploy ausloest.
     #
     # Die Richtung ist umgedreht, weil die andere nicht geht: Ein GitHub-Runner

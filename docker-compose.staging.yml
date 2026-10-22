@@ -9,9 +9,9 @@
 #   docker compose -f docker-compose.staging.yml up -d
 #
 # Difference vs ``docker-compose.prod.yml``: the three repo-owned
-# services (backend / worker / frontend) use ``${SERVICE_VERSION:-latest}``
-# so a staging operator can pin a specific commit SHA / tag for a
-# reproducible rollout before promoting to prod. Prod uses hardcoded
+# services (backend / worker / frontend) use ``${SERVICE_VERSION:-develop}``:
+# staging runs what is on develop (ADR 0013), and a staging operator can
+# pin a specific commit SHA / tag for a reproducible rollout. Prod uses hardcoded
 # ``:latest`` with ``pull_policy: always`` — no pinning, just CD.
 #
 # DB migrations are NOT part of this compose file — the Ansible
@@ -183,7 +183,7 @@ services:
   # not re-introduce a backend-migrate init-container here — that
   # pattern hides migration failures inside the compose output.
   backend:
-    image: ghcr.io/${IMAGE_NAMESPACE:-dhbw-appstore}/backend:${BACKEND_VERSION:-latest}
+    image: ghcr.io/${IMAGE_NAMESPACE:-dhbw-appstore}/backend:${BACKEND_VERSION:-develop}
     container_name: backend-prod
     # The backend image's venv is built at /build/.venv and copied to
     # /app/.venv, so the console scripts (`uvicorn`, `alembic`) carry a
@@ -221,15 +221,17 @@ services:
       # CORS
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
 
-      # Email (Gmail SMTP) — used by the post-deploy notify hook in
+      # Email (any SMTP server) — used by the post-deploy notify hook in
       # celery_event_listener.py. SMTP_ENABLED is the explicit
-      # kill-switch (default false): even with SMTP_USER/SMTP_PASSWORD
-      # populated, mail delivery only happens when SMTP_ENABLED=true.
+      # kill-switch (default false): mail delivery only happens when
+      # SMTP_ENABLED=true. SMTP_USER/SMTP_PASSWORD stay empty for a relay
+      # that admits the host by address.
       # Use it to keep credentials in .env for later but turn delivery
       # off in dev / CI / on demo days without scrubbing the creds.
       SMTP_ENABLED: ${SMTP_ENABLED:-false}
-      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_SECURITY: ${SMTP_SECURITY:-auto}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
@@ -325,7 +327,7 @@ services:
   # Worker has NO access to the application DB — it only talks to
   # RabbitMQ/Redis (Celery) and postgres-tfstate (OpenTofu state).
   worker:
-    image: ghcr.io/${IMAGE_NAMESPACE:-dhbw-appstore}/worker:${WORKER_VERSION:-latest}
+    image: ghcr.io/${IMAGE_NAMESPACE:-dhbw-appstore}/worker:${WORKER_VERSION:-develop}
     container_name: worker-prod
     environment:
       # Celery (broker = RabbitMQ, result backend = Redis)
@@ -438,7 +440,7 @@ services:
   # Frontend (Vue 3 SPA, served by nginx in the image)
   # ----------------------------------------------------------------
   frontend:
-    image: ghcr.io/${IMAGE_NAMESPACE:-dhbw-appstore}/frontend:${FRONTEND_VERSION:-latest}
+    image: ghcr.io/${IMAGE_NAMESPACE:-dhbw-appstore}/frontend:${FRONTEND_VERSION:-develop}
     container_name: frontend-prod
     environment:
       NODE_ENV: production

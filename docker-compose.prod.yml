@@ -14,11 +14,11 @@
 #     override. ``pull_policy: always`` on every service from this
 #     repo's images so each ``compose up`` re-pulls. Combined with
 #     the CI workflow tagging ``main`` as ``:latest``, this gives a
-#     continuous-delivery pipeline: merge to main → image rebuilt
-#     and pushed → ``compose up`` pulls and rolls.
-#   - The staging.yml variant keeps ``${BACKEND_VERSION:-latest}`` so a
-#     staging operator can pin a specific commit SHA / tag for a
-#     reproducible rollout before promoting to prod. Prod intentionally
+#     continuous-delivery pipeline: release merged to main → image
+#     rebuilt and pushed → ``compose up`` pulls and rolls.
+#   - The staging.yml variant uses ``${BACKEND_VERSION:-develop}``:
+#     staging runs develop (ADR 0013), and an operator can pin a
+#     specific commit SHA / tag for a reproducible rollout. Prod intentionally
 #     cannot pin — if you need a pin, use staging.yml on a separate VM.
 #
 # Everything else (resource limits, log rotation, nginx TLS,
@@ -264,13 +264,15 @@ services:
       # CORS
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
 
-      # Email (Gmail SMTP) — used by the post-deploy notify hook in
+      # Email (any SMTP server) — used by the post-deploy notify hook in
       # celery_event_listener.py. SMTP_ENABLED is the explicit
-      # kill-switch (default false): even with SMTP_USER/SMTP_PASSWORD
-      # populated, mail delivery only happens when SMTP_ENABLED=true.
+      # kill-switch (default false): mail delivery only happens when
+      # SMTP_ENABLED=true. SMTP_USER/SMTP_PASSWORD stay empty for a relay
+      # that admits the host by address.
       SMTP_ENABLED: ${SMTP_ENABLED:-false}
-      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_SECURITY: ${SMTP_SECURITY:-auto}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
