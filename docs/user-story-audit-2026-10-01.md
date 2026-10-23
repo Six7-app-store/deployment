@@ -1,5 +1,7 @@
 # Prüfung der User Stories aus der Projektkonzeption
 
+> **Einordnung vom 02.10.2026:** Die folgende Matrix bewahrt den Prüfstand vom 01.10.2026. Für den aktuellen Arbeitsumfang gilt der [überarbeitete Agentenplan](user-story-umsetzungsplan-2026-10-01.md): Der App Store bleibt eigenständig und wird zusätzlich integriert; Keycloak-/OpenTofu-Wechsel sind ungeklärt. Moodle-Sync erfolgt beim Dozenten-Start und zusätzlich per Knopf. Privater Rechnerzugriff ist laut Nutzer bereits im getesteten Rahmen funktionsfähig, die genaue DHBW-Netz-/VPN-Bedingung bleibt zu bestätigen. Doku-/Designpakete sind zurückgestellt. Die alten Zahlen sind keine neue Gesamtprüfung und keine Aussage, dass alle damaligen Lücken jetzt aktiv umzusetzen wären.
+
 Stand: **01.10.2026**. Aktuelle Quelle: `Projektkonzeption_2026-10-01_17-40-49.pdf`, eine Seite, **40 User Stories**. Gegenüber der PDF vom 30.09.2026 sind sieben Stories hinzugekommen und zwei Git-Repository-Stories nicht mehr enthalten. Die bisherigen IDs bleiben stabil: US-31/US-32 sind historisch; neue Stories erhalten US-36 bis US-42. Die PDF selbst vergibt keine IDs. Jede aktuelle Story ist einzeln erfasst.
 
 **Ergebnis: Nicht alle Stories sind umgesetzt.** Im lokal vorliegenden Stand sind **8 im Code umgesetzt**, **26 teilweise umgesetzt**, **3 offen / nicht nachgewiesen** und **3 als Entscheidung dokumentiert**. Für alle 29 teilweise umgesetzten oder offenen aktuellen Stories gibt es ein Arbeitspaket im [Umsetzungsplan](user-story-umsetzungsplan-2026-10-01.md).
