@@ -1,4 +1,4 @@
-# 0016 — Windows-Apps werden unterstützt
+# 0020 — Windows-Apps werden unterstützt
 
 **Status:** Angenommen
 **Datum:** 22.10.2026

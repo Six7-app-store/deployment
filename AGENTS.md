@@ -14,6 +14,9 @@ Frontend und Worker laufen nur über die Stacks hier.
 - Moodle-Testinstanz: siehe `docs/moodle-lti-dev.md`
 - Claude-Harness verteilen: `make harness-sync` (nach jedem `git pull`),
   prüfen: `make harness-check`. Quelle: `harness/`, siehe `harness/README.md`.
+- Doku prüfen: `make docs-check` (Links, ADR-Verzeichnis, Diagramme)
+- Staging lesend prüfen: `make staging-status`
+- Story-Issues: `make story-issues` (Trockenlauf), `make story-issues-anlegen`
 - `make help` listet alle Targets.
 
 ## Umgebungen
@@ -21,23 +24,31 @@ Frontend und Worker laufen nur über die Stacks hier.
 | Umgebung | Branch | Compose-Datei | Ausrollen |
 |---|---|---|---|
 | dev | beliebig | `docker-compose.dev.yml` | `make dev-up` am eigenen Rechner |
-| staging | `develop` | `docker-compose.staging.yml` | **nur** über die Pipeline, nie von Hand |
+| staging | `develop` | `docker-compose.staging.yml` | **nur** über die Pipeline, nie von Hand — eigene VM, `staging.<zone>` |
+| main-Stand | `main` | `docker-compose.staging.yml` | **nur** über die Pipeline — die bisherige Staging-VM und -Adresse (ADR 0014) |
 | prod | `main` | `docker-compose.prod.yml` | `make prod-*` auf der Zielmaschine, manuell |
 
 Der Staging-Deploy läuft in **GitHub Actions** auf dem self-hosted Runner im
 Campusnetz (`.github/workflows/staging.yml`, ADR 0002) — von außen ist die
-OpenStack-API der DHBW nicht erreichbar. Ausgelöst von Push auf `develop`, von
-`repository_dispatch` aus der CI der drei anderen Repos auf `develop`, oder
-von Hand. Ein Merge auf `main` löst nichts aus: `main` ist Produktion
-(ADR 0013). Jeder Lauf
-reißt die VM ab und baut sie neu (ADR 0003); einen Trockenlauf gibt es nicht.
+OpenStack-API der DHBW nicht erreichbar. Ausgelöst von Push auf `develop`
+oder `main`, von `repository_dispatch` aus der CI der drei anderen Repos, oder
+von Hand. Der Branch des Auslösers bestimmt, welcher der beiden Stände neu
+gebaut wird (ADR 0014); jeder hat eigene VM, eigenen State und eigene
+Datenbanken. Jeder Lauf reißt die VM ab und baut sie neu (ADR 0003); einen
+Trockenlauf gibt es nicht.
 
 **Bewusst kein `pull_request`-Trigger.** Das Repository ist öffentlich, und ein
 self-hosted Runner an einem Fork-PR gäbe Fremden eine Ausführungsumgebung mit
 OpenStack-Zugang. Nicht nachrüsten.
 
-Staging hat bewusst keine Make-Targets, damit kein Arbeitsplatz von dem
-abweicht, was die Pipeline erzeugt.
+Staging hat bewusst keine Make-Targets, die etwas verändern, damit kein
+Arbeitsplatz von dem abweicht, was die Pipeline erzeugt. `make
+staging-status` liest nur.
+
+**Agent und Staging (ADR 0015):** den Stand `develop` darf der Agent selbst
+neu bauen — `gh workflow run staging.yml -R Six7-app-store/deployment --ref
+develop -f stand=develop`. Der Hook prüft Form und laufende Deploys. Den
+Stand `main` und die Produktion nie. Details: Skill `deployment-pruefen`.
 
 ## Env-Fallen
 
@@ -61,7 +72,7 @@ abweicht, was die Pipeline erzeugt.
 - OpenTofu-Änderungen mit `tofu fmt -recursive infrastructure/tofu`
   formatieren — die Pipeline prüft das mit `-check` und bricht sonst ab.
 - Alle Umgebungen und das Modul `openstack_vm` liegen unter
-  `infrastructure/tofu/` (ADR 0010, ADR 0015). Neue Infrastruktur gehört dorthin.
+  `infrastructure/tofu/` (ADR 0010, ADR 0019). Neue Infrastruktur gehört dorthin.
 
 ## Definition of Done
 
@@ -70,6 +81,9 @@ abweicht, was die Pipeline erzeugt.
 - Harness geändert? `make harness-sync` gefahren, `make harness-test` grün,
   die erzeugten Kopien mitcommittet
 - Architekturentscheidung getroffen? ADR unter `docs/adr/` (Format: `docs/adr/README.md`)
+- Doku und Diagramme nachgezogen (`harness/doc-map.json`, Skill
+  `doku-nachziehen`), `make docs-check` grün. Das Commit-Gate fragt danach
+  (ADR 0017).
 
 ## Nicht anfassen
 

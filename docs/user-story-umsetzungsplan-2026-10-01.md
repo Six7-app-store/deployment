@@ -225,7 +225,7 @@ Hoch = zentraler Lehrbedarf, Integrationslücke oder Betriebsgrundlage; Mittel =
 **Schritte:**
 
 1. Die im Prüfbericht aufgeführten Widersprüche unmittelbar gegen aktuelle Workflows/Compose/Terraform bereinigen. Historische Runbooks als überholt kennzeichnen und auf den geltenden Einstieg verweisen.
-2. Windows-Entscheidung fachlich bestätigen; historische Windows-Beispiele kenntlich machen. Keine Windows-Funktion als Folgerung aus widersprüchlichen Alttexten bauen. Lizenzhinweise als dokumentierten Gesprächsstand kennzeichnen; bei Änderung aktuell fachlich/rechtlich prüfen lassen.
+2. Windows-Entscheidung fachlich bestätigen (erledigt am 22.10.2026: Windows-Apps werden unterstützt, [ADR 0020](adr/0020-windows-apps-werden-unterstuetzt.md) löst ADR 0001 ab); historische Windows-Beispiele kenntlich machen. Keine Windows-Funktion als Folgerung aus widersprüchlichen Alttexten bauen. Lizenzhinweise als dokumentierten Gesprächsstand kennzeichnen; bei Änderung aktuell fachlich/rechtlich prüfen lassen.
 3. Für jede veröffentlichte App-Version verifizierte Softwareliste mit Betriebssystem, wesentlichen Programmen/Versionen, Zugangsart und Ressourcenempfehlung aus dem Build ableiten. Zunächst reicht eine releasegebundene gepflegte Beschreibung; ein strukturiertes Manifest nur bei erkennbarem Bedarf ergänzen.
 4. Übergabeeinstieg für alle sechs lokalen Repositories ergänzen: Start, Konfiguration ohne Secrets, Migrationen, sichere Tests, Auth-/LTI-Flows, App-Vertrag, Plattform- versus App-State, Backup/Restore und Fehlerdiagnose.
 5. SMTP-Anleitung auf Hochschul-/Betreiber-SMTP mit konfigurierbarem Host beziehen. Vorhandene Einschränkungen Login und TLS-Verfahren nennen; Gmail bleibt höchstens optionales Beispiel.

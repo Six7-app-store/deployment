@@ -56,7 +56,7 @@ Der erste OpenTofu-Lauf legt das Verzeichnis an. Der State der Moodle-Umgebung
 liegt analog unter `/var/lib/tofu-state/moodle/`. Unter `/var/lib/tf-state/`
 liegen noch die States aus der Terraform-Zeit; sie werden von nichts mehr
 gelesen und sind nur noch Sicherung. Terraform selbst gehört nicht mehr auf
-diese VM (ADR 0015).
+diese VM (ADR 0019).
 
 Der Pfad liegt **außerhalb** des Runner-Workspace: `actions/checkout` räumt den
 Workspace vor jedem Lauf. Und er liegt auf der **Runner**-VM, nicht auf der

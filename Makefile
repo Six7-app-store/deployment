@@ -58,7 +58,9 @@ MAILPIT_PORT       ?= 8025
         prod-up prod-down prod-stop prod-restart prod-pull prod-logs prod-ps \
         prod-migrate prod-seed prod-cert-self-signed prod-reset \
         prod-set-keycloak-urls \
-        harness-sync harness-check harness-test \n        up down logs build
+        harness-sync harness-check harness-test \
+        docs-check story-issues story-issues-anlegen staging-status \
+        up down logs build
 
 # ----------------------------------------------------------------
 # Help
@@ -581,6 +583,28 @@ harness-test: ## Tests des Hook-Helfers fahren (nur Standardbibliothek)
 harness-check: ## Nur pruefen, ob die verteilten Kopien aktuell sind (Exit 1 bei Drift)
 	@if [ -z "$(HARNESS_PY)" ]; then echo "Kein python gefunden."; exit 1; fi
 	@$(HARNESS_PY) harness/sync.py --check
+
+# ----------------------------------------------------------------
+# Doku, Stories, Staging-Blick
+# ----------------------------------------------------------------
+# Dieselben Pruefungen wie .github/workflows/docs-check.yml. Mermaid nur,
+# wenn Docker laeuft; die CI rendert immer.
+
+docs-check: ## Doku pruefen: ADR-Verzeichnis, Links, doc-map, Mermaid (mit Docker)
+	@if [ -z "$(HARNESS_PY)" ]; then echo "Kein python gefunden."; exit 1; fi
+	@$(HARNESS_PY) scripts/docs_check.py --mermaid=auto
+
+story-issues: ## Trockenlauf: welche offenen User Stories noch kein Issue haben
+	@if [ -z "$(HARNESS_PY)" ]; then echo "Kein python gefunden."; exit 1; fi
+	@$(HARNESS_PY) scripts/story_issues.py
+
+story-issues-anlegen: ## Fehlende Story-Issues in Six7-app-store/deployment anlegen
+	@if [ -z "$(HARNESS_PY)" ]; then echo "Kein python gefunden."; exit 1; fi
+	@$(HARNESS_PY) scripts/story_issues.py --anlegen
+
+# Staging hat sonst bewusst keine Targets. Dieses liest nur.
+staging-status: ## Lesend: DNS, Health und letzte Deploys beider Staging-Staende
+	@bash scripts/staging-status.sh
 
 # ----------------------------------------------------------------
 # Aliases

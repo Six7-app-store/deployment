@@ -1,4 +1,4 @@
-# 0014 — Forgejo wird nicht weiterbetrieben
+# 0018 — Forgejo wird nicht weiterbetrieben
 
 **Status:** Angenommen
 **Datum:** 22.10.2026

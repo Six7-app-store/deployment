@@ -1,4 +1,4 @@
-# 0015 — Die Terraform-Übergangsinsel ist aufgelöst
+# 0019 — Die Terraform-Übergangsinsel ist aufgelöst
 
 **Status:** Angenommen
 **Datum:** 22.10.2026
@@ -14,7 +14,7 @@ samt einer zweiten Kopie des Moduls `openstack_vm`. Dafür hielt die CI
 `hashicorp/setup-terraform` vor, die Runner-VM ein Terraform-Binary, und der
 Harness formatierte `.tf`-Dateien mit `terraform fmt`.
 
-Forgejo ist mit [ADR 0014](0014-forgejo-wird-nicht-weiterbetrieben.md)
+Forgejo ist mit [ADR 0018](0018-forgejo-wird-nicht-weiterbetrieben.md)
 entfallen. Übrig blieb Moodle.
 
 ## Entscheidung

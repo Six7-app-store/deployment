@@ -17,10 +17,6 @@ Zusätzlich liegen hier `Ubuntu-App/` (App-Template) und `self-service-ui/`
 (Portal mit React/Mantine). Die gemeinsame Git-Regel gilt für alle sechs
 Repositories; Hooks und Stack-Befehle gelten für die vier Stack-Repos.
 
-Zusätzlich liegen hier `Ubuntu-App/` (App-Template) und `self-service-ui/`
-(Portal mit React/Mantine). Die gemeinsame Git-Regel gilt für alle sechs
-Repositories; Hooks und Stack-Befehle gelten für die vier Stack-Repos.
-
 Backend, Frontend und Worker laufen **nicht standalone**, sondern nur als
 Dienste im Stack aus `deployment/docker-compose.dev.yml`.
 
@@ -49,12 +45,30 @@ und wird auch in die `AGENTS.md` aller sechs lokalen Repositories verteilt:
 - **Kein Produktions-Deploy, kein `tofu apply` von Hand.** Staging baut
   `develop` und läuft über GitHub Actions auf dem self-hosted Runner
   (ADR-0002, ADR-0013); Produktion ist `main` und wird von einem Menschen auf
-  der Zielmaschine ausgerollt.
+  der Zielmaschine ausgerollt. Den develop-Stand darf der Agent über
+  `gh workflow run staging.yml` selbst neu bauen, den main-Stand nie
+  (ADR-0015, Skill `deployment-pruefen`).
+- **Schreibende `gh`-Aufrufe immer mit `-R Six7-app-store/<repo>`.** Die
+  Stack-Repos sind Forks von DHBW-AppStore; ohne `-R` zielt `gh` auf das
+  Original. Der Hook blockt das.
 - **Neue Arbeit zweigt von `develop` ab und geht per Pull Request nach
   `develop`.** Kein Push auf `main`, kein Force-Push. Jeder Push fragt nach;
   Pull Requests mergt und auf `main` pusht eine Person.
 - **Architekturentscheidung getroffen?** ADR nach `deployment/docs/adr/`, im
-  selben Commit. Format: `deployment/docs/adr/README.md`.
+  selben Commit, und die Doku und Diagramme dazu nachziehen (Skills
+  `adr-schreiben`, `doku-nachziehen`).
+- **Vor jedem Commit laufen Doku-Zuordnung, Lint und Tests** (ADR-0017). Der
+  Stack muss laufen; sonst blockt das Commit-Gate.
+
+## Von der User Story bis Staging
+
+| Schritt | Skill / Befehl |
+|---|---|
+| Offene Stories als Issues in `Six7-app-store/deployment` | `/stories-zu-issues` |
+| Plan gegen den heutigen Code, als Kommentar ins Issue; Person bestätigt | `/issue-planen <nr>` |
+| Umsetzen, Doku und Diagramme, ADR | `doku-nachziehen`, `adr-schreiben` |
+| Gegenprüfung, PR mit `Teil von Six7-app-store/deployment#<nr>` | `/code-review`, `/pr-review` |
+| Merge: eine Person. Danach Nachweis auf Staging ins Issue | `deployment-pruefen`, `make staging-status` |
 
 ## Harness
 

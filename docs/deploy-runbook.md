@@ -2,7 +2,7 @@
 
 Diese Anleitung bringt eine Codeänderung auf die Staging-VM. Sie wird von
 einem Menschen ausgeführt, nicht von einer Pipeline — warum, steht in
-[deployment-process.md](deployment-process.md), Abschnitt 6, kurz gefasst: Die
+[pipeline.md](pipeline.md), kurz gefasst: Die
 OpenStack-API der DHBW ist von außen nicht erreichbar, GitHubs Runner können
 also nicht ausrollen.
 
@@ -18,7 +18,7 @@ Wer einen Dev-Stack aus der Terraform-Zeit hat, findet den Hinweis zum
 State-Volume in [dev-setup.md](dev-setup.md).
 
 Alle Umgebungen liegen unter `infrastructure/tofu/`, auch `envs/moodle`
-(ADR 0015).
+(ADR 0019).
 
 ---
 
@@ -272,4 +272,4 @@ Dieses Runbook beginnt erst, wenn das Image bereits in GHCR liegt. Alles davor
 Ansible-Dateien, die du hier ausführst, hat `CI - Infrastructure QA` in diesem
 Repository schon geprüft.
 
-Der Gesamtablauf steht in [deployment-process.md](deployment-process.md).
+Der Gesamtablauf steht in [pipeline.md](pipeline.md).
