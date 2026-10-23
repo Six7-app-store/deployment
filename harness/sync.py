@@ -50,7 +50,7 @@ HOOK_MODES = {
 
 STATUS = {
     "pre": "Secret- und Migrationsschutz",
-    "bash": "Secret-Schutz (Shell)",
+    "bash": "Secret-Schutz, Ziel-Repo, Staging- und Commit-Gate",
     "lint": "Auto-Format",
     "stop": "Qualitaets-Gate",
 }
@@ -65,7 +65,13 @@ EVENT = {
 # Ohne matcher laeuft ein Hook zu jedem Werkzeug — `stop` hat deshalb keinen.
 MATCHER = {"pre": "Edit|Write", "bash": "Bash", "lint": "Edit|Write"}
 
-TIMEOUT = {"pre": 15, "bash": 15, "lint": 90, "stop": 300}
+# `bash` traegt das Commit-Gate mit der vollen Testsuite (backend am
+# 23.10.2026 gemessen: 351 s, Testlimit im Hook 780 s). Laeuft ein Hook ins Zeitlimit, bricht Claude Code ihn ab und
+# fuehrt das Kommando trotzdem aus — ein zu knappes Limit waere ein
+# Commit-Gate, das genau bei den langsamen Suiten still aufgibt. Alle
+# anderen Bash-Aufrufe kehren in Millisekunden zurueck; das Limit ist eine
+# Obergrenze, keine Wartezeit.
+TIMEOUT = {"pre": 15, "bash": 900, "lint": 90, "stop": 300}
 
 
 def hook_entry(mode: str) -> dict:

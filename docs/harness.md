@@ -15,33 +15,35 @@ Das Ziel ist nicht „der Agent macht alles", sondern: **der Mensch entscheidet
 noch über Merge und Produktion, alles davor läuft ohne ihn.** Aus einer
 Anforderung wird ein Feature, und wir sehen es uns am Ende an.
 
-Die Kette steht schon. Was fehlt, sind zwei Handgriffe, nicht zwei Bausteine.
+Die Kette steht. Seit dem 23.10.2026 beginnt sie beim Issue statt bei einer
+`SPEC.md`, und der Commit ist ein Gate (ADR 0015 bis 0017).
 
 | Schritt | Heute | Ziel bis Projektende |
 |---|---|---|
-| Anforderung → `SPEC.md` | Mensch schreibt sie im Interview mit dem Agenten | Agent erzeugt sie aus der User Story, Mensch bestätigt |
+| Anforderung → Issue | Agent legt je offener Story ein Issue an (`/stories-zu-issues`, ADR 0016) | unverändert |
+| Issue → Plan | Agent prüft gegen den Code, schreibt den Plan ins Issue (`/issue-planen`), Mensch bestätigt | unverändert |
 | Umsetzung | Agent; Hooks halten Lint und Typecheck grün | unverändert |
-| Verifikation | Stop-Hook lokal, Pipeline im Pull Request | unverändert |
+| Verifikation | Stop-Hook lokal; Commit-Gate mit Doku-Zuordnung und Tests (ADR 0017); Pipeline im Pull Request | unverändert |
 | Gegenprüfung | `/code-review` im frischen Kontext, `pr-review` gegen die DoD | unverändert |
-| Pull Request öffnen | Mensch | Agent |
+| Pull Request öffnen | Agent; Push und PR fragen nach | unverändert |
 | **Merge** | **Mensch** | **Mensch — bleibt so** |
-| Staging-Deploy anstoßen | läuft bei jedem Merge auf `develop` von selbst | unverändert |
-| Nachweis, dass es läuft | Agent prüft lesend (`deployment-pruefen`) | unverändert |
+| Staging-Deploy anstoßen | läuft bei jedem Merge auf `develop` von selbst; den develop-Stand darf der Agent zusätzlich neu bauen (ADR 0015) | unverändert |
+| Nachweis, dass es läuft | Agent prüft (`deployment-pruefen`, `make staging-status`) und schreibt den Beleg ins Issue | unverändert |
 | **Produktion** | **Mensch** | **Mensch — bleibt so** |
 
 ### Was dafür noch fehlt
 
 | Lücke | Aufwand |
 |---|---|
-| `gh` installiert und angemeldet, damit der Agent den CI-Stand der Pull Requests lesen kann | eine Installation |
-| Ein Skill, der aus einer User Story eine `SPEC.md` erzeugt — nach demselben Muster wie die acht vorhandenen | ein Arbeitstag |
+| Smoke-Test als letzter Schritt in `staging.yml` (Login, App-Liste, ein API-Aufruf), damit „grün" mehr heißt als „Container laufen" | ein Workflow-Schritt |
+| Diagnose-Workflow für den develop-Stand: Containerstatus und Fehlerzähler von der VM, **ohne Rohlogs** — das Repository ist öffentlich, Job-Logs und Artefakte sind es auch | ein Workflow |
+| Laufende App-Deployments vor einem Neubau erkennen; heute warnt nur der Skill | Endpunkt im Backend |
 
 ### Warum das im Projektrahmen umsetzbar ist
 
 Weil nichts davon neue Infrastruktur braucht. Die Pipeline läuft, der Runner
-läuft, die Secrets liegen, die Hooks greifen, acht Skills sind im Einsatz.
-Die zwei offenen Punkte sind eine Installation und ein weiterer Skill
-desselben Formats.
+läuft, die Secrets liegen, die Hooks greifen. Die offenen Punkte sind
+Workflow-Schritte auf dem vorhandenen Runner.
 
 Den Punkt „Staging-Deploy anstoßen" hat der Umbau vom 19.09.2026 erledigt,
 bevor er eine Lücke werden konnte: Staging baut sich seit `52d931f` bei jedem
@@ -195,9 +197,12 @@ Skills lädt er bei Bedarf.
 | `neuer-endpoint` | backend | Router, Schema, CRUD, Berechtigung, Test, Frontend-Aufruf |
 | `lti-flow` | backend | Launch-Ablauf, Sitzungsmodell, Rollen, lokale Testfallen |
 | `neue-view` | frontend | View/Store/API-Tripel, Route, Container-Neustart |
-| `adr-schreiben` | deployment | Wann fällig, Format, Nummernvergabe |
-| `deployment-pruefen` | deployment | Lesende Prüfung, ob eine Umgebung läuft |
+| `adr-schreiben` | alle (geteilt) | Wann fällig, Format, Nummernvergabe, Doku danach |
+| `deployment-pruefen` | alle (geteilt) | Ob eine Umgebung läuft; develop-Stand neu bauen |
 | `pr-review` | alle (geteilt) | Diff gegen die Definition of Done des betroffenen Repos |
+| `stories-zu-issues` | alle (geteilt) | Offene User Stories als Issues in `deployment` |
+| `issue-planen` | alle (geteilt) | Plan gegen den heutigen Code, als Kommentar ins Issue; die Kette bis Staging |
+| `doku-nachziehen` | alle (geteilt) | Doku und Diagramme finden und anpassen, die eine Änderung falsch macht |
 
 `neue-migration` zeigt das Prinzip am deutlichsten: Der Hook **verbietet**,
 bestehende Migrationen zu bearbeiten. Der Skill sagt, was man **stattdessen**
@@ -253,12 +258,12 @@ Dienst übertragen könnten.
 
 ### Deployment: anstoßen und nachweisen
 
-Der Agent darf **Staging ausrollen und prüfen, ob es funktioniert hat**.
-Produktion bleibt beim Menschen.
+Der Agent darf **den develop-Stand ausrollen und prüfen, ob es funktioniert
+hat**. Der main-Stand und die Produktion bleiben beim Menschen (ADR 0015).
 
 | Erlaubt | Verboten |
 |---|---|
-| Staging-Workflow von Hand anstoßen — nach Rückfrage | Produktions-Deployment |
+| `gh workflow run staging.yml … --ref develop -f stand=develop` | jeder Lauf für den Stand `main`, Produktions-Deployment |
 | `/health` abfragen, Erreichbarkeit über IPv4 und IPv6 prüfen | `tofu apply` / `destroy` von Hand |
 | Containerstatus und Logs lesen | `deploy.cmd` / `scripts/deploy.sh` von Hand |
 | Pipeline-Ergebnis lesen | Secrets lesen oder schreiben |
@@ -283,8 +288,9 @@ Vertretbar bleibt es aus zwei anderen Gründen. Erstens ist Staging bewusst
 wegwerfbar: es wird ohnehin bei jedem Merge neu gebaut (ADR 0003), ein
 zusätzlicher Lauf zerstört also nichts, was nicht ohnehin verginge. Zweitens
 deployt Staging nur, was schon in `develop` steht, und dorthin kommt nichts
-ohne menschlichen Merge. Dazu kommt das Gate im Harness: `gh workflow run` steht in
-`permissions.ask`, ein Mensch bestätigt jeden Lauf von Hand.
+ohne menschlichen Merge. Dazu kommt das Gate im Harness: der Bash-Hook lässt
+nur den develop-Stand durch, und nur, wenn kein anderer Deploy läuft; eine
+deny-Regel sperrt `stand=main` zusätzlich.
 
 Ein Agent, der auf das Ergebnis seiner eigenen Arbeit schauen kann, arbeitet
 eine Stufe eigenständiger: Er merkt selbst, dass ein Deployment rot ist,
@@ -312,8 +318,11 @@ leitet die geltende Regel aus dem Pfad der bearbeiteten Datei ab.
 | `PreToolUse` auf Edit/Write | Blockt Schreibzugriffe auf `.env`, `*.pem`, `*.key` — in **allen** Repos, nicht nur in deployment. `.env.example` bleibt erlaubt |
 | `PreToolUse` auf Edit/Write | Blockt Änderungen an **bestehenden** Alembic-Migrationen; neue bleiben erlaubt |
 | `PreToolUse` auf Bash | Blockt Kommandos, die eine Geheimnisdatei lesen würden. Die deny-Regeln greifen am Read-Werkzeug, eine Shell geht daran vorbei |
+| `PreToolUse` auf Bash | Schreibende `gh`-Aufrufe nur mit `-R Six7-app-store/…` |
+| `PreToolUse` auf Bash | `gh workflow run staging.yml` nur für den Stand `develop` und nur ohne laufenden Deploy (ADR 0015) |
+| `PreToolUse` auf Bash | Commit-Gate vor `git commit`: Doku-Zuordnung aus `harness/doc-map.json`, dann Lint und Tests der CI im Container (ADR 0017) |
 | `PostToolUse` auf Edit/Write | backend: `ruff --fix`. worker: ruff, black, isort. `*.tofu`: `tofu fmt`, `*.tf`: `terraform fmt`. frontend: bewusst nichts |
-| `Stop` | Turn-Ende blockiert, solange das Gate des Repos rot ist: ruff (backend), ruff/black/isort (worker), `vue-tsc` (frontend), `tofu fmt -check` auf `infrastructure/tofu` und `terraform fmt -check` auf `infrastructure/terraform` (deployment) |
+| `Stop` | Turn-Ende blockiert, solange das Gate des Repos rot ist: ruff (backend), ruff/black/isort (worker), `vue-tsc` (frontend), `tofu fmt -check` auf `infrastructure/tofu` und `terraform fmt -check` auf `infrastructure/terraform` — am Host, sonst über Docker — und der schnelle Teil von `make docs-check` (deployment) |
 
 Die Skripte liegen als lesbare Python-Dateien unter `.claude/hooks/`, nicht
 als Einzeiler im JSON. Sie sind damit im Pull Request review-fähig und
@@ -322,10 +331,17 @@ Entwicklungsrechner installiert, `python` bei diesem Projekt zwangsläufig.
 
 ### Zwei bewusste Entscheidungen zu den Hooks
 
-**Die Hooks laufen fail-open.** Kein Docker, Container aus, kaputtes
-JSON — jeder Fehler endet still mit Exit 0. Ein Hook, der die Arbeit
-blockiert, weil er selbst defekt ist, kostet mehr, als er schützt. Das
-harte Gate ist die Pipeline; die Hooks fangen Fehler nur früher ab.
+**Die Hooks laufen fail-open — mit zwei Ausnahmen.** Kein Docker,
+Container aus, kaputtes JSON — jeder Fehler endet still mit Exit 0. Ein Hook,
+der die Arbeit blockiert, weil er selbst defekt ist, kostet mehr, als er
+schützt. Das harte Gate ist die Pipeline; die Hooks fangen Fehler nur früher
+ab.
+
+Die Ausnahmen sind der Staging-Deploy und das Commit-Gate. Beide schließen,
+wenn sie nicht prüfen können: ein Deploy reißt eine VM ab, und ein Commit
+ohne gelaufene Tests ist genau der Fall, den das Gate verhindern soll
+(ADR 0015, ADR 0017). Ein Mensch am eigenen Terminal committet weiterhin
+ohne Hook — das ist der Ausweg, falls das Gate selbst kaputt ist.
 
 **Das Stop-Gate prüft Lint, nicht die Testsuite.** Ein voller Backend-Lauf
 dauert rund 3,5 Minuten. Ein Stop-Hook, der ihn bei jedem Turn-Ende fährt,
@@ -333,9 +349,11 @@ wäre nach einer halben Stunde abgeschaltet. Deshalb die Aufteilung:
 
 > **Schnelle Gates laufen lokal, teure Gates laufen in der Pipeline.**
 
-Lint und Formatierung kosten Sekunden und gehören an den Turn. Tests,
-Coverage und Security-Scan kosten Minuten und gehören in den Pull Request,
-wo Wartezeit nichts blockiert.
+Lint und Formatierung kosten Sekunden und gehören an den Turn. Tests
+kosten Minuten und gehören an den **Commit** — der ist seltener als das
+Turn-Ende, weil Commits je Arbeitspaket gebündelt werden (ADR 0017).
+Coverage und Security-Scan bleiben im Pull Request, wo Wartezeit nichts
+blockiert.
 
 ### Die harte Ebene: Berechtigungen
 
@@ -359,8 +377,14 @@ und `clouds.yaml`; `git push --force` und jeder Push auf `main`;
 wäre.
 
 Was nachfragt statt zu sperren: jeder `git push`, `git reset --hard`,
-`git rebase`, `tofu plan`, `terraform plan`, `gh workflow run`, `docker compose down`,
-die zurücksetzenden `make`-Targets.
+`git rebase`, `tofu plan`, `terraform plan`, `gh issue close|delete`,
+`docker compose down`, die zurücksetzenden `make`-Targets — und das
+Bearbeiten von `.github/workflows/**` und `harness/**`. Wer sein eigenes
+Prüfsystem umschreiben darf, hat keines.
+
+Was ohne Nachfrage geht, weil der Hook es prüft: `gh workflow run
+staging.yml` (nur develop-Stand), `gh issue create|edit|comment` (nur
+Six7-app-store), `git commit` (nur durch das Commit-Gate).
 
 Das **Lesen** der Secrets mitzusperren ist der Punkt, der vorher fehlte. Ein
 Hook auf `Edit|Write` verhindert nur das Schreiben; gelesen wandert der
@@ -411,6 +435,7 @@ Bash-Kommandos sind nicht auto-approved, alles Unbekannte fragt nach.
 - Kein Bearbeiten bestehender Alembic-Migrationen
 - Kein `git push --force`
 - Kein Merge ohne grüne CI
+- Kein Lauf gegen den main-Stand, kein `gh`-Aufruf gegen DHBW-AppStore
 
 Die Grenzen sind die Hälfte der Antwort. Ein Agent, der alles darf,
 braucht bei jedem Schritt einen Menschen — und war damit nie autonom.
@@ -418,33 +443,43 @@ braucht bei jedem Schritt einen Menschen — und war damit nie autonom.
 ## Die Kette von der Anforderung bis in den Einsatz
 
 ```
-User Story
+User Story (Story-Matrix im Audit)
    │
-   ├─ Interview (AskUserQuestion)  ──►  SPEC.md
-   │     Scope, betroffene Dateien, Out-of-Scope,
-   │     End-to-End-Verifikation
+   ├─ /stories-zu-issues            ──►  Issue in Six7-app-store/deployment
    │
-   ├─ Plan Mode                    read-only, bis der Plan steht
+   ├─ /issue-planen                 Ist gegen heutigen Code belegt,
+   │     fachliche Fragen an Menschen    Abnahme, Doku, ADR, Nachweis
+   │     (AskUserQuestion)          ──►  Plan als Kommentar im Issue
    │
-   ├─ Implementierung              PostToolUse-Hook: Lint nach jedem Edit
-   │                               PreToolUse-Hook: Tabu-Zonen blockiert
+   ├─ Mensch bestätigt den Plan
    │
-   ├─ Verifikation                 Stop-Hook: Turn endet nicht rot
+   ├─ Implementierung               PostToolUse-Hook: Lint nach jedem Edit
+   │                                PreToolUse-Hook: Tabu-Zonen blockiert
    │
-   ├─ Gegenprüfung                 /code-review im frischen Kontext
+   ├─ Doku, Diagramme, ADR          doku-nachziehen, adr-schreiben
    │
-   ├─ Commit + Pull Request
+   ├─ Verifikation                  Stop-Hook: Turn endet nicht rot
    │
-   └─ Pipeline                     lint → test → coverage → security
-            │                              → build → image-scan
-            │
-            └─ develop  ──►  Staging-Deploy (OpenTofu + Ansible, self-hosted Runner)
+   ├─ Commit je Repo                Commit-Gate: Doku-Zuordnung, Lint, Tests
+   │
+   ├─ Gegenprüfung                  /code-review, /pr-review
+   │
+   ├─ Pull Request                  „Teil von Six7-app-store/deployment#N"
+   │
+   ├─ Pipeline                      lint → test → coverage → security
+   │                                → build → image-scan, Doku-Check
+   │
+   ├─ Merge (Mensch) ──► develop ──► Staging-Deploy
+   │
+   └─ Nachweis auf Staging          make staging-status, Abnahme → Kommentar
+                                    im Issue; Schließen bestätigt ein Mensch
 ```
 
-Eine brauchbare `SPEC.md` ist selbsttragend: sie benennt die beteiligten
+Ein brauchbarer Plan ist selbsttragend: er benennt die beteiligten
 Dateien und Schnittstellen, sagt explizit, was **nicht** dazugehört, und
 endet mit einem Verifikationsschritt, der beweist, dass die Sache
-funktioniert. Zeit, die in die Präzision der Spezifikation fließt, zahlt
+funktioniert. Er steht im Issue, nicht in einer `SPEC.md` im Repo
+(ADR 0016). Zeit, die in die Präzision der Spezifikation fließt, zahlt
 sich stärker aus als Zeit, die man mit dem Zusehen bei der Umsetzung
 verbringt.
 
@@ -457,6 +492,8 @@ Anforderung — und sie lässt sich nur maschinell halten.
 |---|---|
 | Coverage-Ratsche | `fail_under` bzw. `thresholds` in allen Repos; der Lauf schlägt fehl, wenn die Abdeckung darunter fällt. Der Wert wird nur erhöht, nie gesenkt. |
 | Lint-Gate am Turn-Ende | Formatierungs- und Stilverfall wird nicht angesammelt |
+| Commit-Gate | Kein Agenten-Commit ohne gelaufene Tests; geänderter Code fragt nach der Doku, die ihn beschreibt |
+| Doku-Check in der CI | Tote Links, fehlende ADR-Einträge, kaputte Diagramme, Stories ohne Issue fallen im PR auf |
 | Tabu-Zonen als Hook | Migrationen und Secrets sind nicht vom Wohlwollen abhängig |
 | ADR-Pflicht | Architekturentscheidungen bleiben nachvollziehbar statt implizit |
 | Gegenprüfung im frischen Kontext | Fängt das, was der Schreibende nicht sieht |

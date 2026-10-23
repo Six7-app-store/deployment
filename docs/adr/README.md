@@ -46,6 +46,11 @@ Lage ändert, entsteht ein neues, und das alte bekommt den Status
 
 Wer eine Architekturentscheidung trifft, legt im selben Commit ein ADR an.
 Das ist Teil der Definition of Done in den `AGENTS.md` aller vier Repos.
+Wie, und was danach an Doku und Diagrammen nachzuziehen ist: Skill
+`adr-schreiben`.
+
+`make docs-check` prüft dieses Verzeichnis gegen die Dateien: jede Nummer
+genau einmal, lückenlos, Status hier wie im ADR.
 
 ## Verzeichnis
 
@@ -64,3 +69,7 @@ Das ist Teil der Definition of Done in den `AGENTS.md` aller vier Repos.
 | [0011](0011-deploy-wartet-auf-die-einrichtung-der-vms.md) | Ein Deploy ist erst fertig, wenn cloud-init in allen VMs durchgelaufen ist | Angenommen |
 | [0012](0012-design-v2-tokens-als-einzige-quelle.md) | Das Design v2 hat die Tokens als einzige Quelle, Light ist Standard | Angenommen |
 | [0013](0013-develop-ist-staging-main-ist-produktion.md) | `develop` ist Staging, `main` ist Produktion | Angenommen |
+| [0014](0014-zwei-staende-develop-und-main.md) | Die Pipeline baut zwei Stände: `develop` und `main` | Vorschlag |
+| [0015](0015-agent-baut-develop-stand-selbst-nie-produktion.md) | Der Agent baut den develop-Stand selbst neu, den main-Stand und die Produktion nie | Vorschlag |
+| [0016](0016-user-stories-leben-als-issues-in-deployment.md) | Offene User Stories leben als Issues in Six7-app-store/deployment | Vorschlag |
+| [0017](0017-commit-gate-mit-doku-zuordnung-und-tests.md) | Vor jedem Agenten-Commit laufen Doku-Zuordnung und die Tests der CI | Vorschlag |

@@ -14,6 +14,9 @@ Frontend und Worker laufen nur über die Stacks hier.
 - Moodle-Testinstanz: siehe `docs/moodle-lti-dev.md`
 - Claude-Harness verteilen: `make harness-sync` (nach jedem `git pull`),
   prüfen: `make harness-check`. Quelle: `harness/`, siehe `harness/README.md`.
+- Doku prüfen: `make docs-check` (Links, ADR-Verzeichnis, Diagramme)
+- Staging lesend prüfen: `make staging-status`
+- Story-Issues: `make story-issues` (Trockenlauf), `make story-issues-anlegen`
 - `make help` listet alle Targets.
 
 ## Umgebungen
@@ -38,8 +41,14 @@ Trockenlauf gibt es nicht.
 self-hosted Runner an einem Fork-PR gäbe Fremden eine Ausführungsumgebung mit
 OpenStack-Zugang. Nicht nachrüsten.
 
-Staging hat bewusst keine Make-Targets, damit kein Arbeitsplatz von dem
-abweicht, was die Pipeline erzeugt.
+Staging hat bewusst keine Make-Targets, die etwas verändern, damit kein
+Arbeitsplatz von dem abweicht, was die Pipeline erzeugt. `make
+staging-status` liest nur.
+
+**Agent und Staging (ADR 0015):** den Stand `develop` darf der Agent selbst
+neu bauen — `gh workflow run staging.yml -R Six7-app-store/deployment --ref
+develop -f stand=develop`. Der Hook prüft Form und laufende Deploys. Den
+Stand `main` und die Produktion nie. Details: Skill `deployment-pruefen`.
 
 ## Env-Fallen
 
@@ -74,6 +83,9 @@ abweicht, was die Pipeline erzeugt.
 - Harness geändert? `make harness-sync` gefahren, `make harness-test` grün,
   die erzeugten Kopien mitcommittet
 - Architekturentscheidung getroffen? ADR unter `docs/adr/` (Format: `docs/adr/README.md`)
+- Doku und Diagramme nachgezogen (`harness/doc-map.json`, Skill
+  `doku-nachziehen`), `make docs-check` grün. Das Commit-Gate fragt danach
+  (ADR 0017).
 
 ## Nicht anfassen
 
