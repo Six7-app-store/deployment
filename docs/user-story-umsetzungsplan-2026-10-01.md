@@ -93,7 +93,7 @@ Hoch = zentraler Lehrbedarf, Integrationslücke oder Betriebsgrundlage; Mittel =
 
 **Ist:** Terminal-App und beschriebene code-server-App ersetzen nicht automatisch das Mac-Labor. Java, Eclipse und IntelliJ sind lokal nicht als installierte Kombination nachgewiesen.
 
-**Betroffene Stellen:** Neues versioniertes App-Template nach dem vorhandenen Packer-/Terraform-Muster, `Ubuntu-App/packer/` als Referenz, `deployment/seed/seed_data.py`, App-Beschreibung, Zugangsdatenvertrag in `backend/app/services/deployment_notifier.py`.
+**Betroffene Stellen:** Neues versioniertes App-Template [Six7-app-store/template-app](https://github.com/Six7-app-store/template-app) als Referenz, `deployment/seed/seed_data.py`, App-Beschreibung, Zugangsdatenvertrag in `backend/app/services/deployment_notifier.py`.
 
 **Schritte:**
 
