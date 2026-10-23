@@ -4,7 +4,7 @@ variable "ssh_public_key" {
 }
 
 # Dieselben Campus-Bereiche wie in envs/staging. SSH gehoert nicht ins offene
-# Netz; 80 und 443 dagegen schon - siehe security_group.tf.
+# Netz; 80 und 443 dagegen schon - siehe security_group.tofu.
 variable "ssh_source_cidr_ipv4" {
   description = "IPv4-Bereich, der Port 22 erreichen darf."
   type        = string

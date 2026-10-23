@@ -11,7 +11,7 @@ roles:
 collections:
   - name: community.docker  # docker_compose_v2
   - name: ansible.posix     # synchronize, mount
-  # filesystem, used by forgejo.yml to prepare the Cinder data volume. Declared
+  # filesystem, used by staging.yml to prepare the Cinder data volume. Declared
   # explicitly even though the job image already has it: it ships as part of the
   # full `ansible` package rather than being asked for, so it would disappear
   # unannounced if that image ever moved to ansible-core.

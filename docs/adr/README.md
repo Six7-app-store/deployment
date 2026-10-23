@@ -56,7 +56,7 @@ genau einmal, lückenlos, Status hier wie im ADR.
 
 | Nr. | Titel | Status |
 |---|---|---|
-| [0001](0001-keine-windows-apps.md) | Windows-Apps werden nicht unterstützt | Angenommen |
+| [0001](0001-keine-windows-apps.md) | Windows-Apps werden nicht unterstützt | Abgelöst durch ADR-0020 |
 | [0002](0002-self-hosted-runner-auf-eigener-vm.md) | Der Staging-Deploy läuft auf einem self-hosted GitHub-Runner auf eigener VM | Angenommen |
 | [0003](0003-staging-wird-bei-jedem-merge-neu-gebaut.md) | Staging wird bei jedem Merge abgerissen und neu gebaut | Angenommen |
 | [0004](0004-staging-kommt-ohne-cinder-volume-aus.md) | Staging kommt ohne Cinder-Volume aus | Angenommen |
@@ -73,3 +73,6 @@ genau einmal, lückenlos, Status hier wie im ADR.
 | [0015](0015-agent-baut-develop-stand-selbst-nie-produktion.md) | Der Agent baut den develop-Stand selbst neu, den main-Stand und die Produktion nie | Vorschlag |
 | [0016](0016-user-stories-leben-als-issues-in-deployment.md) | Offene User Stories leben als Issues in Six7-app-store/deployment | Vorschlag |
 | [0017](0017-commit-gate-mit-doku-zuordnung-und-tests.md) | Vor jedem Agenten-Commit laufen Doku-Zuordnung und die Tests der CI | Vorschlag |
+| [0018](0018-forgejo-wird-nicht-weiterbetrieben.md) | Forgejo wird nicht weiterbetrieben | Angenommen |
+| [0019](0019-terraform-uebergangsinsel-ist-aufgeloest.md) | Die Terraform-Übergangsinsel ist aufgelöst | Angenommen |
+| [0020](0020-windows-apps-werden-unterstuetzt.md) | Windows-Apps werden unterstützt | Angenommen |

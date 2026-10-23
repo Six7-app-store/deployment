@@ -10,61 +10,15 @@ Ein vollständiger Durchlauf dauert etwa **fünf bis zehn Minuten**.
 
 ---
 
-## Einmalig: Umstieg von Terraform auf OpenTofu
+## Umstieg von Terraform auf OpenTofu
 
-Gilt nur für den Wechsel auf die `feat/opentofu`-Stände der vier Repos
-([ADR 0010](adr/0010-opentofu-statt-terraform-und-packer.md)). OpenTofu
-übernimmt keinen Terraform-State; alles, was Terraform angelegt hat, wird
-vorher abgerissen. Die Reihenfolge ist zwingend: Schritte 1 bis 3 laufen
-**mit dem alten Stand**, bevor gemergt wird.
+Abgeschlossen, siehe [ADR 0010](adr/0010-opentofu-statt-terraform-und-packer.md).
+Die einmaligen Schritte von damals stehen in der Git-Historie dieser Datei.
+Wer einen Dev-Stack aus der Terraform-Zeit hat, findet den Hinweis zum
+State-Volume in [dev-setup.md](dev-setup.md).
 
-1. **App-Deployments zerstören.** Jedes laufende Deployment in der
-   Oberfläche löschen und warten, bis es verschwunden ist. Danach in Horizon
-   nachsehen, dass keine VM eines App-Deployments übrig ist. Der neue
-   Worker kann sie nicht mehr abräumen: er lehnt Apps mit `terraform/`
-   oder `packer/` ab.
-2. **Staging abreißen.** Auf der Runner-VM den State sichern und mit dem
-   alten Code zerstören:
-
-   ```bash
-   cp /var/lib/tf-state/staging/terraform.tfstate ~/tfstate-staging-vor-tofu.json
-   cd <checkout des alten Stands>/infrastructure/terraform/envs/staging
-   terraform destroy
-   ```
-
-   Ohne diesen Schritt legt der erste OpenTofu-Lauf eine zweite VM an und
-   scheitert am schon vergebenen Namen. Der neue State liegt unter
-   `/var/lib/tofu-state/staging/`; die alte Datei bleibt liegen und wird nie
-   gelesen.
-3. **State-Datenbank der App-Deployments leeren** (auf der Runner-VM,
-   ADR 0005). Erst sichern, dann die Schemata `deployment_*` löschen:
-
-   ```sql
-   -- psql gegen die State-Datenbank; erzeugt die DROP-Befehle
-   SELECT 'DROP SCHEMA ' || quote_ident(nspname) || ' CASCADE;'
-     FROM pg_namespace WHERE nspname LIKE 'deployment\_%';
-   ```
-
-4. **Mergen.** Die vier `feat/opentofu`-Branches auf `main`. Der
-   Staging-Workflow baut mit OpenTofu neu auf, Ansible fährt die
-   Migrationen (`alembic upgrade head`, darunter `661aa473b510` für
-   `userInputVar`).
-5. **Dev-Stacks.** Der Default-Benutzer der State-Datenbank heißt jetzt
-   `tofu`. Postgres legt ihn nur beim ersten Start eines Volumes an; wer
-   schon ein Volume hat, legt es neu an (es enthält nur State, keine
-   Anwendungsdaten):
-
-   ```bash
-   docker compose -f docker-compose.dev.yml rm -sf postgres-tfstate
-   docker volume ls --filter name=postgres_tfstate_data   # Namen ablesen
-   docker volume rm <name aus der Zeile darüber>
-   ```
-
-6. **App-Repos umbauen.** Bis eine App `tofu/` statt `terraform/` und
-   `packer/` mitbringt, ist sie nicht deploybar.
-
-`envs/moodle` und `envs/forgejo` sind davon ausgenommen und laufen weiter
-mit Terraform aus `infrastructure/terraform/`.
+Alle Umgebungen liegen unter `infrastructure/tofu/`, auch `envs/moodle`
+(ADR 0019).
 
 ---
 

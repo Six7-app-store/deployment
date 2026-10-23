@@ -33,7 +33,7 @@
 # docs/deploy-runbook.md
 #
 # Was sich ohne OpenStack prüfen lässt, wird hier geprüft — und zwar bei
-# jedem Push und jedem Pull Request, damit ein Fehler in OpenTofu, Terraform oder
+# jedem Push und jedem Pull Request, damit ein Fehler in OpenTofu oder
 # Ansible auffällt, bevor jemand ihn auf die VM trägt.
 name: CI - Infrastructure QA
 
@@ -53,7 +53,7 @@ permissions:
 # Feature-Branches, und dieselbe Quelle pruefen dort die drei anderen Repos.
 jobs:
   qa:
-    name: "🔍 OpenTofu, Terraform, Ansible, IaC-Scan"
+    name: "🔍 OpenTofu, Ansible, IaC-Scan"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -77,24 +77,6 @@ jobs:
             echo "--- $env"
             tofu -chdir="$env" init -backend=false -input=false
             tofu -chdir="$env" validate
-          done
-
-      # Übergangsinsel: envs/moodle und envs/forgejo verwalten laufende VMs
-      # und bleiben vorerst bei Terraform (ADR 0010). Fällt weg, sobald sie
-      # nach infrastructure/tofu umgezogen sind.
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_wrapper: false
-
-      - name: Terraform Format (moodle, forgejo)
-        run: terraform fmt -check -recursive infrastructure/terraform
-
-      - name: Terraform Validate (moodle, forgejo)
-        run: |
-          for env in infrastructure/terraform/envs/*/; do
-            echo "--- $env"
-            terraform -chdir="$env" init -backend=false -input=false
-            terraform -chdir="$env" validate
           done
 
       - name: Ansible installieren

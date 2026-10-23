@@ -8,11 +8,9 @@ __pycache__/
 # versions and belongs in git.
 .terraform/
 
-# State files. envs/forgejo uses a local backend (see its backend.tf), so an
-# apply from an operator's machine drops terraform.tfstate next to the config
-# (OpenTofu kept Terraform's file names).
-# It records resource IDs and must not be committed — back it up alongside the
-# Forgejo database dumps instead.
+# State files. An apply from an operator's machine with a local backend drops
+# terraform.tfstate next to the config (OpenTofu kept Terraform's file names).
+# It records resource IDs and must not be committed.
 *.tfstate
 *.tfstate.*
 .terraform.tfstate.lock.info

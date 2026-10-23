@@ -83,7 +83,7 @@
     },
     {
       "repo": "deployment",
-      "pfade": ["infrastructure/terraform/envs/moodle/*", "infrastructure/ansible/moodle.yml"],
+      "pfade": ["infrastructure/tofu/envs/moodle/*", "infrastructure/ansible/moodle.yml"],
       "doku": ["docs/moodle-infrastruktur.md"],
       "warum": "Moodle-Instanz"
     },

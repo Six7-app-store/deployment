@@ -1,13 +1,15 @@
-# Job image for the Forgejo deploy runner.
+# Deploy image for deploy.cmd / scripts/deploy.sh.
 #
-# Everything the staging workflow needs is baked in: no apt-get, no curl | sh,
-# no ansible-galaxy at deploy time. That removes the passwordless-sudo
-# dependency the GitHub Actions version had, pins every tool version, and stops
-# a deploy failing because GitHub Releases or Ansible Galaxy is briefly down.
+# Everything a manual deploy needs is baked in: no apt-get, no curl | sh, no
+# ansible-galaxy at deploy time. That needs neither WSL nor locally installed
+# OpenTofu or Ansible, pins every tool version, and stops a deploy failing
+# because GitHub Releases or Ansible Galaxy is briefly down.
 #
-# node is the base rather than an add-on because Forgejo Actions — like act —
-# executes JavaScript actions such as actions/checkout *inside* this container.
-# A plain debian base makes actions/checkout fail with a confusing error.
+# The staging pipeline itself does not use this image; it runs on the
+# self-hosted GitHub runner (ADR 0002).
+#
+# node stays the base so the image can also run JavaScript actions (act-style)
+# should it ever be used that way.
 FROM node:20-bookworm-slim
 
 ARG TARGETARCH=amd64

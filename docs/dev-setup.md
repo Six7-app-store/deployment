@@ -22,11 +22,10 @@ Ein GitHub Personal Access Token mit `repo`-Scope ist empfohlen. Ohne Token funk
 ```bash
 mkdir app-store
 cd app-store
-git clone https://github.com/DHBW-AppStore/frontend
-git clone https://github.com/DHBW-AppStore/backend
-git clone https://github.com/DHBW-AppStore/worker
-git clone https://github.com/DHBW-AppStore/deployment
-git clone https://github.com/DHBW-AppStore/.github org-docs # optional (nur Dokumentation)
+git clone https://github.com/Six7-app-store/frontend
+git clone https://github.com/Six7-app-store/backend
+git clone https://github.com/Six7-app-store/worker
+git clone https://github.com/Six7-app-store/deployment
 cd deployment
 ```
 

@@ -71,15 +71,13 @@ Stand `main` und die Produktion nie. Details: Skill `deployment-pruefen`.
 - Redis: DB 0 gehört Celery, DB 1 der LTI-Sitzungsablage. Nicht mischen.
 - OpenTofu-Änderungen mit `tofu fmt -recursive infrastructure/tofu`
   formatieren — die Pipeline prüft das mit `-check` und bricht sonst ab.
-- `infrastructure/terraform/` ist eine Übergangsinsel für `envs/moodle` und
-  `envs/forgejo` (ADR 0010). Dort gilt weiter `terraform fmt`; neue
-  Infrastruktur gehört nach `infrastructure/tofu/`. Das Modul
-  `openstack_vm` liegt in beiden Bäumen — Änderungen in beide Kopien.
+- Alle Umgebungen und das Modul `openstack_vm` liegen unter
+  `infrastructure/tofu/` (ADR 0010, ADR 0019). Neue Infrastruktur gehört dorthin.
 
 ## Definition of Done
 
 - `.env.example` und Compose-Datei zusammen aktualisiert
-- OpenTofu (und die Terraform-Übergangsinsel) formatiert
+- OpenTofu formatiert
 - Harness geändert? `make harness-sync` gefahren, `make harness-test` grün,
   die erzeugten Kopien mitcommittet
 - Architekturentscheidung getroffen? ADR unter `docs/adr/` (Format: `docs/adr/README.md`)
@@ -91,12 +89,12 @@ Stand `main` und die Produktion nie. Details: Skill `deployment-pruefen`.
 
 - `.env` — nur `.env.example` wird gepflegt
 - Alles auf `*.pem` (Tool-Schlüssel, gehört nie ins Repo)
-- Kein Prod-Deploy und kein `tofu apply` (oder `terraform apply`) von Hand
+- Kein Prod-Deploy und kein `tofu apply` von Hand
 - Kein `git push --force`
 - `.claude/` — erzeugt aus `harness/`. Änderungen gehören in die Quelle, sonst
   sind sie beim nächsten `make harness-sync` weg.
 
-Geheimnisse, Produktions-Deploys, `tofu apply`/`terraform apply` und Pushes auf `main` sind
+Geheimnisse, Produktions-Deploys, `tofu apply` und Pushes auf `main` sind
 zusätzlich als deny-Regel in `.claude/settings.json` gesperrt. So ein Kommando
 scheitert ohne Nachfrage — das ist Absicht und kein Werkzeugfehler.
 

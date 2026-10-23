@@ -486,18 +486,18 @@ class IacFormatierer(unittest.TestCase):
     def test_tofu_datei_formatiert_tofu(self):
         self.assertEqual(guard.iac_formatter("envs/staging/main.tofu")[0], "tofu")
 
-    def test_tf_datei_formatiert_terraform(self):
-        # Terraform liest keine .tofu-Dateien; .tf gibt es nur noch in der
-        # Übergangsinsel infrastructure/terraform.
-        self.assertEqual(guard.iac_formatter("envs/moodle/main.tf")[0], "terraform")
-        self.assertEqual(guard.iac_formatter("x.tfvars")[0], "terraform")
+    def test_tf_datei_wird_nicht_formatiert(self):
+        # Seit ADR 0019 gibt es keine Terraform-Dateien mehr; ein verirrtes
+        # .tf bekommt kein terraform fmt.
+        self.assertIsNone(guard.iac_formatter("envs/moodle/main.tf"))
+        self.assertIsNone(guard.iac_formatter("x.tfvars"))
 
     def test_andere_dateien_gehen_nicht_an_iac(self):
         self.assertIsNone(guard.iac_formatter("app/tasks.py"))
         self.assertIsNone(guard.iac_formatter("tofu/README.md"))
 
-    def test_gate_kennt_beide_baeume(self):
-        self.assertEqual(dict(guard.IAC_TREES), {"tofu": "tofu", "terraform": "terraform"})
+    def test_gate_kennt_nur_den_tofu_baum(self):
+        self.assertEqual(dict(guard.IAC_TREES), {"tofu": "tofu"})
 
 
 class StopSchleifenschutz(unittest.TestCase):

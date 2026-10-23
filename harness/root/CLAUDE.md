@@ -42,13 +42,12 @@ und wird auch in die `AGENTS.md` aller sechs lokalen Repositories verteilt:
 - **`.env`, `*.pem`, `*.key` sind tabu** — lesen wie schreiben. Gepflegt wird
   `.env.example`. Die deny-Regeln in `.claude/settings.json` setzen das hart
   durch, ein Hook erklärt den Grund.
-- **Kein Produktions-Deploy, kein `tofu apply` (oder `terraform apply`) von Hand.** Staging baut
+- **Kein Produktions-Deploy, kein `tofu apply` von Hand.** Staging baut
   `develop` und läuft über GitHub Actions auf dem self-hosted Runner
   (ADR-0002, ADR-0013); Produktion ist `main` und wird von einem Menschen auf
   der Zielmaschine ausgerollt. Den develop-Stand darf der Agent über
   `gh workflow run staging.yml` selbst neu bauen, den main-Stand nie
-  (ADR-0015, Skill `deployment-pruefen`). Der Forgejo-Stack unter
-  `deployment/forgejo/` ist ein Versuchsaufbau, keine laufende Pipeline.
+  (ADR-0015, Skill `deployment-pruefen`).
 - **Schreibende `gh`-Aufrufe immer mit `-R Six7-app-store/<repo>`.** Die
   Stack-Repos sind Forks von DHBW-AppStore; ohne `-R` zielt `gh` auf das
   Original. Der Hook blockt das.

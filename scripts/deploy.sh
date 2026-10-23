@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Rollt den Store auf die Staging-VM aus. Läuft im Deploy-Container
-# (forgejo/job-image/Dockerfile), damit weder WSL noch lokal installiertes
+# (deploy-image/Dockerfile), damit weder WSL noch lokal installiertes
 # OpenTofu oder Ansible nötig ist.
 #
 # Nicht direkt aufrufen — deploy.cmd (Windows) bzw. deploy.sh im Repo-Wurzel

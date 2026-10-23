@@ -61,10 +61,7 @@ OpenTofu  →  je Nutzer eine VM aus dem Basis-Image  →  cloudbase-init
 **Kein eigenes Abbild mehr** ([ADR 0010](adr/0010-opentofu-statt-terraform-und-packer.md)).
 Die VM startet vom Basis-Image `Windows 11 25H2 (UEFI)`; was früher Packer
 einmalig ins Abbild gebacken hat, installiert cloudbase-init jetzt beim
-ersten Start. Das verlängert den ersten Start entsprechend. Das
-Windows-App-Repository ist noch auf dem alten Stand (`packer/` +
-`terraform/`) und muss auf `tofu/` umgebaut werden, bevor es wieder
-deploybar ist.
+ersten Start. Das verlängert den ersten Start entsprechend.
 
 **OpenTofu** legt **eine VM pro Studierendem** an. Kein geteilter Rechner wie bei Ubuntu: Windows 11 ist ein Client-Betriebssystem und erlaubt nur eine Sitzung gleichzeitig — auf einer geteilten VM würden sich die Teilnehmenden gegenseitig rauswerfen. Das kostet 2 vCPU und 8 GB RAM je Kopf, deshalb eine Obergrenze von zwölf.
 

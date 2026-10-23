@@ -14,14 +14,16 @@ Es wird **eine VM pro Team** deployed. Bei zwei Teams entstehen zwei VMs, jede m
 
 ## Deployment-Dauer
 
-| Phase | Dauer |
-|---|---|
-| Packer Image Build (einmalig) | ca. 8–14 Min |
-| Terraform Apply | ca. 2–4 Min |
-| VM-Boot + cloud-init (User-Anlage, Apache-Start) | ca. 3–6 Min |
-| **Gesamt erstmalig** | **ca. 15–25 Min** |
+Ein Deployment läuft in zwei Phasen:
 
-Bei vorhandenem Packer-Image entfällt der Build — dann ca. **5–10 Minuten** gesamt.
+1. `tofu apply` legt VM, Netzanschluss und Floating IP an.
+2. Beim ersten Start richtet cloud-init die VM ein (Phase `VM_SETUP`). Der Store
+   meldet das Deployment erst als fertig, wenn diese Einrichtung abgeschlossen
+   ist.
+
+Es gibt kein vorgebautes Image mehr: Die Software wird bei jedem Deployment
+installiert. Die Dauer hängt deshalb von der Einrichtung ab und ist länger als
+bei früheren Ständen. Messwerte folgen nach der Abnahme auf Staging.
 
 ## Konfigurierbare Variablen
 

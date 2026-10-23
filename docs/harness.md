@@ -48,7 +48,6 @@ Workflow-Schritte auf dem vorhandenen Runner.
 Den Punkt „Staging-Deploy anstoßen" hat der Umbau vom 19.09.2026 erledigt,
 bevor er eine Lücke werden konnte: Staging baut sich seit `52d931f` bei jedem
 Merge selbst neu auf (ADR 0003), seit ADR 0013 bei jedem Merge auf `develop`. Angestoßen werden muss nichts mehr.
-Ein Token für den früheren Forgejo-Workflow braucht es damit auch nicht.
 
 ### Was bewusst außerhalb bleibt
 
@@ -148,7 +147,7 @@ geladene Datei, sondern in eine Skill unter `.claude/skills/<name>/SKILL.md`.
 | Debuggen | Container-Logs, Shells | `make dev-logs-backend`, `make shell-db` |
 | Qualitätssicherung (Python) | pytest, ruff, black, isort | `make test-backend-isolated`, `docker exec … poetry run …` |
 | Qualitätssicherung (Frontend) | vitest, vue-tsc | `docker exec frontend-dev sh -lc 'cd /app && npx vitest --run'` |
-| Qualitätssicherung (IaC) | tofu fmt (terraform fmt für die Übergangsinsel), Trivy | in der Pipeline |
+| Qualitätssicherung (IaC) | tofu fmt, Trivy | in der Pipeline |
 | Gegenprüfung | `/code-review` | Subagent in frischem Kontext, sieht nur den Diff |
 | Deployment | GitHub Actions, self-hosted Runner | Staging automatisch bei Merge auf `develop`; von Hand `gh workflow run staging.yml` |
 
@@ -321,8 +320,8 @@ leitet die geltende Regel aus dem Pfad der bearbeiteten Datei ab.
 | `PreToolUse` auf Bash | Schreibende `gh`-Aufrufe nur mit `-R Six7-app-store/…` |
 | `PreToolUse` auf Bash | `gh workflow run staging.yml` nur für den Stand `develop` und nur ohne laufenden Deploy (ADR 0015) |
 | `PreToolUse` auf Bash | Commit-Gate vor `git commit`: Doku-Zuordnung aus `harness/doc-map.json`, dann Lint und Tests der CI im Container (ADR 0017) |
-| `PostToolUse` auf Edit/Write | backend: `ruff --fix`. worker: ruff, black, isort. `*.tofu`: `tofu fmt`, `*.tf`: `terraform fmt`. frontend: bewusst nichts |
-| `Stop` | Turn-Ende blockiert, solange das Gate des Repos rot ist: ruff (backend), ruff/black/isort (worker), `vue-tsc` (frontend), `tofu fmt -check` auf `infrastructure/tofu` und `terraform fmt -check` auf `infrastructure/terraform` — am Host, sonst über Docker — und der schnelle Teil von `make docs-check` (deployment) |
+| `PostToolUse` auf Edit/Write | backend: `ruff --fix`. worker: ruff, black, isort. `*.tofu`: `tofu fmt`. frontend: bewusst nichts |
+| `Stop` | Turn-Ende blockiert, solange das Gate des Repos rot ist: ruff (backend), ruff/black/isort (worker), `vue-tsc` (frontend), `tofu fmt -check` auf `infrastructure/tofu` — am Host, sonst über Docker — und der schnelle Teil von `make docs-check` (deployment) |
 
 Die Skripte liegen als lesbare Python-Dateien unter `.claude/hooks/`, nicht
 als Einzeiler im JSON. Sie sind damit im Pull Request review-fähig und
@@ -369,7 +368,7 @@ Code selbst durchsetzt: der `permissions`-Block in `.claude/settings.json`.
 | `permissions.deny` | hart, vor jedem Werkzeugaufruf | Der Aufruf findet nicht statt |
 
 Was hart gesperrt ist: Lesen **und** Schreiben von `.env`, `*.pem`, `*.key`
-und `clouds.yaml`; `git push --force` und jeder Push auf `main`;
+und `clouds.yaml`; `git push --force`, jeder Push auf `main` und jeder Push an das Remote `dhbw` (E6, DHBW-AppStore);
 `gh pr merge`; `make prod*` und Compose gegen die Prod- und Staging-Stacks;
 `deploy.cmd` und `scripts/deploy.sh`; `tofu apply|destroy|state|import` und dasselbe für `terraform`;
 `docker system prune`, `docker volume rm`, `rm -rf`. Dazu `docker exec
@@ -377,7 +376,7 @@ und `clouds.yaml`; `git push --force` und jeder Push auf `main`;
 wäre.
 
 Was nachfragt statt zu sperren: jeder `git push`, `git reset --hard`,
-`git rebase`, `tofu plan`, `terraform plan`, `gh issue close|delete`,
+`git rebase`, `tofu plan`, `gh issue close|delete`,
 `docker compose down`, die zurücksetzenden `make`-Targets — und das
 Bearbeiten von `.github/workflows/**` und `harness/**`. Wer sein eigenes
 Prüfsystem umschreiben darf, hat keines.
