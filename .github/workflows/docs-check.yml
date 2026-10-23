@@ -1,0 +1,46 @@
+# Prüft, dass Doku, Diagramme, ADR-Verzeichnis und Story-Issues
+# zusammenpassen (ADR 0017, ADR 0016).
+#
+# Dieselbe Prüfung wie `make docs-check` am Arbeitsplatz, plus zwei Teile,
+# die dort fehlen können: Mermaid rendert hier immer (Docker ist da), und
+# die Story-Issues werden gegen die Story-Matrix gehalten (braucht die
+# GitHub-API).
+#
+# Läuft bei jedem Pull Request, auch gegen Feature-Branches — aus demselben
+# Grund wie harness-check.yml: an develop wird gearbeitet.
+name: CI - Doku
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  docs:
+    name: "📚 Links, ADR-Verzeichnis, Diagramme, Story-Issues"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pull vorab, damit ein Netzfehler beim Image nicht wie ein kaputtes
+      # Diagramm aussieht.
+      - name: mermaid-cli holen
+        run: docker pull --quiet minlag/mermaid-cli:11.17.1
+
+      - name: Doku-Check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/docs_check.py --mermaid=on --issues
+
+      - name: Hinweis bei Abweichung
+        if: failure()
+        run: |
+          echo "::error::Doku, Diagramme, ADR-Verzeichnis oder Story-Issues passen nicht zusammen."
+          echo "Lokal: 'make docs-check'. Fehlende Issues: 'make story-issues-anlegen'."
+          echo "Die Doku nachziehen, nicht den Check (Skill doku-nachziehen)."

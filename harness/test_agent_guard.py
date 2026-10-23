@@ -6,8 +6,9 @@
 Warum es diese Tests gibt: Ein Fehler in `agent_guard.py` fällt sonst erst
 auf, wenn ein Agent mitten in einer Aufgabe hängt — und dann sieht es aus
 wie ein Fehler des Agenten, nicht wie einer des Harness. Geprüft wird die
-Pfad- und Entscheidungslogik, nicht Docker: alles, was einen Container oder
-`git` braucht, ist bewusst nicht Teil dieser Tests.
+Pfad- und Entscheidungslogik, nicht Docker: alles, was einen Container
+braucht, ist bewusst nicht Teil dieser Tests. `git` kommt genau einmal vor,
+in einem Wegwerf-Repo (CommitGateHilfen).
 """
 
 import contextlib
@@ -15,6 +16,8 @@ import importlib.util
 import io
 import json
 import os
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -244,6 +247,239 @@ class BashSchutz(unittest.TestCase):
         # Namen aber. Beim Bau dieses Hooks hat er genau so den eigenen
         # Patch geblockt. Lieber einmal zu viel als ein Geheimnis im Kontext.
         self.assertIn("deny", self.bash("echo bitte die " + DOT_NAME + " pflegen"))
+
+
+class Zerlegung(unittest.TestCase):
+    def test_trennt_an_operatoren_und_zeilen(self):
+        self.assertEqual(
+            guard.segments("cd backend && git commit -m x\ngit status; ls | wc -l"),
+            [["cd", "backend"], ["git", "commit", "-m", "x"], ["git", "status"], ["ls"], ["wc", "-l"]],
+        )
+
+    def test_text_in_anfuehrungszeichen_bleibt_ein_wort(self):
+        self.assertEqual(guard.segments('echo "git commit; rm x"'), [["echo", "git commit; rm x"]])
+
+    def test_heredoc_mit_apostroph(self):
+        befehl = "git add a && git commit -m \"$(cat <<'EOF'\nFix don't break\nEOF\n)\""
+        self.assertEqual(guard.segments(befehl)[1][:2], ["git", "commit"])
+
+    def test_kaputtes_quoting_nimmt_die_erste_zeile(self):
+        self.assertEqual(guard.segments("git commit -F msg\nit's broken")[0], ["git", "commit", "-F", "msg"])
+
+    def test_programm_nach_zuweisungen_und_pfad(self):
+        self.assertEqual(guard.program(["MSYS_NO_PATHCONV=1", "/usr/bin/git", "status"]), ("git", ["status"]))
+        self.assertEqual(guard.program(["C:\\Tools\\gh.exe", "pr", "view"]), ("gh", ["pr", "view"]))
+
+    def test_git_unterkommando_mit_c(self):
+        self.assertEqual(guard.git_call(["-C", "../worker", "-c", "a=b", "commit", "-m", "x"]), ("commit", "../worker", ["-m", "x"]))
+
+
+class GhZiel(unittest.TestCase):
+    def grund(self, befehl: str) -> str:
+        name, args = guard.program(guard.segments(befehl)[0])
+        return guard.gh_target_reason(name, args)
+
+    def test_schreiben_ohne_repo_wird_geblockt(self):
+        for befehl in ("gh pr create --fill", "gh issue create --title x", "gh label create story"):
+            self.assertIn("-R Six7-app-store", self.grund(befehl), befehl)
+
+    def test_six7_ist_erlaubt(self):
+        self.assertEqual(self.grund("gh issue create -R Six7-app-store/deployment --title x"), "")
+        self.assertEqual(self.grund("gh pr create --repo=six7-app-store/backend --fill"), "")
+
+    def test_dhbw_ist_nie_ziel(self):
+        self.assertIn("ausschliesslich", self.grund("gh pr create -R DHBW-AppStore/backend --fill"))
+
+    def test_repo_edit_nimmt_das_repo_als_argument(self):
+        self.assertEqual(self.grund("gh repo edit Six7-app-store/deployment --enable-issues"), "")
+        self.assertIn("ausschliesslich", self.grund("gh repo edit DHBW-AppStore/deployment --enable-issues"))
+        self.assertIn("-R Six7-app-store", self.grund("gh repo edit --enable-issues"))
+
+    def test_lesen_braucht_kein_repo(self):
+        for befehl in ("gh pr view 3", "gh issue list", "gh run list --limit 5"):
+            self.assertEqual(self.grund(befehl), "", befehl)
+
+
+class StagingWaechter(unittest.TestCase):
+    OK = "gh workflow run staging.yml -R Six7-app-store/deployment --ref develop -f stand=develop -f recreate=false"
+
+    def setUp(self):
+        self.original = guard.active_staging_runs
+        guard.active_staging_runs = lambda: []
+
+    def tearDown(self):
+        guard.active_staging_runs = self.original
+
+    def grund(self, befehl: str) -> str:
+        name, args = guard.program(guard.segments(befehl)[0])
+        return guard.staging_dispatch_reason(name, args)
+
+    def test_develop_ist_erlaubt(self):
+        self.assertEqual(self.grund(self.OK), "")
+
+    def test_main_ist_produktion(self):
+        self.assertIn("ADR 0015", self.grund(self.OK.replace("stand=develop", "stand=main")))
+
+    def test_stand_muss_ausdruecklich_dastehen(self):
+        self.assertIn("ADR 0015", self.grund("gh workflow run staging.yml -R Six7-app-store/deployment --ref develop"))
+
+    def test_ref_muss_develop_sein(self):
+        self.assertIn("--ref develop", self.grund(self.OK.replace("--ref develop", "--ref main")))
+
+    def test_json_eingaben_sind_nicht_pruefbar(self):
+        self.assertIn("--json", self.grund(self.OK + " --json"))
+
+    def test_laufender_deploy_blockt(self):
+        guard.active_staging_runs = lambda: [{"databaseId": 7, "status": "in_progress"}]
+        self.assertIn("#7", self.grund(self.OK))
+
+    def test_unbekannter_laufstatus_blockt(self):
+        # Schliessen statt schweigen: ohne Auskunft kein Deploy.
+        guard.active_staging_runs = lambda: None
+        self.assertIn("nicht feststellen", self.grund(self.OK))
+
+    def test_andere_workflows_gehen_den_waechter_nichts_an(self):
+        self.assertEqual(self.grund("gh workflow run ci.yml -R Six7-app-store/backend --ref develop"), "")
+
+
+class CommitErkennung(unittest.TestCase):
+    """Wird das Gate fuer den richtigen Ordner gerufen — und nur dann?"""
+
+    def setUp(self):
+        self.aufrufe = []
+        self.original = guard.commit_gate
+        guard.commit_gate = lambda ordner, args, befehl: self.aufrufe.append(ordner) or ""
+        self.cwd = os.path.abspath(os.path.join(os.sep, "ws"))
+
+    def tearDown(self):
+        guard.commit_gate = self.original
+
+    def bash(self, befehl: str) -> str:
+        return capture(guard.bash, {"cwd": self.cwd, "tool_input": {"command": befehl}})
+
+    def test_cd_davor_zaehlt(self):
+        self.bash("cd backend && git add . && git commit -m x")
+        self.assertEqual(self.aufrufe, [os.path.join(self.cwd, "backend")])
+
+    def test_minus_c_zaehlt(self):
+        self.bash("git -C worker commit -am x")
+        self.assertEqual(self.aufrufe, [os.path.join(self.cwd, "worker")])
+
+    def test_erwaehnung_ist_kein_commit(self):
+        self.bash('echo "git commit" && git log --grep "git commit"')
+        self.assertEqual(self.aufrufe, [])
+
+    def test_trockenlauf_ist_kein_commit(self):
+        self.bash("git commit --dry-run")
+        self.assertEqual(self.aufrufe, [])
+
+    def test_grund_wird_zur_ablehnung(self):
+        guard.commit_gate = lambda ordner, args, befehl: "Tests rot"
+        self.assertIn("Tests rot", self.bash("git commit -m x"))
+
+    def test_defektes_gate_schliesst(self):
+        def kaputt(*_):
+            raise RuntimeError("kaputt")
+
+        guard.commit_gate = kaputt
+        ausgabe = json.loads(self.bash("git commit -m x"))["hookSpecificOutput"]
+        self.assertEqual(ausgabe["permissionDecision"], "deny")
+        self.assertIn("selbst gescheitert", ausgabe["permissionDecisionReason"])
+
+
+class DokuZuordnung(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = self.tmp.name
+        harness = os.path.join(self.root, "deployment", "harness")
+        os.makedirs(harness)
+        with open(os.path.join(harness, "doc-map.json"), "w", encoding="utf-8") as handle:
+            json.dump(
+                {"regeln": [{
+                    "repo": "backend", "pfade": ["app/models.py", "alembic/versions/*"],
+                    "doku": ["docs/architektur.md"], "warum": "Datenmodell",
+                }]},
+                handle,
+            )
+        self.beruehrt = set()
+        self.original = guard.touched_since_base
+        guard.touched_since_base = lambda _: set(self.beruehrt)
+
+    def tearDown(self):
+        guard.touched_since_base = self.original
+        self.tmp.cleanup()
+
+    def gruende(self, dateien, befehl="git commit -m x", repo="backend"):
+        return guard.doc_reasons(repo, self.root, dateien, befehl)
+
+    def test_modell_ohne_doku_wird_gemeldet(self):
+        gruende = self.gruende(["app/models.py"])
+        self.assertIn("deployment/docs/architektur.md", gruende[0])
+        self.assertIn(guard.DOC_ACK, gruende[-1])
+
+    def test_unterordner_passen_aufs_muster(self):
+        self.assertTrue(self.gruende(["alembic/versions/2026_10_23-neu.py"]))
+
+    def test_doku_auf_dem_branch_genuegt(self):
+        self.beruehrt = {"docs/architektur.md"}
+        self.assertEqual(self.gruende(["app/models.py"]), [])
+
+    def test_bestaetigung_in_der_nachricht_genuegt(self):
+        befehl = f'git commit -m "x\n\n{guard.DOC_ACK} nur ein Index"'
+        self.assertEqual(self.gruende(["app/models.py"], befehl), [])
+
+    def test_fremde_dateien_und_repos_bleiben_still(self):
+        self.assertEqual(self.gruende(["app/routers/apps.py"]), [])
+        self.assertEqual(self.gruende(["app/models.py"], repo="worker"), [])
+
+    def test_ohne_zuordnungsdatei_still(self):
+        self.assertEqual(guard.doc_reasons("backend", os.path.join(self.root, "nix"), ["app/models.py"], ""), [])
+
+
+class CommitGateHilfen(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("git"), "git fehlt")
+    def test_ungetrackte_dateien_zaehlen_mit(self):
+        # Der Hook laeuft vor `git add -A && git commit`. Eine neue Datei ist
+        # in dem Moment ungetrackt — fehlte sie hier, ginge ein Commit aus
+        # lauter neuen Dateien ohne Tests durch. Das einzige git in diesen
+        # Tests, in einem Wegwerf-Repo.
+        with tempfile.TemporaryDirectory() as repo:
+            subprocess.run(["git", "init", "-q", repo], check=True)
+            with open(os.path.join(repo, "neu.py"), "w", encoding="utf-8") as handle:
+                handle.write("x = 1\n")
+            self.assertEqual(guard.changed_files(repo), ["neu.py"])
+
+    def test_ausgaben_werden_als_utf8_gelesen(self):
+        # Mit text=True dekodiert Python unter Windows als cp1252 und
+        # scheitert an Bytes wie 0x8d — still, im Lesethread. Beim ersten
+        # Live-Lauf gegen die Container passiert.
+        result = subprocess.run(
+            [sys.executable, "-c", "import sys; sys.stdout.buffer.write('✓ ü'.encode() + bytes([0x8d]))"],
+            capture_output=True,
+            **guard.TEXT,
+        )
+        self.assertTrue(result.stdout.startswith("✓ ü"))
+
+    def test_doku_allein_braucht_keine_tests(self):
+        self.assertFalse(guard.needs_tests(["README.md", "docs/x.md", ".claude/hooks/agent_guard.py"]))
+        self.assertTrue(guard.needs_tests(["README.md", "app/main.py"]))
+
+    def test_mountpfade_werden_vergleichbar(self):
+        erwartet = "c:/users/flock/desktop/dhbw_app/backend"
+        for pfad in (
+            "C:\\Users\\flock\\Desktop\\DHBW_APP\\backend",
+            "C:/Users/flock/Desktop/DHBW_APP/backend/",
+            "/run/desktop/mnt/host/c/Users/flock/Desktop/DHBW_APP/backend",
+            "/c/Users/flock/Desktop/DHBW_APP/backend",
+        ):
+            self.assertEqual(guard.normalized_dir(pfad), erwartet, pfad)
+
+    def test_jedes_repo_hat_testeintraege(self):
+        for repo, config in guard.REPOS.items():
+            self.assertIn("tests", config, repo)
+            self.assertIn("needs", config, repo)
+            if config["container"]:
+                self.assertIn(config["container"], config["tests"], repo)
 
 
 class IacFormatierer(unittest.TestCase):

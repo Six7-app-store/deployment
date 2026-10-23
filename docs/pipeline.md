@@ -10,12 +10,12 @@ Entwickler → GitHub Actions → GHCR → Self-hosted Runner → OpenTofu → A
 |---|---|---|
 | **Entwickler** | Codeänderung, Pull Request | lokal |
 | **GitHub Actions** | Lint, Tests, Security Scans, Image-Build | gehosteter Runner |
-| **GHCR** | Image liegt als `ghcr.io/six7-app-store/<dienst>:latest` | GitHub |
+| **GHCR** | Image liegt als `ghcr.io/six7-app-store/<dienst>:develop` bzw. `:latest` (aus `main`) | GitHub |
 | **Self-hosted Runner** | nimmt den Deploy an | eigene VM im Campusnetz |
 | **OpenTofu** | reißt die alte VM ab, baut eine neue | OpenStack |
 | **Ansible** | Docker, `.env`, Images ziehen, starten | auf der neuen VM |
 | **Docker Compose** | neun Container: Frontend, Backend, Worker, Keycloak, Postgres, RabbitMQ, Redis, Caddy | auf der neuen VM |
-| **Staging** | erreichbar unter `appstore.…users.dhbw.site` | öffentlich über IPv6 |
+| **Staging** | `develop`: `staging.…users.dhbw.site`, `main`: `appstore.…users.dhbw.site` (ADR 0014) | öffentlich über IPv6 |
 
 **Warum ein eigener Runner:** Die OpenStack-API der DHBW ist von außerhalb des Campusnetzes nicht erreichbar. Ein gehosteter GitHub-Runner läuft dort in einen Timeout — unabhängig von Zugangsdaten. Begründung in ADR-0002.
 
@@ -30,7 +30,12 @@ Entwickler → GitHub Actions → GHCR → Self-hosted Runner → OpenTofu → A
 | Ansible, Compose, Migrationen | Production Rollout |
 | TLS-Zertifikat, DNS-Eintrag | |
 
-Ein Merge nach `main` genügt. Alles danach läuft ohne Eingriff.
+Ein Merge nach `develop` baut Staging neu, ein Merge nach `main` den main-Stand
+(ADR 0013, ADR 0014). Alles danach läuft ohne Eingriff. Die Produktion aus
+`docker-compose.prod.yml` rollt weiterhin eine Person aus.
+
+Den develop-Stand darf auch ein Agent von Hand neu bauen, den main-Stand nicht
+(ADR 0015). Lesend zeigt `make staging-status` beide Stände.
 
 ## Zwei Ebenen, die man auseinanderhalten muss
 
@@ -38,7 +43,7 @@ Der App-Store ist **selbst eine Anwendung**, die auf Staging läuft — und er *
 
 | | Plattform-Deploy | App-Deploy |
 |---|---|---|
-| Ausgelöst durch | Merge nach `main` | Klick im App-Store |
+| Ausgelöst durch | Merge nach `develop` oder `main` | Klick im App-Store |
 | Läuft auf | Self-hosted Runner | Worker-Container |
 | Erzeugt | die Staging-VM | VMs für Studierende |
 | State liegt | Datei auf der Runner-VM | Postgres auf der Runner-VM |

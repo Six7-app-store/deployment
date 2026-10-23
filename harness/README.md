@@ -29,6 +29,7 @@ das sie an die fünf Stellen verteilt.
 | `skills/` | geteilte Skills, in jedes Repo und in den Arbeitsordner |
 | `root/CLAUDE.md` | `DHBW_APP/CLAUDE.md` |
 | `git-workflow.md` | Markierter Block in `AGENTS.md` aller sechs lokalen Repos: Arbeitspakete fertigstellen, Commits und Pushes bündeln |
+| `doc-map.json` | wird nicht verteilt. Ordnet Code-Pfaden die Doku zu, die sie beschreibt; das Commit-Gate liest sie aus `deployment/harness/` (ADR 0017) |
 | `sync.py` | das Verteilen selbst |
 
 ## Benutzen
@@ -103,7 +104,7 @@ Sie verstärken sich gegenseitig, statt dasselbe dreimal zu sagen:
 | Ebene | Wo | Wirkung |
 |---|---|---|
 | `AGENTS.md` | je Repo | Begründung und Kontext. Überzeugt, hindert nicht |
-| Hooks | `agent_guard.py` | erklärt beim Zugriff, warum etwas tabu ist; formatiert; hält am Ende die Gates |
+| Hooks | `agent_guard.py` | erklärt beim Zugriff, warum etwas tabu ist; formatiert; prüft Ziel-Repo und Staging-Aufrufe; hält am Ende und vor jedem Commit die Gates |
 | `permissions` | `permissions.json` | hart. Kein Prod-Deploy, kein Force-Push, keine Secrets — unabhängig davon, was im Kontext steht |
 
 Der Hook ist bewusst **fail-open**: kein Docker, kaputtes JSON, Container aus
@@ -120,6 +121,26 @@ vollen Typecheck über alles.
 Der Hook prüft `stop_hook_active` und blockt nie zweimal hintereinander.
 Ohne diese Prüfung hängt eine Sitzung an einem Fehler fest, den Claude nicht
 beheben kann (etwa Lint-Rot in einer Datei, die niemand angefasst hat).
+
+## Was das Commit-Gate kostet
+
+Vor jedem `git commit` eines Agenten (ADR 0017):
+
+1. **Doku-Zuordnung** aus `doc-map.json` — Millisekunden. Ist zugeordnete
+   Doku unberührt, blockt es sofort, bevor Tests laufen.
+2. **Lint und Tests** des Repos im Container — gemessen am 23.10.2026:
+   backend 351 s, frontend 31 s, worker 6 s. Nur `.md`-Dateien oder `.claude/`
+   im Commit: keine Tests.
+
+Deshalb hat der Bash-Hook ein Zeitlimit von 900 Sekunden, der Testlauf darin
+780. Bei einem
+kürzeren bricht Claude Code den Hook ab und führt das Kommando trotzdem aus —
+das Gate gäbe dann genau bei der langsamsten Suite still auf.
+
+Anders als der Rest **schließt** das Gate, wenn es nicht prüfen kann: Docker
+aus, Container aus, oder der Container testet einen anderen Checkout als den,
+in dem committet wird (etwa ein Worktree). Ein Mensch am eigenen Terminal
+committet ohne Hook.
 
 ## `.claude/` ist vom Linting ausgenommen
 
