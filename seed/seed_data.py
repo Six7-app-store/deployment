@@ -197,8 +197,10 @@ ALL_USERS: list[SeedUser] = (
 # Kali-Linux-App ``v2.2.1`` und Kubernetes-App ``v2.1.1`` geben ihrer
 # Security Group einen Zufallsanhang: Nova loest Gruppen ueber den Namen
 # auf, und ein fester Name kollidiert mit einem zweiten Deployment.
-# Kali-Linux-App ``v2.2.2`` beginnt ihre final_message mit der Standardzeile
-# von cloud-init, an der der Worker nach Kalis Neustart das Ende erkennt.
+# Kali-Linux-App ``v2.2.3`` beginnt ihre final_message mit der Standardzeile
+# von cloud-init, an der der Worker nach Kalis Neustart das Ende erkennt
+# (``v2.2.2`` hatte dort einen Punkt hinter einer Variable, cloud-init
+# verwarf die Meldung).
 #
 # ``template-app`` ist eine Vorlage und gehoert nicht in den Katalog.
 #
@@ -319,7 +321,7 @@ APPS: list[SeedApp] = [
         is_private=False,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v2.2.2", APPROVED,
+            ("v2.2.3", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
