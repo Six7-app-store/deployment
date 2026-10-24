@@ -34,6 +34,15 @@ Ein Merge nach `develop` baut Staging neu, ein Merge nach `main` den main-Stand
 (ADR 0013, ADR 0014). Alles danach läuft ohne Eingriff. Die Produktion aus
 `docker-compose.prod.yml` rollt weiterhin eine Person aus.
 
+Das gilt nur bei grüner CI. Den Staging-Deploy stößt jedes Repo erst an, wenn
+sein CI-Lauf auf dem Branch durchgelaufen ist. Ist ein Gate rot (Tests,
+pip-audit, Trivy), wird kein Image nach GHCR gepusht, und Staging behält das
+alte, obwohl der Merge durch ist. So geschehen am 24.10.2026: Eine neue
+Debian-CVE in `libbrotli1` hielt Backend und Worker zurück. Damit Trivy den
+aktuellen Debian-Stand prüft und nicht einen alten aus dem Build-Cache, baut
+jeder CI-Lauf die `apt-get upgrade`-Schicht der Images neu (Build-Arg
+`APT_REFRESH`).
+
 Den develop-Stand darf auch ein Agent von Hand neu bauen, den main-Stand nicht
 (ADR 0015). Lesend zeigt `make staging-status` beide Stände.
 
