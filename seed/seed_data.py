@@ -56,6 +56,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.utils.time import utcnow
 
 logger = logging.getLogger("seed")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -353,6 +354,35 @@ APPS: list[SeedApp] = [
 ]
 
 
+# Apps aus frueheren Seed-Staenden, die nicht mehr deploybar sind. Der Seed
+# legt sonst nur an und nimmt nie etwas weg - ohne diese Liste blieben sie in
+# jeder Datenbank stehen, in der ein aelterer Seed sie angelegt hat.
+# Ausgeblendet wird wie beim Loeschen in der Admin-Oberflaeche ueber
+# ``deleted_at``: die Zeile bleibt, bestehende Deployments behalten ihre App.
+RETIRED_APPS: tuple[str, ...] = (
+    # Repo gibt es nicht (six7-click-n-deploy/GitLab-App, .../Monitoring-Stack,
+    # .../Test-App); GitLab-CE und Monitoring-Stack gestrichen am 21.10.2026
+    # (E3 in docs/plan-opentofu-abschluss.md).
+    "GitLab-CE",
+    "Monitoring-Stack",
+    "Test-App (Template-Spielwiese)",
+    "Monika's Test-Sandbox",
+    # Beispiel-Apps aus dem Seed bis Juni 2026. Sie zeigen auf Repos in
+    # six7-click-n-deploy, die noch packer/ und terraform/ haben; der Worker
+    # lehnt sie ab (ADR 0010).
+    "Online IDE",
+    "Jupyter Notebook",
+    "Ubuntu Sandbox",
+    "My Custom Stack (WIP)",
+    "Luca's IDE Fork",
+    "Felix's LaTeX Vorlage",
+    "Anna's Web-LaTeX",
+    "Raphael's Notebook-Stack",
+    "Tom's Ubuntu mit Docker",
+    "Iven's PostgreSQL Lab",
+)
+
+
 # ----------------------------------------------------------------
 # Keycloak-Helpers
 # ----------------------------------------------------------------
@@ -595,6 +625,23 @@ def _ensure_app(db: Session, app_def: SeedApp, owner: User) -> App:
     return app
 
 
+def _retire_app(db: Session, name: str) -> None:
+    """Blendet eine App aus RETIRED_APPS aus, falls es sie noch gibt.
+
+    Zeigt sie auf das Repo einer aktuellen Katalog-App, bleibt sie stehen:
+    _ensure_app findet Apps auch ueber das Repo, und eine von Hand
+    eingetragene App mit altem Namen ist dann genau diese Katalog-App.
+    """
+    app = db.query(App).filter(App.name == name, App.deleted_at.is_(None)).first()
+    if app is None:
+        return
+    if app.git_link in {a.git_link for a in APPS}:
+        logger.info("App %s nicht ausgeblendet: Repo gehoert zu einer Katalog-App", name)
+        return
+    app.deleted_at = utcnow()
+    logger.info("App ausgeblendet (nicht mehr im Katalog): %s", name)
+
+
 def _ensure_version(
     db: Session,
     app: App,
@@ -683,6 +730,9 @@ def seed() -> None:
             for version_tag, status, notes, reason in app_def.versions:
                 _ensure_version(db, db_app, admin_user, version_tag, status, notes, reason)
 
+        for name in RETIRED_APPS:
+            _retire_app(db, name)
+
         db.commit()
     except Exception:
         db.rollback()
@@ -718,6 +768,8 @@ def _print_summary() -> None:
     for a in APPS:
         flavor = "private" if a.is_private else "public"
         print(f"  - [{flavor:7s}] {a.name:30s}  {len(a.versions)} Version(en)")
+    print()
+    print(f"Ausgeblendet, falls noch vorhanden: {len(RETIRED_APPS)} Apps aus frueheren Seeds")
     print()
     print("=" * 72)
 
