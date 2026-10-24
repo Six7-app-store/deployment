@@ -1,36 +1,48 @@
 # pgAdmin 4 – PostgreSQL-Administration mit Beispieldatenbank
 
-Eine pgAdmin4-Instanz pro Team mit einer vorinstallierten PostgreSQL-Datenbank (Pagila-Beispieldatensatz). Jedes Team erhält eine eigene VM mit einem dedizierten pgAdmin-Login und direktem Datenbankzugriff.
+Jedes Team bekommt eine eigene VM mit PostgreSQL, der Beispieldatenbank
+**Pagila** (Film- und Videoverleih) und pgAdmin 4 im Browser. Die Datenbank ist
+in pgAdmin schon als Server eingetragen.
 
 ## User-Management
 
-Es wird **ein pgAdmin-Account pro Team** erstellt — alle Mitglieder eines Teams teilen sich denselben Login. Die Login-E-Mail hat die Form `<teamname>@example.com`, das Passwort wird automatisch generiert. Zugangsdaten werden nach dem Deployment per Mail an alle Teammitglieder versendet. Der pgAdmin-Account wird direkt in die interne SQLite-Datenbank geschrieben (PBKDF2-SHA512).
-
-Die VM enthält außerdem eine lokale PostgreSQL-Instanz mit der **Pagila-Beispieldatenbank** (Film-/Videoverleih-Schema), die im pgAdmin-Account bereits vorkonfiguriert ist. Das Passwort dazu ist "pagila".
+- **Ein pgAdmin-Konto pro Team**, alle Mitglieder teilen sich den Login
+- Login ist eine E-Mail-Adresse aus dem Teamnamen, z.B. `Team #1` →
+  `team-1@example.com`; das Passwort wird zufällig erzeugt
+- Der Datenbanknutzer für Pagila ist `pagila_user` mit dem Passwort `pagila`.
+  pgAdmin fragt danach, sobald man den Server öffnet.
 
 ## VM-Deployment
 
-Es wird **eine VM pro Team** deployed. Bei zwei Teams entstehen zwei VMs, jede mit eigener Floating IP und eigenem pgAdmin-Login. Flavor: `gp1.small`.
-
-## Deployment-Dauer
-
-Ein Deployment läuft in zwei Phasen:
-
-1. `tofu apply` legt VM, Netzanschluss und Floating IP an.
-2. Beim ersten Start richtet cloud-init die VM ein (Phase `VM_SETUP`). Der Store
-   meldet das Deployment erst als fertig, wenn diese Einrichtung abgeschlossen
-   ist.
-
-Es gibt kein vorgebautes Image mehr: Die Software wird bei jedem Deployment
-installiert. Die Dauer hängt deshalb von der Einrichtung ab und ist länger als
-bei früheren Ständen. Messwerte folgen nach der Abnahme auf Staging.
+| | |
+|---|---|
+| VMs gesamt | **eine pro Team** (höchstens 15) |
+| Größe | wählbar: `gp1.small`, `gp1.medium`, `gp1.large` |
+| Erreichbar über | HTTP auf Port 80 unter `/pgadmin4`, über IPv6 (Standard), IPv4 oder beides |
+| Floating IP | Nein |
 
 ## Konfigurierbare Variablen
 
 | Variable | Beschreibung | Pflicht |
 |---|---|---|
-| `network_uuid` | UUID des internen Netzwerks | Ja (Default vorhanden) |
-| `floating_ip_pool` | Name des External Networks für die öffentliche IP | Ja (Default vorhanden) |
-| `shared_secgroup_id` | ID der Security Group | Ja (Default vorhanden) |
+| `flavor` | Größe der Team-VM | Nein (Standard `gp1.small`) |
+| `disk_size_gb` | Festplatte in GB, `0` = Platte des Flavors | Nein |
+| `max_teams` | Obergrenze für Team-VMs | Nein (Standard 15) |
+| `ip_mode` | Adressfamilie: `ipv4`, `ipv6` oder `dual` | Nein (Standard `ipv6`) |
+| `network_uuid` / `network_v4_uuid` | Netz für IPv6 bzw. IPv4 | Nein (Standard vorhanden) |
+| `shared_secgroup_id` | ID der gemeinsamen Security Group | Nein (Standard vorhanden) |
 
-Kein File-Upload. Alle Defaults sind auf die DHBW-OpenStack-Infrastruktur vorkonfiguriert.
+Kein File-Upload.
+
+## Deployment-Dauer
+
+Ein Deployment läuft in zwei Phasen:
+
+1. `tofu apply` legt VM und Netzanschluss an.
+2. Beim ersten Start richtet cloud-init die VM ein (Phase `VM_SETUP`). Der Store
+   meldet das Deployment erst als fertig, wenn diese Einrichtung abgeschlossen
+   ist.
+
+Es gibt kein vorgebautes Image mehr: PostgreSQL, pgAdmin und die
+Beispieldatenbank werden bei jedem Deployment installiert. Die Dauer hängt
+deshalb von der Einrichtung ab. Messwerte folgen nach der Abnahme auf Staging.
