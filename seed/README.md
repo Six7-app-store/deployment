@@ -38,7 +38,7 @@ nicht leer ist.
   | Jupyter-Notebook | v2.0.0 | public |
   | pgAdmin | v2.0.0 | private |
   | Windows-App | v2.1.1 | public |
-  | Kali-Linux-App | v2.2.1 | public |
+  | Kali-Linux-App | v2.2.2 | public |
   | VSCode-App | v1.1.0 | public |
   | Kubernetes-App | v2.1.1 | public |
   | group-network-app | v1.0.2 | public |
