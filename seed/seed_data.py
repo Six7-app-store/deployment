@@ -187,10 +187,12 @@ ALL_USERS: list[SeedUser] = (
 # oder ``terraform/`` ab, deshalb zeigt kein Eintrag mehr auf die alte Org.
 #
 # ``version_tag`` ist der Git-Tag, den der Worker klont. Der Tag muss im
-# App-Repo existieren, sonst scheitert der Deploy. Bei den Apps, die auf
-# OpenTofu umgebaut wurden (Online-IDE, Web-LaTeX, Jupyter-Notebook,
-# pgAdmin, Windows-App), steht hier ``v2.0.0``: den Tag setzt eine Person
-# nach dem Merge des Umbaus. Vorher gibt es ihn noch nicht.
+# App-Repo existieren, sonst scheitert der Deploy. Ein neuer Tag hier setzt
+# voraus, dass der passende PR im App-Repo gemergt und getaggt ist: so bei
+# den auf OpenTofu umgebauten Apps (Online-IDE, Web-LaTeX, Jupyter-Notebook,
+# pgAdmin, ``v2.0.0``) und den Versionen mit waehlbarer Adressfamilie
+# (Ubuntu-App ``v2.0.2``, Windows-App ``v2.1.0``, Kali-Linux-App ``v2.2.0``,
+# VSCode-App ``v1.1.0``, Kubernetes-App ``v2.1.0``).
 #
 # ``template-app`` ist eine Vorlage und gehoert nicht in den Katalog.
 #
@@ -256,7 +258,7 @@ APPS: list[SeedApp] = [
         is_private=True,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v2.0.1", APPROVED,
+            ("v2.0.2", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
@@ -300,7 +302,7 @@ APPS: list[SeedApp] = [
         is_private=False,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v2.0.0", APPROVED,
+            ("v2.1.0", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
@@ -311,7 +313,7 @@ APPS: list[SeedApp] = [
         is_private=False,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v2.1.1", APPROVED,
+            ("v2.2.0", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
@@ -322,7 +324,7 @@ APPS: list[SeedApp] = [
         is_private=False,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v1.0.2", APPROVED,
+            ("v1.1.0", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
@@ -333,7 +335,7 @@ APPS: list[SeedApp] = [
         is_private=False,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v2.0.0", APPROVED,
+            ("v2.1.0", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),

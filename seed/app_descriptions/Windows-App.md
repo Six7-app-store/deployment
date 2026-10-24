@@ -27,8 +27,9 @@ PowerShell-Kurzreferenz (mit Linux-Vergleich), Beispieldaten und fünf Übungen.
 
 Es wird **eine VM pro Nutzer** deployed, weil Windows 11 nur eine interaktive Sitzung
 gleichzeitig erlaubt. Flavor `win11.medium` (2 vCPU, 8 GB RAM, 80 GB). Die Obergrenze
-liegt bei 12 gleichzeitigen VMs (`max_users`). Die Adresse ist die IPv6-Adresse der VM,
-in eckigen Klammern. Studierende brauchen das DHBW-VPN.
+liegt bei 12 gleichzeitigen VMs (`max_users`). Die Adresse ist standardmäßig die IPv6-Adresse der VM in eckigen
+Klammern; über `ip_mode` geht auch IPv4 oder beides. RDP ist nur aus dem
+Campusnetz erreichbar, Studierende brauchen das DHBW-VPN.
 
 ## Deployment-Dauer
 
@@ -46,7 +47,9 @@ deutlich länger als bei Linux-VMs. Messwerte folgen nach der Abnahme auf Stagin
 
 | Variable | Beschreibung |
 |---|---|
-| `network_uuid` | Hauptnetzwerk |
+| `ip_mode` | Adressfamilie: `ipv4`, `ipv6` (Standard) oder `dual` |
+| `network_uuid` | Netz mit öffentlicher IPv6, für `ipv6` und `dual` |
+| `network_v4_uuid` | Netz mit öffentlich gerouteter IPv4, für `ipv4` und `dual` |
 | `floating_ip_pool` | Name des External Networks für Floating IPs |
 | `shared_secgroup_id` | ID der gemeinsamen Security Group |
 | `max_users` | Obergrenze gleichzeitiger Nutzer-VMs (Standard 12) |

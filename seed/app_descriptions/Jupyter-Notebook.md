@@ -1,34 +1,59 @@
-# JupyterHub – Gemeinsame Notebook-Umgebung
+# JupyterHub – gemeinsame Notebook-Umgebung
 
-Eine JupyterHub-Instanz auf einer gemeinsamen VM, die allen Teilnehmern eines Deployments individuelle JupyterLab-Sessions bereitstellt. Jeder Nutzer meldet sich mit persönlichen Zugangsdaten an und arbeitet in einer isolierten Notebook-Umgebung.
+Eine JupyterHub-Instanz auf einer gemeinsamen VM. Jede Person meldet sich mit
+eigenen Zugangsdaten an und bekommt eine eigene JupyterLab-Sitzung mit eigenem
+Home-Verzeichnis.
+
+## Vorinstallierte Software
+
+- JupyterHub und JupyterLab mit Python-Kernel
+- Python 3 (inkl. pip, venv), Git
+
+Weitere Pakete installiert jede Person selbst, etwa mit
+`pip install --user pandas` im Terminal von JupyterLab.
 
 ## User-Management
 
-Jeder Nutzer erhält einen eigenen Linux-Account (abgeleitet aus der E-Mail-Adresse) und ein automatisch generiertes Passwort. JupyterHub nutzt PAM-Authentifizierung — der Login entspricht direkt dem Linux-Account. Alle Nutzer aller Teams teilen dieselbe VM, haben aber voneinander isolierte Home-Verzeichnisse und JupyterLab-Sessions. Zugangsdaten werden nach dem Deployment per Mail versendet.
+- **Ein Linux-Konto pro Person**, abgeleitet aus der E-Mail-Adresse
+  (z.B. `anna.alt@dhbw.de` → `annaalt`)
+- JupyterHub meldet über dieses Konto an; das Passwort gilt auch für `sudo`
+  und SSH
+- Alle Teams landen auf **einer gemeinsamen VM**, jedes Team als eigene
+  Linux-Gruppe
 
 ## VM-Deployment
 
-Es wird **eine gemeinsame VM** für alle Nutzer und alle Teams deployed — unabhängig von der Anzahl der Teams oder Nutzer. Die VM erhält eine öffentliche Floating IP und ist über Port `8000` erreichbar.
+| | |
+|---|---|
+| VMs gesamt | **1** (geteilt von allen Teams und Personen) |
+| Größe | wählbar: `gp1.small`, `gp1.medium`, `gp1.large` |
+| Erreichbar über | HTTP auf Port 8000, über IPv6 (Standard), IPv4 oder beides |
+| Floating IP | Nein |
 
-## Deployment-Dauer
-
-Ein Deployment läuft in zwei Phasen:
-
-1. `tofu apply` legt VM, Netzanschluss und Floating IP an.
-2. Beim ersten Start richtet cloud-init die VM ein (Phase `VM_SETUP`). Der Store
-   meldet das Deployment erst als fertig, wenn diese Einrichtung abgeschlossen
-   ist.
-
-Es gibt kein vorgebautes Image mehr: Die Software wird bei jedem Deployment
-installiert. Die Dauer hängt deshalb von der Einrichtung ab und ist länger als
-bei früheren Ständen. Messwerte folgen nach der Abnahme auf Staging.
+Über IPv4 ist JupyterHub nur aus dem Campusnetz und dem VPN erreichbar.
 
 ## Konfigurierbare Variablen
 
 | Variable | Beschreibung | Pflicht |
 |---|---|---|
-| `network_uuid` | UUID des internen Netzwerks | Ja (Default vorhanden) |
-| `floating_ip_pool` | Name des External Networks für die öffentliche IP | Ja (Default vorhanden) |
-| `shared_secgroup_id` | ID der Security Group | Ja (Default vorhanden) |
+| `flavor` | Größe der VM | Nein (Standard `gp1.small`) |
+| `disk_size_gb` | Festplatte in GB, `0` = Platte des Flavors | Nein |
+| `ip_mode` | Adressfamilie: `ipv4`, `ipv6` oder `dual` | Nein (Standard `ipv6`) |
+| `network_uuid` / `network_v4_uuid` | Netz für IPv6 bzw. IPv4 | Nein (Standard vorhanden) |
+| `shared_secgroup_id` | ID der gemeinsamen Security Group | Nein (Standard vorhanden) |
+| `web_source_v4` / `web_source_v6` | Wer JupyterHub erreichen darf | Nein (Campus bzw. alle) |
 
-Kein File-Upload. Alle Defaults sind auf die DHBW-OpenStack-Infrastruktur vorkonfiguriert und müssen in der Regel nicht geändert werden.
+Kein File-Upload.
+
+## Deployment-Dauer
+
+Ein Deployment läuft in zwei Phasen:
+
+1. `tofu apply` legt VM und Netzanschluss an.
+2. Beim ersten Start richtet cloud-init die VM ein (Phase `VM_SETUP`). Der Store
+   meldet das Deployment erst als fertig, wenn diese Einrichtung abgeschlossen
+   ist.
+
+Es gibt kein vorgebautes Image mehr: JupyterHub wird bei jedem Deployment
+installiert. Die Dauer hängt deshalb von der Einrichtung ab. Messwerte folgen
+nach der Abnahme auf Staging.
