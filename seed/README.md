@@ -33,14 +33,14 @@ nicht leer ist.
   | App | Version | Sichtbarkeit |
   |---|---|---|
   | Online-IDE | v2.0.0 | public |
-  | Ubuntu-App | v2.0.2 | private |
+  | Ubuntu-App | v2.0.3 | private |
   | Web-LaTeX | v2.0.0 | public |
   | Jupyter-Notebook | v2.0.0 | public |
   | pgAdmin | v2.0.0 | private |
-  | Windows-App | v2.1.0 | public |
-  | Kali-Linux-App | v2.2.0 | public |
+  | Windows-App | v2.1.1 | public |
+  | Kali-Linux-App | v2.2.1 | public |
   | VSCode-App | v1.1.0 | public |
-  | Kubernetes-App | v2.1.0 | public |
+  | Kubernetes-App | v2.1.1 | public |
   | group-network-app | v1.0.2 | public |
 
   Die Texte im Store kommen aus `app_descriptions/<App>.md`.

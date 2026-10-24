@@ -192,8 +192,11 @@ ALL_USERS: list[SeedUser] = (
 # voraus, dass der passende PR im App-Repo gemergt und getaggt ist: so bei
 # den auf OpenTofu umgebauten Apps (Online-IDE, Web-LaTeX, Jupyter-Notebook,
 # pgAdmin, ``v2.0.0``) und den Versionen mit waehlbarer Adressfamilie
-# (Ubuntu-App ``v2.0.2``, Windows-App ``v2.1.0``, Kali-Linux-App ``v2.2.0``,
-# VSCode-App ``v1.1.0``, Kubernetes-App ``v2.1.0``).
+# (Ubuntu-App, Windows-App, Kali-Linux-App, VSCode-App ``v1.1.0``,
+# Kubernetes-App). Ubuntu-App ``v2.0.3``, Windows-App ``v2.1.1``,
+# Kali-Linux-App ``v2.2.1`` und Kubernetes-App ``v2.1.1`` geben ihrer
+# Security Group einen Zufallsanhang: Nova loest Gruppen ueber den Namen
+# auf, und ein fester Name kollidiert mit einem zweiten Deployment.
 #
 # ``template-app`` ist eine Vorlage und gehoert nicht in den Katalog.
 #
@@ -259,7 +262,7 @@ APPS: list[SeedApp] = [
         is_private=True,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v2.0.2", APPROVED,
+            ("v2.0.3", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
@@ -303,7 +306,7 @@ APPS: list[SeedApp] = [
         is_private=False,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v2.1.0", APPROVED,
+            ("v2.1.1", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
@@ -314,7 +317,7 @@ APPS: list[SeedApp] = [
         is_private=False,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v2.2.0", APPROVED,
+            ("v2.2.1", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
@@ -336,7 +339,7 @@ APPS: list[SeedApp] = [
         is_private=False,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v2.1.0", APPROVED,
+            ("v2.1.1", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
