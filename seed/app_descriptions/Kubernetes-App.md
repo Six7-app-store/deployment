@@ -42,7 +42,9 @@ Die Dauer hängt von der Einrichtung ab. Messwerte folgen nach der Abnahme auf S
 |---|---|
 | `image_name` | Basis-Image (Ubuntu 24.04 empfohlen) |
 | `flavor_name` | VM-Größe des Team-Clusters |
-| `network_uuid` | Hauptnetzwerk |
+| `ip_mode` | Adressfamilie: `ipv4`, `ipv6` (Standard) oder `dual` |
+| `network_uuid` | Netz mit öffentlicher IPv6, für `ipv6` und `dual` |
+| `network_v4_uuid` | Netz mit öffentlich gerouteter IPv4, für `ipv4` und `dual` |
 | `floating_ip_pool` | Name des External Networks für Floating IPs |
 | `shared_secgroup_id` | ID der gemeinsamen Security Group |
 | `max_teams` | Obergrenze gleichzeitiger Team-Cluster |
