@@ -26,25 +26,28 @@ nicht leer ist.
 - 4 Kurse: `WI SE B 23`, `WI SE B 24`, `INF TI 23`, `WI SE A 23`
 - Professoren als Course-Teacher verlinkt (Many-to-Many)
 - Studenten via `users.courseId` ihrem Kurs zugewiesen
-- 14 Apps (Mischung aus Prof- und Studi-Ownership, public/private):
-  - **Prof-Apps (Lehr-Sandboxes):**
-    - **Online IDE** (Eichberg, public) — 8 Versionen, gemischt approved/pending/rejected
-    - **Web-LaTeX** (Detzler, public) — 3 Versionen
-    - **Jupyter Notebook** (Pagnia, public) — 1 Version pending
-    - **pgAdmin** (Hubert, public) — 1 Version approved
-    - **Ubuntu Sandbox** (Bauer, public) — 3 Versionen
-    - **Test-App (Template-Spielwiese)** (Admin, private)
-    - **My Custom Stack (WIP)** (Eichberg, private)
-  - **Studenten-Apps:**
-    - **Luca's IDE Fork** (Luca Bäck, public) — 1× APPROVED + 1× PENDING
-    - **Felix's LaTeX Vorlage** (Felix Erhard, public) — PENDING
-    - **Raphael's Notebook-Stack** (Raphael Plett, private)
-    - **Tom's Ubuntu mit Docker** (Tom Weber, public) — REJECTED (Klartext-API-Key)
-    - **Monika's Test-Sandbox** (Monika Piano, private)
-    - **Iven's PostgreSQL Lab** (Iven Stahl, public) — APPROVED
-    - **Anna's Web-LaTeX** (Anna Schulz, public) — PENDING
-- Realistischer Mix aus `APPROVED`, `PENDING`, `REJECTED`
-  Approvals mit Notes und Rejection-Reasons
+- 10 Apps im offiziellen DHBW-Katalog, alle mit `Tobias Admin` als Owner
+  und je einer freigegebenen Version. Jede zeigt auf ein Repo in
+  `Six7-app-store` mit `tofu/` (App-Vertrag aus ADR 0010):
+
+  | App | Version | Sichtbarkeit |
+  |---|---|---|
+  | Online-IDE | v2.0.0 | public |
+  | Ubuntu-App | v2.0.2 | private |
+  | Web-LaTeX | v2.0.0 | public |
+  | Jupyter-Notebook | v2.0.0 | public |
+  | pgAdmin | v2.0.0 | private |
+  | Windows-App | v2.1.0 | public |
+  | Kali-Linux-App | v2.2.0 | public |
+  | VSCode-App | v1.1.0 | public |
+  | Kubernetes-App | v2.1.0 | public |
+  | group-network-app | v1.0.2 | public |
+
+  Die Texte im Store kommen aus `app_descriptions/<App>.md`.
+- Apps aus früheren Seed-Ständen, die nicht mehr deploybar sind
+  (`RETIRED_APPS` in `seed_data.py`, z. B. GitLab-CE, Monitoring-Stack und
+  die alten Beispiel-Apps auf `six7-click-n-deploy`), werden ausgeblendet,
+  falls eine Datenbank sie noch hat.
 
 ## Aufruf
 
@@ -77,6 +80,10 @@ Mehrfaches Ausführen ist unkritisch:
   bei jedem Lauf neu gesetzt.
 - Approval-Records werden über `(appId, version_tag)` upsert-artig
   aktualisiert.
+- Apps aus `RETIRED_APPS` bekommen `deleted_at` gesetzt, wie beim
+  Löschen in der Admin-Oberfläche. Die Zeile bleibt, damit bestehende
+  Deployments ihre App behalten. Zeigt eine solche App auf das Repo einer
+  aktuellen Katalog-App, bleibt sie stehen.
 
 Passwörter werden bei jedem Lauf auf den Default zurückgesetzt — so
 ist nach dem Seed garantiert, dass `1234` funktioniert.
