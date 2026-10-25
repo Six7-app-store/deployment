@@ -90,6 +90,14 @@ er liest dafür das Konsolen-Log über die OpenStack-API
 State liegt in einer eigenen PostgreSQL außerhalb der Staging-VM
 ([ADR 0005](adr/0005-tfstate-der-app-deployments-gehoert-von-der-staging-vm-herunter.md)).
 
+Werden die VMs eines Deployments außerhalb des App Stores gelöscht, merkt das
+eine Schleife im Backend (`app/services/vm_presence.py`, alle zehn Minuten):
+Sie liest die Server-IDs aus dem gespeicherten OpenTofu-State, fragt sie mit
+den Zugangsdaten der Eigentümer:in ab und setzt `deployments.vm_missing_since`,
+wenn keine VM mehr gefunden wird. Die Oberfläche zeigt dann einen Hinweis und
+bietet „Eintrag entfernen" an; automatisch gelöscht wird nichts
+([ADR 0021](adr/0021-fehlende-vms-werden-markiert-nicht-geloescht.md)).
+
 ## Zwei Wege hinein
 
 | | Direkter Login | Launch aus Moodle |

@@ -76,3 +76,4 @@ genau einmal, lückenlos, Status hier wie im ADR.
 | [0018](0018-forgejo-wird-nicht-weiterbetrieben.md) | Forgejo wird nicht weiterbetrieben | Angenommen |
 | [0019](0019-terraform-uebergangsinsel-ist-aufgeloest.md) | Die Terraform-Übergangsinsel ist aufgelöst | Angenommen |
 | [0020](0020-windows-apps-werden-unterstuetzt.md) | Windows-Apps werden unterstützt | Angenommen |
+| [0021](0021-fehlende-vms-werden-markiert-nicht-geloescht.md) | Außerhalb gelöschte VMs werden markiert, nicht automatisch entfernt | Angenommen |
