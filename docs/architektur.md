@@ -97,6 +97,9 @@ den Zugangsdaten der Eigentümer:in ab und setzt `deployments.vm_missing_since`,
 wenn keine VM mehr gefunden wird. Die Oberfläche zeigt dann einen Hinweis und
 bietet „Eintrag entfernen" an; automatisch gelöscht wird nichts
 ([ADR 0021](adr/0021-fehlende-vms-werden-markiert-nicht-geloescht.md)).
+Denselben Ausweg gibt es, wenn der letzte Abbau gescheitert ist, etwa weil das
+App-Repository gelöscht wurde
+([ADR 0022](adr/0022-gescheiterter-abbau-laesst-eintrag-entfernen.md)).
 
 ## Zwei Wege hinein
 
