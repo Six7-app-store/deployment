@@ -77,3 +77,4 @@ genau einmal, lückenlos, Status hier wie im ADR.
 | [0019](0019-terraform-uebergangsinsel-ist-aufgeloest.md) | Die Terraform-Übergangsinsel ist aufgelöst | Angenommen |
 | [0020](0020-windows-apps-werden-unterstuetzt.md) | Windows-Apps werden unterstützt | Angenommen |
 | [0021](0021-fehlende-vms-werden-markiert-nicht-geloescht.md) | Außerhalb gelöschte VMs werden markiert, nicht automatisch entfernt | Angenommen |
+| [0022](0022-gescheiterter-abbau-laesst-eintrag-entfernen.md) | Nach einem gescheiterten Abbau lässt sich der Eintrag entfernen | Angenommen |
