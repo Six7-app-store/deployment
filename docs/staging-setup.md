@@ -10,6 +10,17 @@ steht in `infrastructure/README.md`.
 
 ## Wo der Deploy läuft
 
+Backend und Worker verwenden dieselbe `GIT_ALLOWED_HOSTS`-Liste für Git-Ziele.
+Standard sind `github.com` und `gitlab.com`; zusätzliche GitLab-Hosts müssen
+in der Umgebung als JSON-Liste eingetragen werden.
+`OPENSTACK_ALLOWED_AUTH_URLS` und `OPENSTACK_ENFORCE_ALLOWED_AUTH_URLS=true`
+aktivieren die Keystone-URL-Prüfung auch in Staging. Ohne diese Konfiguration
+bleibt die Hostprüfung dort deaktiviert, während Produktion sie verlangt.
+Für produktionsnahe Tests müssen `KEYCLOAK_TOKEN_ISSUER`,
+`KEYCLOAK_ENFORCE_TOKEN_BINDING=true` und `REQUIRE_PINNED_RELEASES=true`
+gesetzt und der Audience-Mapper vorab auf dem bestehenden Realm eingerichtet
+werden. Alte Freigaben ohne gespeicherten Commit sind dann nicht freigebbar.
+
 Auf einem self-hosted GitHub-Runner im Campusnetz, weil die OpenStack-API der
 DHBW von außen nicht erreichbar ist. Warum der Runner an genau diesem
 Repository hängt und der Workflow bewusst keinen `pull_request`-Trigger hat,
