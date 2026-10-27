@@ -85,7 +85,7 @@ docker image inspect appstore-deploy:latest >nul 2>&1
 if errorlevel 1 (
   echo.
   echo   Baue das Deploy-Image ^(nur beim ersten Mal, dauert ein paar Minuten^)...
-  docker build -t appstore-deploy:latest -f forgejo/job-image/Dockerfile forgejo/job-image
+  docker build -t appstore-deploy:latest -f deploy-image/Dockerfile deploy-image
   if errorlevel 1 (
     echo   [FEHLER] Das Image liess sich nicht bauen.
     pause

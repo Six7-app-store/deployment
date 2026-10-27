@@ -46,8 +46,8 @@ moodle.<zone>.users.dhbw.site
 |---|---|
 | VM | `moodle`, Flavor `k8s.node` (4 vCPU, 8 GB, 50 GB) |
 | Netz | `DHBWV6`, erreichbar über IPv6 |
-| Terraform | `infrastructure/terraform/envs/moodle/` |
-| State | `/var/lib/tf-state/moodle/` auf der Runner-VM |
+| OpenTofu | `infrastructure/tofu/envs/moodle/` |
+| State | `/var/lib/tofu-state/moodle/` auf der Runner-VM |
 | Playbook | `infrastructure/ansible/moodle.yml` |
 | Compose | `docker-compose.moodle-infra.yml` |
 
@@ -62,18 +62,18 @@ Moodles JWKS und Token abruft. SSH bleibt auf dem Campus beschränkt.
 
 ## Ausrollen
 
-Zwei Schichten: Terraform legt in OpenStack eine VM an, auf dieser VM laufen
+Zwei Schichten: OpenTofu legt in OpenStack eine VM an, auf dieser VM laufen
 drei Container über Docker Compose. Kein Kubernetes.
 
 ```
-OpenStack ── Terraform ── VM `moodle`
+OpenStack ── OpenTofu ── VM `moodle`
                              └── docker compose -f docker-compose.moodle-infra.yml
                                      moodle · postgres · caddy
 ```
 
 **Alles läuft von der Runner-VM aus**, nicht vom Arbeitsrechner. Die
 OpenStack-API der DHBW ist von außerhalb des Campusnetzes nicht erreichbar, und
-der Terraform-State liegt ohnehin dort (ADR-0002, ADR-0003).
+der OpenTofu-State liegt ohnehin dort (ADR-0002, ADR-0003).
 
 Es gibt **keinen Workflow** dafür. Das passt zu einer Instanz, die bewusst
 stehen bleibt — aber es heißt, dass die folgenden Schritte von Hand kommen.
@@ -83,7 +83,7 @@ stehen bleibt — aber es heißt, dass die folgenden Schritte von Hand kommen.
 ```bash
 ssh -i <deploy-key> ubuntu@2001:7c0:1b20:c913:1::3f0
 git clone --branch main https://github.com/Six7-app-store/deployment.git ~/moodle-deploy
-sudo mkdir -p /var/lib/tf-state/moodle && sudo chown ubuntu:ubuntu /var/lib/tf-state/moodle
+sudo mkdir -p /var/lib/tofu-state/moodle && sudo chown ubuntu:ubuntu /var/lib/tofu-state/moodle
 ```
 
 ### 1. Zugangsdaten hinlegen
@@ -97,7 +97,7 @@ entfernen — die Runner-VM ist dauerhaft und wird von mehreren Leuten benutzt:
 | `os.env` | `export OS_*=…` | `secrets/os-env.sh` |
 | `openstack-deploy` | privater SSH-Schlüssel | Secret `SSH_PRIVATE_KEY` |
 
-Terraform braucht den **öffentlichen** Schlüssel, abgeleitet statt separat
+OpenTofu braucht den **öffentlichen** Schlüssel, abgeleitet statt separat
 gepflegt — zwei Werte, die zusammenpassen müssen, sind zwei Werte, die
 auseinanderlaufen können:
 
@@ -109,15 +109,39 @@ ssh-keygen -y -f openstack-deploy > deploy.pub
 
 ```bash
 . ~/moodle-deploy/os.env
-cd ~/moodle-deploy/infrastructure/terraform/envs/moodle
-terraform init -input=false
-terraform plan -input=false -out=moodle.plan -var "ssh_public_key=$(cat ~/moodle-deploy/deploy.pub)"
-terraform apply -input=false moodle.plan
+cd ~/moodle-deploy/infrastructure/tofu/envs/moodle
+tofu init -input=false
+tofu plan -input=false -out=moodle.plan -var "ssh_public_key=$(cat ~/moodle-deploy/deploy.pub)"
+tofu apply -input=false moodle.plan
 ```
 
 Erst planen, dann anwenden. **Im Plan muss `0 to destroy` stehen** — diese VM
 soll überleben, und ein `destroy` hier nähme Moodles Kursdaten mit, die auf der
 Instanzplatte liegen. Ergebnis ist `vm_ip`.
+
+### Einmalig: State von Terraform übernehmen
+
+Gilt nur für den Wechsel von Terraform auf OpenTofu (ADR 0010). Die VM
+**darf dabei nicht neu gebaut werden**, ihre Kursdaten liegen auf der
+Instanzplatte. Auf der Runner-VM, vor Schritt 2, mit dem Stand dieses Branches:
+
+```bash
+cp /var/lib/tf-state/moodle/terraform.tfstate ~/tfstate-moodle-vor-tofu-$(date +%F).json
+sudo mkdir -p /var/lib/tofu-state/moodle && sudo chown "$(id -u):$(id -g)" /var/lib/tofu-state/moodle
+cp /var/lib/tf-state/moodle/terraform.tfstate /var/lib/tofu-state/moodle/
+cd ~/moodle-deploy/infrastructure/tofu/envs/moodle
+tofu init -input=false
+tofu plan -input=false -var "ssh_public_key=$(cat ~/moodle-deploy/deploy.pub)"
+```
+
+Zeigt der Plan **irgendetwas außer** „No changes", nichts anwenden und
+Rücksprache halten (Rückfall: leerer State und `import {}`-Blöcke für Keypair,
+Instanz, Security Group samt Regeln und Interface-Attach). Ist er sauber:
+`tofu apply -refresh-only`. Danach den alten State umbenennen statt löschen:
+
+```bash
+mv /var/lib/tf-state/moodle/terraform.tfstate{,.uebernommen-$(date +%Y%m%d)}
+```
 
 ### 3. AAAA-Eintrag setzen
 

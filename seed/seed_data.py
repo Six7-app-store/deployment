@@ -9,10 +9,9 @@ Was es macht
 2. Spiegelt die User in die Backend-Datenbank, baut die Kurse, hängt
    die Studenten an ihre Kurse und verlinkt die Profs als
    Course-Teacher (Many-to-Many via ``course_teachers``).
-3. Erstellt Beispiel-Apps (Online-IDE, Web-LaTeX, …) deren Repos in
-   der Org ``DHBW-AppStore`` liegen — zwei Ausnahmen samt Grund
-   stehen am Kommentar zur App-Liste weiter unten —, plus ein paar
-   private Bastel-Apps.
+3. Erstellt Beispiel-Apps (Online-IDE, Web-LaTeX, Kali-Linux-App, …),
+   deren Repos in der Org ``Six7-app-store`` liegen und OpenTofu-Apps
+   sind (Ordner ``tofu/``).
 4. Erzeugt für die öffentlichen Apps ein realistisches Gemisch aus
    ``APPROVED`` / ``PENDING`` / ``REJECTED`` Version-Approvals mit
    Notes und Rejection-Reasons.
@@ -57,6 +56,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.utils.time import utcnow
 
 logger = logging.getLogger("seed")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -182,15 +182,27 @@ ALL_USERS: list[SeedUser] = (
 
 
 # ----------------------------------------------------------------
-# Apps die im Store erscheinen. Genau die sechs DHBW-Apps, keine
-# Bastel- oder Studi-Forks mehr — die Liste matcht 1:1 zu den Repos
-# in der Org ``DHBW-AppStore``.
+# Apps die im Store erscheinen. Jede App ist deploybar: Ihr Repo liegt
+# in der Org ``Six7-app-store`` und bringt ``tofu/`` mit ``*.tofu`` mit
+# (App-Vertrag aus ADR 0010). Der Worker lehnt Repos mit ``packer/``
+# oder ``terraform/`` ab, deshalb zeigt kein Eintrag mehr auf die alte Org.
 #
-# Zwei Einträge zeigen weiterhin auf ``six7-click-n-deploy``:
-# GitLab-App und Monitoring-Stack sind dort privat, und die
-# Organisation erlaubt das Forken privater Repos nicht (HTTP 403,
-# "forking is disabled"). Sie ziehen um, sobald das freigeschaltet
-# oder der Inhalt von Hand gespiegelt ist.
+# ``version_tag`` ist der Git-Tag, den der Worker klont. Der Tag muss im
+# App-Repo existieren, sonst scheitert der Deploy. Ein neuer Tag hier setzt
+# voraus, dass der passende PR im App-Repo gemergt und getaggt ist: so bei
+# den auf OpenTofu umgebauten Apps (Online-IDE, Web-LaTeX, Jupyter-Notebook,
+# pgAdmin, ``v2.0.0``) und den Versionen mit waehlbarer Adressfamilie
+# (Ubuntu-App, Windows-App, Kali-Linux-App, VSCode-App ``v1.1.0``,
+# Kubernetes-App). Ubuntu-App ``v2.0.3``, Windows-App ``v2.1.1``,
+# Kali-Linux-App ``v2.2.1`` und Kubernetes-App ``v2.1.1`` geben ihrer
+# Security Group einen Zufallsanhang: Nova loest Gruppen ueber den Namen
+# auf, und ein fester Name kollidiert mit einem zweiten Deployment.
+# Kali-Linux-App ``v2.2.3`` beginnt ihre final_message mit der Standardzeile
+# von cloud-init, an der der Worker nach Kalis Neustart das Ende erkennt
+# (``v2.2.2`` hatte dort einen Punkt hinter einer Variable, cloud-init
+# verwarf die Meldung).
+#
+# ``template-app`` ist eine Vorlage und gehoert nicht in den Katalog.
 #
 # Beschreibungen leben als Markdown unter ``app_descriptions/`` und
 # werden hier nur zur Laufzeit eingelesen; der Store rendert sie via
@@ -239,87 +251,143 @@ APPS: list[SeedApp] = [
     SeedApp(
         name="Online-IDE",
         description=_load_description("Online-IDE.md"),
-        git_link="https://github.com/DHBW-AppStore/Online-IDE.git",
+        git_link="https://github.com/Six7-app-store/Online-IDE.git",
         is_private=False,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v1.0.0", APPROVED,
+            ("v2.0.0", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
     SeedApp(
         name="Ubuntu-App",
         description=_load_description("Ubuntu-App.md"),
-        git_link="https://github.com/DHBW-AppStore/Ubuntu-App.git",
+        git_link="https://github.com/Six7-app-store/Ubuntu-App.git",
         is_private=True,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v1.0.0", APPROVED,
+            ("v2.0.3", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
     SeedApp(
         name="Web-LaTeX",
         description=_load_description("Web-LaTeX.md"),
-        git_link="https://github.com/DHBW-AppStore/Web-LaTeX.git",
+        git_link="https://github.com/Six7-app-store/Web-LaTeX.git",
         is_private=False,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v1.0.0", APPROVED,
+            ("v2.0.0", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
     SeedApp(
         name="Jupyter-Notebook",
         description=_load_description("Jupyter-Notebook.md"),
-        git_link="https://github.com/DHBW-AppStore/Jupyter-Notebook.git",
+        git_link="https://github.com/Six7-app-store/Jupyter-Notebook.git",
         is_private=False,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v1.0.0", APPROVED,
+            ("v2.0.0", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
     SeedApp(
         name="pgAdmin",
         description=_load_description("pgAdmin.md"),
-        git_link="https://github.com/DHBW-AppStore/pgAdmin.git",
+        git_link="https://github.com/Six7-app-store/pgAdmin.git",
         is_private=True,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v1.0.0", APPROVED,
+            ("v2.0.0", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
     SeedApp(
-        # Display-Name bleibt "GitLab-CE", weil im Store das Produkt
-        # GitLab Community Edition deployed wird — das tatsächliche
-        # Org-Repo heißt aber ``GitLab-App`` (privat, daher klont der
-        # Worker mit dem hinterlegten Deploy-Token).
-        name="GitLab-CE",
-        description=_load_description("GitLab-CE.md"),
-        git_link="https://github.com/six7-click-n-deploy/GitLab-App.git",
+        name="Windows-App",
+        description=_load_description("Windows-App.md"),
+        git_link="https://github.com/Six7-app-store/Windows-App.git",
         is_private=False,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v1.0.0", APPROVED,
+            ("v2.1.1", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
     SeedApp(
-        # Monitoring-Stack: zwei VMs pro Team (Prometheus + Grafana).
-        # Org-Repo ist privat — Worker klont mit GIT_ACCESS_TOKEN.
-        name="Monitoring-Stack",
-        description=_load_description("Monitoring-Stack.md"),
-        git_link="https://github.com/six7-click-n-deploy/Monitoring-Stack.git",
+        name="Kali-Linux-App",
+        description=_load_description("Kali-Linux-App.md"),
+        git_link="https://github.com/Six7-app-store/Kali-Linux-App.git",
         is_private=False,
         owner_email=_DHBW_OWNER_EMAIL,
         versions=(
-            ("v1.0.0", APPROVED,
+            ("v2.2.3", APPROVED,
+             "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
+        ),
+    ),
+    SeedApp(
+        name="VSCode-App",
+        description=_load_description("VSCode-App.md"),
+        git_link="https://github.com/Six7-app-store/VSCode-App.git",
+        is_private=False,
+        owner_email=_DHBW_OWNER_EMAIL,
+        versions=(
+            ("v1.1.0", APPROVED,
+             "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
+        ),
+    ),
+    SeedApp(
+        name="Kubernetes-App",
+        description=_load_description("Kubernetes-App.md"),
+        git_link="https://github.com/Six7-app-store/Kubernetes-App.git",
+        is_private=False,
+        owner_email=_DHBW_OWNER_EMAIL,
+        versions=(
+            ("v2.1.1", APPROVED,
+             "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
+        ),
+    ),
+    SeedApp(
+        name="group-network-app",
+        description=_load_description("group-network-app.md"),
+        git_link="https://github.com/Six7-app-store/group-network-app.git",
+        is_private=False,
+        owner_email=_DHBW_OWNER_EMAIL,
+        versions=(
+            ("v1.0.2", APPROVED,
              "Erst-Veröffentlichung im offiziellen DHBW-App-Store-Katalog.", None),
         ),
     ),
 ]
+
+
+# Apps aus frueheren Seed-Staenden, die nicht mehr deploybar sind. Der Seed
+# legt sonst nur an und nimmt nie etwas weg - ohne diese Liste blieben sie in
+# jeder Datenbank stehen, in der ein aelterer Seed sie angelegt hat.
+# Ausgeblendet wird wie beim Loeschen in der Admin-Oberflaeche ueber
+# ``deleted_at``: die Zeile bleibt, bestehende Deployments behalten ihre App.
+RETIRED_APPS: tuple[str, ...] = (
+    # Repo gibt es nicht (six7-click-n-deploy/GitLab-App, .../Monitoring-Stack,
+    # .../Test-App); GitLab-CE und Monitoring-Stack gestrichen am 21.10.2026
+    # (E3 in docs/plan-opentofu-abschluss.md).
+    "GitLab-CE",
+    "Monitoring-Stack",
+    "Test-App (Template-Spielwiese)",
+    "Monika's Test-Sandbox",
+    # Beispiel-Apps aus dem Seed bis Juni 2026. Sie zeigen auf Repos in
+    # six7-click-n-deploy, die noch packer/ und terraform/ haben; der Worker
+    # lehnt sie ab (ADR 0010).
+    "Online IDE",
+    "Jupyter Notebook",
+    "Ubuntu Sandbox",
+    "My Custom Stack (WIP)",
+    "Luca's IDE Fork",
+    "Felix's LaTeX Vorlage",
+    "Anna's Web-LaTeX",
+    "Raphael's Notebook-Stack",
+    "Tom's Ubuntu mit Docker",
+    "Iven's PostgreSQL Lab",
+)
 
 
 # ----------------------------------------------------------------
@@ -532,6 +600,12 @@ def _ensure_course_teacher(db: Session, course: Course, teacher: User) -> None:
 def _ensure_app(db: Session, app_def: SeedApp, owner: User) -> App:
     app = db.query(App).filter(App.name == app_def.name).first()
     if app is None:
+        # Auf Staging sind die OpenTofu-Apps teils schon von Hand eingetragen,
+        # womoeglich unter anderem Namen. Dasselbe Repo ist dieselbe App.
+        app = db.query(App).filter(App.git_link == app_def.git_link).first()
+        if app is not None:
+            logger.info("App %s unter dem Namen %s gefunden (gleiches Repo)", app_def.name, app.name)
+    if app is None:
         app = App(
             name=app_def.name,
             description=app_def.description,
@@ -556,6 +630,23 @@ def _ensure_app(db: Session, app_def: SeedApp, owner: User) -> App:
             logger.info("App reaktiviert (deleted_at -> NULL): %s", app_def.name)
             app.deleted_at = None
     return app
+
+
+def _retire_app(db: Session, name: str) -> None:
+    """Blendet eine App aus RETIRED_APPS aus, falls es sie noch gibt.
+
+    Zeigt sie auf das Repo einer aktuellen Katalog-App, bleibt sie stehen:
+    _ensure_app findet Apps auch ueber das Repo, und eine von Hand
+    eingetragene App mit altem Namen ist dann genau diese Katalog-App.
+    """
+    app = db.query(App).filter(App.name == name, App.deleted_at.is_(None)).first()
+    if app is None:
+        return
+    if app.git_link in {a.git_link for a in APPS}:
+        logger.info("App %s nicht ausgeblendet: Repo gehoert zu einer Katalog-App", name)
+        return
+    app.deleted_at = utcnow()
+    logger.info("App ausgeblendet (nicht mehr im Katalog): %s", name)
 
 
 def _ensure_version(
@@ -646,6 +737,9 @@ def seed() -> None:
             for version_tag, status, notes, reason in app_def.versions:
                 _ensure_version(db, db_app, admin_user, version_tag, status, notes, reason)
 
+        for name in RETIRED_APPS:
+            _retire_app(db, name)
+
         db.commit()
     except Exception:
         db.rollback()
@@ -681,6 +775,8 @@ def _print_summary() -> None:
     for a in APPS:
         flavor = "private" if a.is_private else "public"
         print(f"  - [{flavor:7s}] {a.name:30s}  {len(a.versions)} Version(en)")
+    print()
+    print(f"Ausgeblendet, falls noch vorhanden: {len(RETIRED_APPS)} Apps aus frueheren Seeds")
     print()
     print("=" * 72)
 

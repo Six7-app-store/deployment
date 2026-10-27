@@ -1,0 +1,97 @@
+{
+  "_kommentar": [
+    "Welche Doku welchen Code beschreibt. Quelle fuer das Commit-Gate in",
+    "agent_guard.py und fuer `make docs-check` (prueft, dass jede Doku hier",
+    "existiert und jedes Muster noch auf Dateien zeigt).",
+    "",
+    "Eine Regel greift, wenn eine geaenderte Datei des Repos `repo` auf eines",
+    "der Muster in `pfade` passt (fnmatch, `*` schliesst `/` ein). Sie ist",
+    "erfuellt, wenn mindestens eine Datei aus `doku` (Pfad im deployment-Repo)",
+    "auf demselben Branch oder im Arbeitsbaum geaendert ist.",
+    "",
+    "Bewusst eine Regel je Zusammenhang, nicht je Datei: das Gate soll fragen",
+    "'hast du an X gedacht', nicht jede Zeile Code einer Doku zuordnen. Wo die",
+    "Doku nichts zu sagen hat, schreibt der Agent 'Doku-geprueft: <Grund>' in",
+    "die Commit-Nachricht."
+  ],
+  "regeln": [
+    {
+      "repo": "backend",
+      "pfade": ["app/models.py", "alembic/versions/*"],
+      "doku": ["docs/architektur.md"],
+      "warum": "Datenmodell-Diagramm"
+    },
+    {
+      "repo": "backend",
+      "pfade": ["app/routers/lti.py", "app/services/lti_service.py", "app/utils/lti*", "app/utils/auth.py", "app/utils/keycloak_auth.py"],
+      "doku": ["docs/architektur.md", "docs/moodle-lti-dev.md"],
+      "warum": "Launch-Ablauf, Rollen und Anmeldung"
+    },
+    {
+      "repo": "backend",
+      "pfade": [".github/workflows/*"],
+      "doku": ["docs/pipeline.md"],
+      "warum": "Kette von CI bis Staging"
+    },
+    {
+      "repo": "frontend",
+      "pfade": [".github/workflows/*"],
+      "doku": ["docs/pipeline.md"],
+      "warum": "Kette von CI bis Staging"
+    },
+    {
+      "repo": "worker",
+      "pfade": [".github/workflows/*"],
+      "doku": ["docs/pipeline.md"],
+      "warum": "Kette von CI bis Staging"
+    },
+    {
+      "repo": "worker",
+      "pfade": ["app/tasks.py"],
+      "doku": ["docs/pipeline.md"],
+      "warum": "App-Deploy: Ablauf der Worker-Tasks"
+    },
+    {
+      "repo": "deployment",
+      "pfade": [".github/workflows/staging.yml"],
+      "doku": ["docs/pipeline.md", "docs/staging-setup.md"],
+      "warum": "Staging-Pipeline"
+    },
+    {
+      "repo": "deployment",
+      "pfade": ["infrastructure/tofu/*", "docker-compose.staging.yml"],
+      "doku": ["docs/staging-setup.md"],
+      "warum": "Aufbau der Staging-VM"
+    },
+    {
+      "repo": "deployment",
+      "pfade": ["infrastructure/ansible/staging.yml", "scripts/autoupdate.sh"],
+      "doku": ["docs/staging-setup.md", "docs/selbstaktualisierung.md"],
+      "warum": "Einrichtung und Selbstaktualisierung der Staging-VM"
+    },
+    {
+      "repo": "deployment",
+      "pfade": ["docker-compose.dev.yml", ".env.example"],
+      "doku": ["docs/dev-setup.md"],
+      "warum": "lokaler Stack und seine Variablen"
+    },
+    {
+      "repo": "deployment",
+      "pfade": ["docker-compose.prod.yml"],
+      "doku": ["docs/prod-setup.md"],
+      "warum": "Produktions-Stack"
+    },
+    {
+      "repo": "deployment",
+      "pfade": ["infrastructure/tofu/envs/moodle/*", "infrastructure/ansible/moodle.yml"],
+      "doku": ["docs/moodle-infrastruktur.md"],
+      "warum": "Moodle-Instanz"
+    },
+    {
+      "repo": "deployment",
+      "pfade": ["harness/agent_guard.py", "harness/permissions.json", "harness/sync.py", "harness/doc-map.json", "harness/skills/*"],
+      "doku": ["docs/harness.md", "harness/README.md"],
+      "warum": "Beschreibung des Harness"
+    }
+  ]
+}

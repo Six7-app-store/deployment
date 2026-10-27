@@ -1,6 +1,6 @@
 # Plan — Umstieg auf ausschließlich OpenTofu abschließen
 
-**Stand der Erhebung:** 21.10.2026, gegen `origin/main` (Six7-app-store) aller Repos
+**Stand der Erhebung:** 21.10.2026, gegen `origin/develop` (Six7-app-store) aller Repos; `develop` = `main` (ADR 0013)
 **Grundlage:** [ADR 0010](adr/0010-opentofu-statt-terraform-und-packer.md),
 [ADR 0011](adr/0011-deploy-wartet-auf-die-einrichtung-der-vms.md),
 [deploy-runbook.md](deploy-runbook.md)
@@ -31,7 +31,7 @@ OpenTofu selbst so führt (siehe Abschnitt 6, „Erlaubte Reste").
 
 ## 2. Ausgangslage
 
-### Schon erledigt (auf `origin/main`, nicht nacharbeiten)
+### Schon erledigt (auf `origin/develop`, nicht nacharbeiten)
 
 | Repo | Stand | Beleg |
 |---|---|---|
@@ -52,7 +52,7 @@ OpenTofu selbst so führt (siehe Abschnitt 6, „Erlaubte Reste").
 | O5 | Seed-Einträge `GitLab-CE` und `Monitoring-Stack` zeigen auf `six7-click-n-deploy/...` → **HTTP 404**. | `seed/seed_data.py` |
 | O6 | Für `Ubuntu-App` gibt es schon eine OpenTofu-Fassung, aber unter `Six7-app-store/Ubuntu-App` (Tags `v2.0.0`, `v2.0.1`), nicht dort, wohin der Seed zeigt. | GitHub |
 | O7 | Harness erlaubt noch `terraform fmt/validate/plan`, `agent_guard.py` formatiert `.tf` mit `terraform fmt`, pr-review-Skill prüft `terraform fmt`. | `harness/permissions.json`, `harness/agent_guard.py:350-368`, `harness/skills/pr-review/SKILL.md:40` |
-| O8 | Doku-Reste: Packer-Zeiten in `seed/app_descriptions/Ubuntu-App.md`, `terraform apply` in `GitLab-CE.md`, Moodle-Anleitung mit `terraform`-Befehlen, Einmal-Abschnitt im Runbook, Insel-Hinweise in `AGENTS.md`, `README.md`, `infrastructure/README.md`. | `git grep -niE "packer\|terraform" origin/main` |
+| O8 | Doku-Reste: Packer-Zeiten in `seed/app_descriptions/Ubuntu-App.md`, `terraform apply` in `GitLab-CE.md`, Moodle-Anleitung mit `terraform`-Befehlen, Einmal-Abschnitt im Runbook, Insel-Hinweise in `AGENTS.md`, `README.md`, `infrastructure/README.md`. | `git grep -niE "packer\|terraform" origin/develop` |
 | O9 | `Six7-app-store/Windows-App` hat noch `packer/` + `terraform/`. | GitHub; ADR 0001; `docs/pipeline.md:56-61` |
 | O10 | **Org `DHBW-AppStore` läuft auseinander.** Ihre `main`-Stände von deployment, backend, frontend und worker haben ADR 0010 nicht. Sie haben aber eigene Commits, die Six7 fehlen (z. B. backend `390b822` „Verify Keycloak tokens with PyJWT"). Laut E6 wird sie **nicht** nachgezogen. Falls einer dieser Commits in Six7 gebraucht wird, ist das ein eigenes Paket außerhalb dieses Plans. | `git rev-list --count origin/main..dhbw/main`: deployment 8, backend 11, frontend 3, worker 9 |
 | O11 | **Unbekannt:** Ob der einmalige Abriss aus O3 tatsächlich gelaufen ist und ob alte App-Deployment-VMs und `deployment_*`-Schemata wirklich weg sind. Das geht aus keinem Repo hervor. | — |
@@ -84,12 +84,13 @@ Keine. Alle Pakete sind freigegeben.
 
 ## 4. Regeln für alle Agenten
 
-1. **Basis ist `origin/main`, nicht der lokale Checkout.** Die lokalen
-   Arbeitskopien stehen auf alten Feature-Branches (Stand Ende September),
-   vor ADR 0010. Vor jedem Paket:
+1. **Basis ist `origin/develop`, nicht der lokale Checkout und nicht `main`.**
+   `develop` ist Staging, `main` ist Produktion (ADR 0013); seit 22.10.2026
+   stehen beide in allen vier Repos auf demselben Stand. Die lokalen
+   Arbeitskopien können auf alten Feature-Branches stehen. Vor jedem Paket:
    ```bash
    git fetch origin
-   git switch -c <branch-aus-dem-paket> origin/main
+   git switch -c <branch-aus-dem-paket> origin/develop
    ```
    Uncommittete Änderungen anderer Leute nicht anfassen. Ist der Arbeitsbaum
    schmutzig, mit `git worktree add` arbeiten.
@@ -101,7 +102,10 @@ Keine. Alle Pakete sind freigegeben.
    bzw. mit `tofu` am Host nur für `fmt`, `init -backend=false`, `validate`
    und `test`.
 5. **Verboten für Agenten:** `tofu apply|destroy|state|import`,
-   `terraform apply|destroy|state|import`, Push auf `main`, Force-Push,
+   `terraform apply|destroy|state|import`, **jeder Push auf `main`**,
+   **jeder Push und jeder Merge auf `develop`** (Agenten pushen nur auf ihren
+   eigenen Feature-Branch; ob und wann ein Branch nach `develop` kommt,
+   entscheidet ein Mensch), Force-Push,
    **jeder Push, PR oder Link in die Org `DHBW-AppStore`** (Remote `dhbw`;
    Ziel ist ausschließlich `Six7-app-store`, E6), Lesen oder Schreiben von `.env`,
    `*.pem` und `*.key`. Pakete mit der Rolle **Mensch** führen Agenten nicht
@@ -122,7 +126,7 @@ Keine. Alle Pakete sind freigegeben.
 |---|---|---|
 | **Code** | In einem Repo auf einem Branch ändern, lokal prüfen, Commit, Push auf Feature-Branch nach Freigabe | Coding-Agent |
 | **Audit** | Nur lesen, Befundliste mit `datei:zeile` liefern | Review- bzw. Explore-Agent |
-| **Mensch** | Echte Infrastruktur, State, Runner-VM, Merge auf `main`, Org-fremde Repos | Teammitglied mit Zugang |
+| **Mensch** | Echte Infrastruktur, State, Runner-VM, Merge auf `develop` und `main`, Org-fremde Repos | Teammitglied mit Zugang |
 
 ---
 
@@ -144,7 +148,7 @@ graph LR
   C1 --> C5[C5 Seed umstellen]
   C6[C6 Windows-App umbauen] --> C5
   C5 --> C7[C7 Abnahme je App<br/>Mensch]
-  A1 & A2 & A3 & B4 & H2 & C7 --> Z[Z Schluss-Audit + ADR 0012]
+  A1 & A2 & A3 & B4 & H2 & C7 --> Z[Z Schluss-Audit + Abschluss-ADR]
 ```
 
 **Sofort parallel startbar:** P0, A3, B1, B3 (Abriss), C0 und danach C1–C4,
@@ -222,7 +226,7 @@ Schritte:
 3. `docs/architektur.md:172`, `docs/dev-setup.md:299`: Formulierungen auf
    den Ist-Zustand bringen.
 
-Prüfung: `git grep -niE "packer" origin/main -- seed docs ':!docs/adr'` zeigt
+Prüfung: `git grep -niE "packer" origin/develop -- seed docs ':!docs/adr'` zeigt
 nur noch Stellen, die Packers Wegfall beschreiben.
 
 ---
@@ -363,7 +367,7 @@ aber nicht mehr gebraucht.
    nennt Forgejo Actions als Staging-Trigger) und `docs/staging-setup.md`
    („Warum ein eigenes Forgejo") entfernen. Seit ADR 0002 läuft Staging über
    den self-hosted GitHub-Runner.
-3. ADR anlegen (nächste freie Nummer): „Forgejo wird nicht weiterbetrieben".
+3. ADR anlegen (nächste freie Nummer; Stand 22.10.2026: 0014): „Forgejo wird nicht weiterbetrieben".
 
 Fertig, wenn: die VM weg ist und `git grep -ni forgejo` nur noch in ADRs trifft.
 
@@ -375,7 +379,7 @@ Fertig, wenn: die VM weg ist und `git grep -ni forgejo` nur noch in ADRs trifft.
 |---|---|
 | Rolle | Code |
 | Repo / Branch | deployment / `chore/terraform-insel-aufloesen` |
-| Abhängig von | B2 und B3 auf `main` |
+| Abhängig von | B2 und B3 auf `develop` |
 
 Schritte:
 
@@ -392,7 +396,7 @@ Schritte:
 5. `README.md` (Baum Z. 75), `infrastructure/README.md` (Abschnitte
    Intro, Environments, Baum), `docs/deploy-runbook.md` (Absatz zu moodle und
    forgejo).
-6. ADR (nächste freie Nummer, voraussichtlich 0012) „Die
+6. ADR (nächste freie Nummer, nach dem Forgejo-ADR) „Die
    Terraform-Übergangsinsel ist aufgelöst": Datum, Weg A oder B aus B2 und
    die Abschaffung von Forgejo (E1). ADR 0010 bleibt unverändert. Zeile im
    Verzeichnis in `docs/adr/README.md` ergänzen. Ist B3 schon mit eigenem ADR
@@ -413,7 +417,7 @@ löschen.
 |---|---|
 | Rolle | Code |
 | Repo / Branch | deployment / `chore/harness-ohne-terraform` |
-| Abhängig von | B4 auf `main` (vorher würde `.tf` in der Insel unformatiert bleiben) |
+| Abhängig von | B4 auf `develop` (vorher würde `.tf` in der Insel unformatiert bleiben) |
 
 Schritte, nur unter `deployment/harness/`:
 
@@ -440,7 +444,7 @@ Schritte, nur unter `deployment/harness/`:
 |---|---|
 | Rolle | Code |
 | Repo / Branch | je Repo `chore/harness-sync-opentofu` (drei Commits) |
-| Abhängig von | H1 auf `main` |
+| Abhängig von | H1 auf `develop` |
 
 Nach `make harness-sync` die geänderten `.claude/`-Dateien und `AGENTS.md`
 in jedem der drei Repos als eigenen Commit aufnehmen. Kein Inhalt außer den
@@ -627,7 +631,7 @@ grün ist und ein Tag gesetzt ist.
 | | |
 |---|---|
 | Rolle | **Mensch** |
-| Abhängig von | C5 auf `main`, Staging neu gebaut |
+| Abhängig von | C5 auf `develop`, Staging neu gebaut |
 
 Je Seed-App: im App Store auf Staging deployen. Prüfen: Phase `VM_SETUP`
 endet erfolgreich, die App ist erreichbar, und die Zugangsdaten stimmen.
@@ -646,7 +650,7 @@ notieren (Vergleichswert für die Beschreibungen aus A2).
 ```bash
 for r in deployment backend frontend worker; do
   git -C $r fetch origin
-  git -C $r grep -nIiE "packer|terraform" origin/main -- . \
+  git -C $r grep -nIiE "packer|terraform" origin/develop -- . \
     ':!docs/adr' ':!**/alembic/versions/**' ':!*.lock' ':!package-lock.json'
 done
 ```

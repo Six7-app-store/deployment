@@ -1,46 +1,62 @@
-# Online-IDE – Browserbasierte Java-Entwicklungsumgebung
+# Online-IDE – Java-Entwicklungsumgebung im Browser
 
-Eine cloud-init-basierte VS Code Server Instanz pro Team, die jedem Studierenden eine
-individuelle Entwicklungsumgebung im Browser bereitstellt. Jeder Nutzer meldet sich mit
-persönlichen Zugangsdaten an und erhält eine eigene code-server-Session auf einem
-dedizierten Port.
+Jedes Team bekommt eine eigene VM, und jede Person darauf einen eigenen
+code-server (VS Code im Browser) mit eigenem Port und eigenem Passwort.
+
+## Vorinstallierte Software
+
+- OpenJDK 21 (`java`, `javac`), direkt aus dem Terminal der IDE nutzbar
+- Python 3 (inkl. pip, venv), `build-essential`, Git
+
+## Aufgaben
+
+Jede Person findet nach dem Login `~/Coding-Aufgabe/` vor. Ohne Upload liegen
+dort zehn Java-Übungen von „Hello World" bis zur binären Suche. Eine
+hochgeladene ZIP ersetzt sie für alle Mitglieder des Teams.
 
 ## User-Management
 
-Jeder Nutzer bekommt einen eigenen Linux-Account (abgeleitet aus der E-Mail-Adresse)
-und ein automatisch generiertes Passwort. Der Login in code-server erfolgt über dieses
-Passwort. Zugangsdaten werden nach dem Deployment per Mail versendet. Innerhalb eines
-Teams teilen sich alle Nutzer dieselbe VM, arbeiten aber auf isolierten Ports und in
-separaten Home-Verzeichnissen.
+- **Ein Account pro Person**, abgeleitet aus der E-Mail-Adresse
+  (z.B. `anna.alt@dhbw.de` → `annaalt`)
+- Das Passwort gilt für die IDE, für `sudo` und für SSH
+- Jede Person hat einen eigenen Port ab 8080; die Zugangsdaten nennen ihn
 
 ## VM-Deployment
 
-Es wird **eine VM pro Team** deployed. Bei zwei Teams entstehen zwei VMs. Jeder Nutzer
-eines Teams erhält einen eigenen Port ab 8080 (aufsteigend pro Nutzer). Flavor: `gp1.small`.
-
-## Deployment-Dauer
-
-| Phase | Dauer |
+| | |
 |---|---|
-| Packer Image Build (einmalig) | ca. 15–20 Min |
-| Terraform Apply | ca. 2–5 Min |
-| VM-Boot + cloud-init (User-Anlage, code-server-Start) | ca. 2–4 Min |
-| **Gesamt erstmalig** | **ca. 20–30 Min** |
+| VMs gesamt | **eine pro Team** (höchstens 15, je Team bis 20 Personen) |
+| Größe | wählbar: `gp1.small`, `gp1.medium`, `gp1.large` |
+| Erreichbar über | HTTP auf Port 8080 + n, über IPv6 (Standard), IPv4 oder beides |
+| Floating IP | Nein |
 
-Bei vorhandenem Packer-Image entfällt der Build — dann ca. **5–10 Minuten** gesamt.
+Über IPv4 ist die IDE nur aus dem Campusnetz und dem VPN erreichbar.
 
 ## Konfigurierbare Variablen
 
 | Variable | Beschreibung | Pflicht |
 |---|---|---|
-| `assignment_files` | Java-Aufgabendatei pro User (`.java`) — landet unter `~/Coding-Aufgabe/` | Ja |
-| `team_flavor_ids` | Flavor-ID pro Team — Picker-Auswahl | Nein |
-| `network_uuid` | UUID des internen Netzwerks | Ja (Default vorhanden) |
-| `floating_ip_pool` | Name des External Networks für öffentliche IP | Ja (Default vorhanden) |
-| `shared_secgroup_id` | ID der Security Group | Ja (Default vorhanden) |
+| `assignment_files` | Aufgaben als ZIP pro Team, landen in `~/Coding-Aufgabe` | Nein |
+| `flavor` | Größe der Team-VM | Nein (Standard `gp1.small`) |
+| `disk_size_gb` | Festplatte in GB, `0` = Platte des Flavors | Nein |
+| `max_teams` | Obergrenze für Team-VMs | Nein (Standard 15) |
+| `ip_mode` | Adressfamilie: `ipv4`, `ipv6` oder `dual` | Nein (Standard `ipv6`) |
+| `network_uuid` / `network_v4_uuid` | Netz für IPv6 bzw. IPv4 | Nein (Standard vorhanden) |
+| `shared_secgroup_id` | ID der gemeinsamen Security Group | Nein (Standard vorhanden) |
+| `web_source_v4` / `web_source_v6` | Wer die IDE erreichen darf | Nein (Campus bzw. alle) |
 
-### Aufgabendateien (`assignment_files`)
+Die ZIP darf höchstens etwa 30 KB groß sein, weil sie beim Start der VM
+mitreist.
 
-Über den Wizard muss pro Nutzer eine individuelle `.java`-Datei hochgeladen werden.
-Diese wird beim VM-Start automatisch unter `~/Coding-Aufgabe/<dateiname>.java`
-abgelegt und ist direkt in code-server sichtbar.
+## Deployment-Dauer
+
+Ein Deployment läuft in zwei Phasen:
+
+1. `tofu apply` legt VM und Netzanschluss an.
+2. Beim ersten Start richtet cloud-init die VM ein (Phase `VM_SETUP`). Der Store
+   meldet das Deployment erst als fertig, wenn diese Einrichtung abgeschlossen
+   ist.
+
+Es gibt kein vorgebautes Image mehr: JDK und code-server werden bei jedem
+Deployment installiert. Die Dauer hängt deshalb von der Einrichtung ab.
+Messwerte folgen nach der Abnahme auf Staging.

@@ -3,7 +3,9 @@
 module "vm" {
   source = "../../modules/openstack_vm"
 
-  name  = "staging-dhbw-appstore"
+  # Je Stand ein eigener Name (ADR 0014): main behaelt "staging", develop
+  # heisst "develop". Daraus entstehen auch Keypair und Security Group.
+  name  = "${var.name_prefix}-dhbw-appstore"
   image = "Ubuntu 24.04"
 
   # k8s.node statt gp1.large. Rechenleistung identisch - 4 vCPU, 8 GB RAM -,
@@ -81,7 +83,7 @@ module "vm" {
   docker_data_volume_size_gb = 0
 
   metadata = {
-    env  = "staging"
+    env  = var.name_prefix
     role = "docker"
   }
 }

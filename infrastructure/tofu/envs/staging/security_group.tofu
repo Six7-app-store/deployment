@@ -14,7 +14,7 @@
 
 resource "openstack_networking_secgroup_v2" "appstore_vm" {
   # We enforce a unique security-group for this vm
-  name        = "staging-dhbw-appstore-sg"
+  name        = "${var.name_prefix}-dhbw-appstore-sg"
   description = "Staging Docker host: SSH for Ansible, HTTP/HTTPS for the app"
 
   # delete_default_rules stays false, so the group keeps OpenStack's default

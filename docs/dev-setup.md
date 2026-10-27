@@ -10,7 +10,7 @@ Der App Store ist ein Web-System, in dem Studierende und Dozierende vorgefertigt
 | Docker Compose | v2 (`docker compose`, nicht `docker-compose`) | Über Docker Desktop bereits dabei |
 | Git | 2.x | |
 | Python 3 | 3.11+ | Fernet-Key, `make harness-sync` und die Claude-Hooks laufen darueber |
-| GNU Make | Pflicht | Alle Schritte sind als `make`-Targets ausgelegt — wer kein Make hat, kann die zugrunde liegenden Befehle direkt aus dem [Makefile](./Makefile) ablesen |
+| GNU Make | Pflicht | Alle Schritte sind als `make`-Targets ausgelegt — wer kein Make hat, kann die zugrunde liegenden Befehle direkt aus dem [Makefile](../Makefile) ablesen |
 | Freie Ports | 5173, 8000, 8080, 5432, 5672, 15672, 6379, 5050, 55433 | Bei Konflikt den entsprechenden Port in der `.env` überschreiben (z. B. `KEYCLOAK_PORT=8180`) — die zugehörige `VITE_*_URL` ebenfalls anpassen |
 
 
@@ -22,11 +22,10 @@ Ein GitHub Personal Access Token mit `repo`-Scope ist empfohlen. Ohne Token funk
 ```bash
 mkdir app-store
 cd app-store
-git clone https://github.com/DHBW-AppStore/frontend
-git clone https://github.com/DHBW-AppStore/backend
-git clone https://github.com/DHBW-AppStore/worker
-git clone https://github.com/DHBW-AppStore/deployment
-git clone https://github.com/DHBW-AppStore/.github org-docs # optional (nur Dokumentation)
+git clone https://github.com/Six7-app-store/frontend
+git clone https://github.com/Six7-app-store/backend
+git clone https://github.com/Six7-app-store/worker
+git clone https://github.com/Six7-app-store/deployment
 cd deployment
 ```
 

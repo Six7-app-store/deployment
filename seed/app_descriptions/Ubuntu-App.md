@@ -1,7 +1,7 @@
 # Ubuntu Terminal App
 
 Eine einfache Linux-Lernumgebung für Hochschulkurse. Jeder Studierende
-bekommt einen eigenen SSH-Zugang auf einer gemeinsamen Ubuntu 26.04 VM
+bekommt einen eigenen SSH-Zugang auf einer gemeinsamen Ubuntu 24.04 VM
 und ein vorgefertigtes Lernverzeichnis mit Übungsaufgaben und Kurzreferenz
 zu den wichtigsten Terminal-Befehlen.
 
@@ -40,25 +40,30 @@ Jeder Nutzer findet nach dem Login unter `~/linux-kurs/` folgende Struktur vor:
 | | |
 |---|---|
 | VMs gesamt | **1** (geteilt von allen Teams und Nutzern) |
-| VMs pro Team | — |
-| VMs pro Nutzer | — |
-| Flavor | `gp1.small` |
-| Floating IP | Ja (öffentlich erreichbar) |
+| Größe | wählbar: `gp1.small`, `gp1.medium`, `gp1.large` |
+| Festplatte | wählbar: 10–200 GB, Standard ist die Platte des Flavors |
+| Erreichbar über | SSH, wählbar über IPv6 (Standard), IPv4 oder beides |
+| Floating IP | Nein |
 
 ## Konfigurierbare Variablen
 
 | Variable | Beschreibung | Pflicht |
 |---|---|---|
-| `network_uuid` | UUID des internen Netzwerks | Ja |
-| `floating_ip_pool` | Name des External Networks für Floating IPs | Ja |
-| `shared_secgroup_id` | ID der gemeinsamen Security Group | Ja |
+| `flavor` | Größe der VM | Nein (Standard `gp1.small`) |
+| `disk_size_gb` | Festplatte in GB, `0` = Platte des Flavors | Nein |
+| `ip_mode` | Adressfamilie: `ipv4`, `ipv6` oder `dual` | Nein (Standard `ipv6`) |
+| `network_uuid` / `network_v4_uuid` | Netz für IPv6 bzw. IPv4 | Nein (Standard vorhanden) |
+| `shared_secgroup_id` | ID der gemeinsamen Security Group | Nein (Standard vorhanden) |
 
 ## Deployment-Dauer
 
-| Schritt | Dauer (ca.) |
-|---|---|
-| Packer Image Build | 10–15 min |
-| Terraform apply | 3–5 min |
-| **Gesamt (Erstdeployment)** | **13–20 min** |
+Ein Deployment läuft in zwei Phasen:
 
-Bei Folge-Deployments (Image bereits gebaut) nur Terraform: **3–5 min**.
+1. `tofu apply` legt VM und Netzanschluss an.
+2. Beim ersten Start richtet cloud-init die VM ein (Phase `VM_SETUP`). Der Store
+   meldet das Deployment erst als fertig, wenn diese Einrichtung abgeschlossen
+   ist.
+
+Es gibt kein vorgebautes Image mehr: Die Software wird bei jedem Deployment
+installiert. Die Dauer hängt deshalb von der Einrichtung ab und ist länger als
+bei früheren Ständen. Messwerte folgen nach der Abnahme auf Staging.

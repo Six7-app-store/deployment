@@ -1,58 +1,4 @@
 {
-  "enabledPlugins": {
-    "context7@claude-plugins-official": true
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "P=$(command -v python || command -v python3); [ -n \"$P\" ] && \"$P\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/agent_guard.py\" pre; exit 0",
-            "timeout": 15,
-            "statusMessage": "Secret- und Migrationsschutz"
-          }
-        ],
-        "matcher": "Edit|Write"
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "P=$(command -v python || command -v python3); [ -n \"$P\" ] && \"$P\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/agent_guard.py\" bash; exit 0",
-            "timeout": 15,
-            "statusMessage": "Secret-Schutz (Shell)"
-          }
-        ],
-        "matcher": "Bash"
-      }
-    ],
-    "PostToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "P=$(command -v python || command -v python3); [ -n \"$P\" ] && \"$P\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/agent_guard.py\" lint; exit 0",
-            "timeout": 90,
-            "statusMessage": "Auto-Format"
-          }
-        ],
-        "matcher": "Edit|Write"
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "P=$(command -v python || command -v python3); [ -n \"$P\" ] && \"$P\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/agent_guard.py\" stop; exit 0",
-            "timeout": 300,
-            "statusMessage": "Qualitaets-Gate"
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "deny": [
       "Read(.env)",
@@ -76,7 +22,12 @@
       "Bash(git push * master)",
       "Bash(git push * HEAD:main)",
       "Bash(git push origin main)",
+      "Bash(git push dhbw *)",
       "Bash(gh pr merge *)",
+      "Bash(gh * -R DHBW-AppStore*)",
+      "Bash(gh * --repo DHBW-AppStore*)",
+      "Bash(gh * --repo=DHBW-AppStore*)",
+      "Bash(gh workflow run *stand=main*)",
       "Bash(make prod*)",
       "Bash(docker compose -f docker-compose.prod.yml *)",
       "Bash(docker-compose -f docker-compose.prod.yml *)",
@@ -115,13 +66,15 @@
       "Bash(git clean *)",
       "Bash(git rebase *)",
       "Bash(tofu plan *)",
-      "Bash(terraform plan *)",
-      "Bash(gh workflow run *)",
+      "Bash(gh issue close *)",
+      "Bash(gh issue delete *)",
       "Bash(docker compose down *)",
       "Bash(make db-reset-dev*)",
       "Bash(make keycloak-reset*)",
       "Bash(make clean-all*)",
-      "Bash(make prune*)"
+      "Bash(make prune*)",
+      "Edit(**/.github/workflows/**)",
+      "Edit(**/harness/**)"
     ],
     "allow": [
       "Bash(docker exec backend-dev poetry run *)",
@@ -147,6 +100,11 @@
       "Bash(make status*)",
       "Bash(make health*)",
       "Bash(make help*)",
+      "Bash(make docs-check*)",
+      "Bash(make staging-status*)",
+      "Bash(make story-issues*)",
+      "Bash(make harness-test*)",
+      "Bash(make harness-check*)",
       "Bash(git status *)",
       "Bash(git diff *)",
       "Bash(git log *)",
@@ -166,10 +124,17 @@
       "Bash(gh pr checks *)",
       "Bash(gh run list *)",
       "Bash(gh run view *)",
+      "Bash(gh run watch *)",
+      "Bash(gh issue list *)",
+      "Bash(gh issue view *)",
+      "Bash(gh issue create *)",
+      "Bash(gh issue edit *)",
+      "Bash(gh issue comment *)",
+      "Bash(gh label list *)",
+      "Bash(gh label create *)",
+      "Bash(gh workflow run staging.yml *)",
       "Bash(tofu fmt *)",
       "Bash(tofu validate *)",
-      "Bash(terraform fmt *)",
-      "Bash(terraform validate *)",
       "Bash(curl -sS http://localhost:8000/health)",
       "Bash(curl http://localhost:8000/health)",
       "Bash(curl http://localhost:8000/openapi.json)",
@@ -180,5 +145,59 @@
       "../frontend",
       "../worker"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "P=$(command -v python || command -v python3); [ -n \"$P\" ] && \"$P\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/agent_guard.py\" pre; exit 0",
+            "timeout": 15,
+            "statusMessage": "Secret- und Migrationsschutz"
+          }
+        ],
+        "matcher": "Edit|Write"
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "P=$(command -v python || command -v python3); [ -n \"$P\" ] && \"$P\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/agent_guard.py\" bash; exit 0",
+            "timeout": 900,
+            "statusMessage": "Secret-Schutz, Ziel-Repo, Staging- und Commit-Gate"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "P=$(command -v python || command -v python3); [ -n \"$P\" ] && \"$P\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/agent_guard.py\" lint; exit 0",
+            "timeout": 90,
+            "statusMessage": "Auto-Format"
+          }
+        ],
+        "matcher": "Edit|Write"
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "P=$(command -v python || command -v python3); [ -n \"$P\" ] && \"$P\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/agent_guard.py\" stop; exit 0",
+            "timeout": 300,
+            "statusMessage": "Qualitaets-Gate"
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "context7@claude-plugins-official": true
   }
 }

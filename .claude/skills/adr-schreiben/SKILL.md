@@ -24,9 +24,17 @@ Fehler halten, ohne den Kontext zu kennen?
 ## Wo
 
 `deployment/docs/adr/NNNN-kurzer-titel.md`. Fortlaufend nummeriert, Nummern
-werden nie wiederverwendet. Die nächste freie Nummer steht in
-`docs/adr/README.md` in der Tabelle am Ende — dort auch den neuen Eintrag
-ergänzen.
+werden nie wiederverwendet. Die nächste freie Nummer ist die höchste Datei
+unter `docs/adr/` plus eins — nicht die letzte Zeile im Verzeichnis, das
+kann hinterherhinken. Vorher die offenen Branches prüfen, damit zwei
+Arbeiten nicht dieselbe Nummer vergeben:
+
+```bash
+git fetch -q origin
+for b in $(git branch -r --format='%(refname:short)'); do
+  git ls-tree --name-only "$b" docs/adr/ 2>/dev/null
+done | grep -oE '[0-9]{4}' | sort -u | tail -3
+```
 
 ## Format
 
@@ -77,6 +85,30 @@ geglättetes ADR erzählt nur noch, was man heute denkt.
 
 `docs/adr/0001-keine-windows-apps.md` zeigt das Format an einem echten Fall,
 inklusive vier verworfener Alternativen mit Begründung.
+
+## Danach: Verzeichnis, Doku und Diagramme nachziehen
+
+Ein ADR ändert selten nur sich selbst. Was eine Entscheidung festlegt, steht
+meist schon irgendwo anders als Beschreibung, Tabelle oder Diagramm — und ist
+ab jetzt falsch. Im **selben Commit**:
+
+1. **Verzeichnis.** Zeile in `docs/adr/README.md` mit Nummer, Titel und
+   Status. Der Status muss Wort für Wort dem im ADR entsprechen;
+   `make docs-check` vergleicht beides.
+2. **Abgelöstes ADR.** Ersetzt das neue ein altes, ändert sich dort genau
+   eine Zeile: `**Status:** Abgelöst durch ADR-NNNN`. Dazu die Zeile im
+   Verzeichnis. Sonst nichts am alten ADR.
+3. **Doku und Diagramme.** Skill `doku-nachziehen`: über
+   `harness/doc-map.json` und eine Suche nach den Begriffen der Entscheidung
+   jede Stelle finden, die das Alte beschreibt — Fließtext, Tabellen,
+   Mermaid-Diagramme in `docs/architektur.md`, die `AGENTS.md` der Repos.
+4. **Prüfen.** `make docs-check` grün. Der Check findet fehlende
+   Verzeichniseinträge, abweichende Status, tote Links und Diagramme, die
+   nicht mehr rendern — nicht aber eine Beschreibung, die inhaltlich
+   veraltet ist. Die findet nur das Lesen in Schritt 3.
+
+Kommt die Entscheidung aus einem Issue, gehört ein Verweis auf das ADR in
+den Issue-Kommentar zum Plan (`/issue-planen`).
 
 ## Pflicht
 

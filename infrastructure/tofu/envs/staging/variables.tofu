@@ -42,3 +42,20 @@ variable "ssh_source_cidr_ipv6" {
     error_message = "ssh_source_cidr_ipv6 must be a valid IPv6 CIDR, e.g. 2001:7c0:1b20::/48."
   }
 }
+
+# Two stacks are built from this one environment, one per branch (ADR 0014).
+# The prefix keeps their OpenStack resources apart; the state path is set
+# separately via -backend-config in staging.yml.
+#
+# The default is the name the main stack has always had, so a plain apply
+# without the variable still addresses the existing VM.
+variable "name_prefix" {
+  description = "Prefix for VM, keypair and security group: staging (main) or develop."
+  type        = string
+  default     = "staging"
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]*$", var.name_prefix))
+    error_message = "name_prefix must be lowercase letters, digits and dashes."
+  }
+}

@@ -1,4 +1,4 @@
-# OpenTofu/Terraform local state and modules (same file names)
+# OpenTofu local state and modules (same file names)
 **/.terraform/*
 *.tfstate
 *.tfstate.*

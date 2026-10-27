@@ -2,6 +2,15 @@
 
 **Stand:** 27.09.2026 — Entwurf, nichts davon ist gegen OpenStack erprobt.
 
+> **Überholt seit ADR 0010 (05.10.2026).** Das Konzept geht von der Kette Packer →
+> Terraform aus und empfiehlt, Ansible zur Image-Zeit laufen zu lassen. Diese Kette
+> gibt es nicht mehr: Die Plattform baut keine Images, eine App richtet ihre VM beim
+> Boot per cloud-init (`user_data`) in `tofu/` ein. Die Überlegungen zu Ansible in
+> cloud-init bleiben als Hintergrund stehen, die Tabellen und Verzeichnisbäume
+> beschreiben den früheren Stand. Siehe
+> [ADR 0010](adr/0010-opentofu-statt-terraform-und-packer.md) und
+> [ADR 0011](adr/0011-deploy-wartet-auf-die-einrichtung-der-vms.md).
+
 Anlass ist eine Rückmeldung eines Stakeholders: Die Templates richten ihre
 Systeme bisher allein über cloud-init und Shell-Skripte ein. Aus cloud-init
 heraus ließe sich auch Ansible starten, womit deutlich komplexere Templates
