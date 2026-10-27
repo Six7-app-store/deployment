@@ -4,6 +4,13 @@ Der App Store ist ein Web-System, in dem Studierende und Dozierende vorgefertigt
 
 ## Voraussetzungen
 
+`GIT_ALLOWED_HOSTS` enthält als JSON-Liste die Git-Hosts, an die Backend und
+Worker das Plattform-Token senden dürfen. Standard sind `github.com` und
+`gitlab.com`; weitere GitLab-Hosts müssen ausdrücklich ergänzt werden.
+`OPENSTACK_ALLOWED_AUTH_URLS` begrenzt Keystone auf die angegebenen exakten
+HTTPS-URLs. Ohne Liste ist die Hostprüfung in Dev deaktiviert; Produktion
+erzwingt eine nicht leere Liste.
+
 | Werkzeug | Version | Anmerkung |
 |---|---|---|
 | Docker Desktop (oder Docker Engine) | 24.x oder neuer | Compose v2 ist enthalten |

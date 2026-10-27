@@ -10,6 +10,46 @@ Der App Store ist ein Web-System, in dem Studierende und Dozierende vorgefertigt
 
 ## Voraussetzungen
 
+PostgreSQL sowie RabbitMQ und dessen Management-Oberfläche sind in der
+Produktions-Compose-Datei nur an `127.0.0.1` gebunden. Für die Administration
+von einem anderen Rechner aus einen SSH-Tunnel verwenden; die internen
+Container-Verbindungen funktionieren weiterhin über das Docker-Netzwerk.
+
+`OPENSTACK_ALLOWED_AUTH_URLS` ist eine verpflichtende JSON-Liste exakter
+HTTPS-Keystone-URLs, zum Beispiel `["https://newstack.dhbw.cloud:5000/v3"]`.
+Die Liste muss zu den tatsächlich genutzten Clouds passen und darf nicht leer
+sein. Bereits gespeicherte Credentials mit einer anderen URL können nach der
+Umstellung nicht mehr verwendet werden, auch nicht für den Abbau: vor dem
+Rollout alle aktiven Deployment-Credentials inventarisieren. Zusätzlich sind
+Netzwerk-Egress-Regeln für Weiterleitungen und Service-Katalog-Ziele nötig.
+
+`KEYCLOAK_TOKEN_ISSUER` muss exakt dem öffentlichen Issuer des Realms
+entsprechen; `KEYCLOAK_TOKEN_AUDIENCE` ist standardmäßig `appstore-backend`.
+Vor dem Backend-Update muss der Audience-Mapper im bestehenden Keycloak-Realm
+mit `seed/ensure_api_audience.py` eingerichtet werden. Der Realm-Import ergänzt
+ihn nur bei einem neuen Realm. Die Prüfung und den Login für beide Frontends
+in Staging mit echten Tokens prüfen, bevor Produktion aktualisiert wird.
+Das Skript im Backend-Container ausführen, nachdem die Keycloak-Adminwerte in
+der Administrations-Shell gesetzt wurden:
+
+```bash
+docker compose -f docker-compose.prod.yml cp seed/ensure_api_audience.py backend:/tmp/ensure_api_audience.py
+docker compose -f docker-compose.prod.yml exec -T \
+  -e KEYCLOAK_ADMIN_USER -e KEYCLOAK_ADMIN_PASSWORD \
+  backend python /tmp/ensure_api_audience.py
+```
+
+Neue Versionen werden an Git-Commits gebunden (`REQUIRE_PINNED_RELEASES=true`).
+Worker mit SHA-Unterstützung vor dem Backend aktualisieren.
+Vor dem Umschalten die Task-Warteschlange leeren beziehungsweise laufende
+Tasks beenden, damit keine alten Nachrichten mit ungebundenen Tags mehr
+abgearbeitet werden. Bestehende Freigaben ohne Commit müssen nach Prüfung neu
+eingereicht werden; historische
+Deployments ohne Commit benötigen vor dem Rollout eine individuelle Migration
+auf nachweisbare Commits. Bis dahin sind Lifecycle-Aktionen inklusive Abbau
+gesperrt. Der Git-Server muss die
+freigegebenen Commits dauerhaft bereitstellen.
+
 | Werkzeug | Version | Anmerkung |
 |---|---|---|
 | Ubuntu Server | 22.04 LTS | Auch 24.04 funktioniert |

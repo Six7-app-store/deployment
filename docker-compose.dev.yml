@@ -211,6 +211,8 @@ services:
       ALGORITHM: ${ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?CREDENTIAL_ENCRYPTION_KEY is required}
+      OPENSTACK_ALLOWED_AUTH_URLS: ${OPENSTACK_ALLOWED_AUTH_URLS:-[]}
+      OPENSTACK_ENFORCE_ALLOWED_AUTH_URLS: ${OPENSTACK_ENFORCE_ALLOWED_AUTH_URLS:-false}
       
       # Celery
       CELERY_BROKER_URL: amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-admin}@rabbitmq:5672/${RABBITMQ_VHOST:-/}
@@ -218,6 +220,8 @@ services:
       
       # Git — the GitHub App is tried first; without it the backend uses the token.
       GIT_ACCESS_TOKEN: ${GIT_ACCESS_TOKEN:-}
+      GIT_ALLOWED_HOSTS: ${GIT_ALLOWED_HOSTS:-["github.com","gitlab.com"]}
+      REQUIRE_PINNED_RELEASES: ${REQUIRE_PINNED_RELEASES:-false}
       GITHUB_APP_ID: ${GITHUB_APP_ID:-}
       GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
 
@@ -225,6 +229,9 @@ services:
       KEYCLOAK_SERVER_URL: ${KEYCLOAK_SERVER_URL:-http://keycloak:8080}
       KEYCLOAK_REALM: ${KEYCLOAK_REALM:-dhbw}
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-appstore-backend}
+      KEYCLOAK_TOKEN_ISSUER: ${KEYCLOAK_TOKEN_ISSUER:-http://localhost:8080/realms/dhbw}
+      KEYCLOAK_TOKEN_AUDIENCE: ${KEYCLOAK_TOKEN_AUDIENCE:-appstore-backend}
+      KEYCLOAK_ENFORCE_TOKEN_BINDING: ${KEYCLOAK_ENFORCE_TOKEN_BINDING:-false}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}
       KEYCLOAK_ENABLED: ${KEYCLOAK_ENABLED:-true}
       
@@ -332,6 +339,7 @@ services:
 
       # Git — the GitHub App is tried first; without it the worker uses the token.
       GIT_ACCESS_TOKEN: ${GIT_ACCESS_TOKEN:-}
+      GIT_ALLOWED_HOSTS: ${GIT_ALLOWED_HOSTS:-["github.com","gitlab.com"]}
       GITHUB_APP_ID: ${GITHUB_APP_ID:-}
       GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
 
