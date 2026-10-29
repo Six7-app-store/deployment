@@ -286,7 +286,7 @@ Default `plan` gibt es nicht mehr. Der heutige Workflow kennt `recreate`
 Trockenlauf gibt es nicht — jeder Lauf verändert etwas.
 
 Vertretbar bleibt es aus zwei anderen Gründen. Erstens ist Staging bewusst
-wegwerfbar: es wird ohnehin bei jedem Merge neu gebaut (ADR 0003), ein
+wegwerfbar: es wird ohnehin bei fast jedem Merge neu gebaut (ADR 0003), ein
 zusätzlicher Lauf zerstört also nichts, was nicht ohnehin verginge. Zweitens
 deployt Staging nur, was schon in `develop` steht, und dorthin kommt nichts
 ohne menschlichen Merge. Dazu kommt das Gate im Harness: der Bash-Hook lässt

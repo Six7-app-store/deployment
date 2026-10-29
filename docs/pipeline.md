@@ -18,7 +18,7 @@ Entwickler → GitHub Actions → GHCR → Self-hosted Runner → OpenTofu → A
 | **GitHub Actions** | Lint, Tests, Security Scans, Image-Build | gehosteter Runner |
 | **GHCR** | Image liegt als `ghcr.io/six7-app-store/<dienst>:develop` bzw. `:latest` (aus `main`) | GitHub |
 | **Self-hosted Runner** | nimmt den Deploy an | eigene VM im Campusnetz |
-| **OpenTofu** | reißt die alte VM ab, baut eine neue | OpenStack |
+| **OpenTofu** | reißt die alte VM ab, baut eine neue; bei geschütztem Image-Update nur Änderungen ohne Ersetzen (ADR 0024) | OpenStack |
 | **Ansible** | Docker, `.env`, Images ziehen, starten | auf der neuen VM |
 | **Docker Compose** | neun Container: Frontend, Backend, Worker, Keycloak, Postgres, RabbitMQ, Redis, Caddy | auf der neuen VM |
 | **Staging** | `develop`: `staging.…users.dhbw.site`, `main`: `appstore.…users.dhbw.site` (ADR 0014) | öffentlich über IPv6 |
@@ -27,12 +27,16 @@ Entwickler → GitHub Actions → GHCR → Self-hosted Runner → OpenTofu → A
 
 **Warum abreißen statt aktualisieren:** Der Zustand von Staging soll aus dem Repository ableitbar sein, nicht aus dem Gedächtnis derer, die ihn angefasst haben. Begründung und Preis in ADR-0003.
 
+**Wann nicht abgerissen wird:** Ausnahme seit ADR 0024: Ist der Schutz für einen Stand eingeschaltet (heute nur `develop`), aktualisiert ein Image-Dispatch aus backend, frontend oder worker die bestehende VM an Ort und Stelle; laufende App-Aufträge werden vorher abgewartet. Ein OpenTofu-Plan,
+der etwas löschen oder ersetzen will, bricht diesen Weg ab. Merges im
+deployment-Repo und alles auf `main` bauen weiter komplett neu.
+
 ## Automatisiert und manuell
 
 | Automatisiert | Manuell |
 |---|---|
 | CI, Build, Security Scans | Codeänderung |
-| OpenTofu (destroy + apply) | Review und Merge |
+| OpenTofu (destroy + apply, geschützt: nur apply) | Review und Merge |
 | Ansible, Compose, Migrationen | Release-PR `develop` → `main` freigeben |
 | TLS-Zertifikat, DNS-Eintrag | |
 | Rollout von Staging und Produktion | |
@@ -94,6 +98,6 @@ ersten Start. Das verlängert den ersten Start entsprechend.
 
 ## Bekannte Schwächen
 
-- **Staging ist während eines Merges nicht erreichbar** (10 bis 15 Minuten). Das ist der Preis von ADR-0003.
-- **Das TLS-Zertifikat wird bei jedem Neuaufbau neu ausgestellt**, weil Caddys Datenverzeichnis mit der VM verschwindet. Am 19.09.2026 hing die CA dabei sieben Minuten.
-- **Die Anwendungsdatenbank überlebt einen Merge nicht.** Deployments, Benutzer und Kurse werden neu geseedet. Nur die OpenTofu-States liegen außerhalb.
+- **Ein Stand ist während eines Neuaufbaus nicht erreichbar** (in den Läufen vom Oktober 2026 meist 3 bis 5 Minuten). Das ist der Preis von ADR-0003; für geschützte Image-Updates auf `develop` entfällt der Abriss (ADR 0024).
+- **Laufende App-Aufträge brechen bei einem Neuaufbau ab**, solange der Schutz aus ADR 0024 für den Stand aus ist. Für `main`, also die Produktion, ist er heute aus.
+- Das TLS-Zertifikat und die Datenbanken überstehen einen Neuaufbau: Caddys Datenverzeichnis sichert der Workflow unter `/var/lib/caddy-backup/` auf dem Runner, die Datenbanken liegen seit ADR 0006 dort.

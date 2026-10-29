@@ -66,7 +66,9 @@ Es gibt zwei Eingaben:
 | `seed` | legt Seed-Nutzer, Kurse und Apps an. Nur bei leerer Datenbank nötig. |
 
 Einen Trockenlauf gibt es nicht: Jeder Lauf mit `recreate` reißt die VM ab und
-baut sie neu. Der Plan im Log zeigt, was OpenTofu anlegt; eine Zeile mit
+baut sie neu. Ausnahme seit ADR 0024: Ist der Schutz für einen Stand eingeschaltet (heute nur
+`develop`), aktualisiert ein Image-Dispatch aus backend, frontend oder worker die
+bestehende VM an Ort und Stelle; laufende App-Aufträge werden vorher abgewartet. Der Plan im Log zeigt, was OpenTofu anlegt; eine Zeile mit
 `must be replaced` beim Lauf ohne `recreate` heißt, dass eine Änderung die VM
 ersetzt.
 

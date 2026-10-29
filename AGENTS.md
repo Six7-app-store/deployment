@@ -34,8 +34,10 @@ OpenStack-API der DHBW nicht erreichbar. Ausgelöst von Push auf `develop`
 oder `main`, von `repository_dispatch` aus der CI der drei anderen Repos, oder
 von Hand. Der Branch des Auslösers bestimmt, welcher der beiden Stände neu
 gebaut wird (ADR 0014); jeder hat eigene VM, eigenen State und eigene
-Datenbanken. Jeder Lauf reißt die VM ab und baut sie neu (ADR 0003); einen
-Trockenlauf gibt es nicht.
+Datenbanken. Ein Lauf reißt die VM ab und baut sie neu (ADR 0003); einen
+Trockenlauf gibt es nicht. Ausnahme seit ADR 0024: Ist der Schutz für einen Stand eingeschaltet (heute nur
+`develop`), aktualisiert ein Image-Dispatch aus backend, frontend oder worker die
+bestehende VM an Ort und Stelle; laufende App-Aufträge werden vorher abgewartet.
 
 **Bewusst kein `pull_request`-Trigger.** Das Repository ist öffentlich, und ein
 self-hosted Runner an einem Fork-PR gäbe Fremden eine Ausführungsumgebung mit
