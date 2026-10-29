@@ -9,11 +9,12 @@ name: CD - Staging Deployment
 #
 #   develop  Staging. Eigene VM, eigener Hostname, eigene Datenbanken,
 #            Images :develop.
-#   main     Der Stand unter der bisherigen Staging-Adresse. Images :latest.
+#   main     Produktion, unter der bisherigen Staging-Adresse. Images :latest.
 #            VM, State und Hostname sind dieselben wie vor ADR 0014.
 #
-# Welcher Stand gebaut wird, bestimmt der Branch des Ausloesers. Die
-# Produktion aus docker-compose.prod.yml faehrt weiterhin eine Person von Hand.
+# Welcher Stand gebaut wird, bestimmt der Branch des Ausloesers. Eine
+# eigenstaendige Installation aus docker-compose.prod.yml setzt eine Person
+# von Hand auf; dieser Workflow fasst sie nicht an.
 #
 # Laeuft auf dem self-hosted Runner (VM `github-runner`, 2001:7c0:1b20:c913:1::3f0).
 # Das ist keine Vorliebe, sondern Notwendigkeit: die OpenStack-API der DHBW ist

@@ -3,6 +3,9 @@
 **Status:** Angenommen
 **Datum:** 18.09.2026
 **Beteiligt:** Projektteam
+**Korrigiert:** 29.10.2026 — Gilt für beide Stände aus ADR 0014. Ist der Schutz aus ADR 0024 für einen
+Stand eingeschaltet, aktualisiert ein Image-Dispatch dessen VM an Ort und
+Stelle statt sie neu zu bauen.
 
 ## Kontext
 

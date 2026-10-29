@@ -3,7 +3,6 @@
 **Status:** Angenommen
 **Datum:** 25.10.2026
 **Beteiligt:** Projektteam
-<!-- TODO: Wer hat die Entscheidung getragen? Namen eintragen, bevor das ADR in die Abgabe geht. -->
 
 ## Kontext
 

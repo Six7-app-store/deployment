@@ -42,6 +42,13 @@ Ein ADR wird nach dem Schreiben **nicht mehr geändert**. Wenn sich die
 Lage ändert, entsteht ein neues, und das alte bekommt den Status
 „Abgelöst durch ADR-NNNN". Die Historie ist der Punkt an der Sache.
 
+**Ausnahme: Korrektur.** Hält ein ADR etwas fest, das nachweislich falsch
+ist oder dem widerspricht, was das Team tatsächlich lebt und bestätigt, wird
+es korrigiert statt abgelöst. Unter `**Beteiligt:**` steht dann eine Zeile
+`**Korrigiert:** TT.MM.JJJJ — was und warum`. Die alte Fassung bleibt in der
+Git-Historie. Eine neue Entscheidung ist keine Korrektur, sie bekommt ein
+neues ADR.
+
 ## Für Agenten
 
 Wer eine Architekturentscheidung trifft, legt im selben Commit ein ADR an.
@@ -63,14 +70,14 @@ genau einmal, lückenlos, Status hier wie im ADR.
 | [0005](0005-tfstate-der-app-deployments-gehoert-von-der-staging-vm-herunter.md) | Der Terraform-State der App-Deployments gehört von der Staging-VM herunter | Angenommen |
 | [0006](0006-auch-die-anwendungsdaten-gehoeren-von-der-staging-vm-herunter.md) | Auch die Anwendungsdaten gehören von der Staging-VM herunter | Angenommen |
 | [0007](0007-protokoll-statt-type-im-account-vertrag.md) | Das Zugangsprotokoll ist ein eigenes Feld, kein Wert in `type` | Angenommen |
-| [0008](0008-studiengruppe-aus-moodle-kurs-anlegen.md) | Eine Studiengruppe entsteht auf Knopfdruck aus einem Moodle-Kurs | Vorschlag |
-| [0009](0009-deep-link-bindet-an-app.md) | Eine deep-verlinkte Moodle-Aktivität bindet an eine App, nicht an eine Umgebung | Vorschlag |
+| [0008](0008-studiengruppe-aus-moodle-kurs-anlegen.md) | Eine Studiengruppe entsteht auf Knopfdruck aus einem Moodle-Kurs | Angenommen |
+| [0009](0009-deep-link-bindet-an-app.md) | Eine deep-verlinkte Moodle-Aktivität bindet an eine App, nicht an eine Umgebung | Angenommen |
 | [0010](0010-opentofu-statt-terraform-und-packer.md) | Die Plattform verwaltet Infrastruktur nur noch mit OpenTofu, ohne Image-Bau | Angenommen |
 | [0011](0011-deploy-wartet-auf-die-einrichtung-der-vms.md) | Ein Deploy ist erst fertig, wenn cloud-init in allen VMs durchgelaufen ist | Angenommen |
 | [0012](0012-design-v2-tokens-als-einzige-quelle.md) | Das Design v2 hat die Tokens als einzige Quelle, Light ist Standard | Angenommen |
 | [0013](0013-develop-ist-staging-main-ist-produktion.md) | `develop` ist Staging, `main` ist Produktion | Angenommen |
-| [0014](0014-zwei-staende-develop-und-main.md) | Die Pipeline baut zwei Stände: `develop` und `main` | Vorschlag |
-| [0015](0015-agent-baut-develop-stand-selbst-nie-produktion.md) | Der Agent baut den develop-Stand selbst neu, den main-Stand und die Produktion nie | Vorschlag |
+| [0014](0014-zwei-staende-develop-und-main.md) | Die Pipeline baut zwei Stände: `develop` als Staging, `main` als Produktion | Vorschlag |
+| [0015](0015-agent-baut-develop-stand-selbst-nie-produktion.md) | Der Agent baut den develop-Stand selbst neu, die Produktion nie | Vorschlag |
 | [0016](0016-user-stories-leben-als-issues-in-deployment.md) | Offene User Stories leben als Issues in Six7-app-store/deployment | Vorschlag |
 | [0017](0017-commit-gate-mit-doku-zuordnung-und-tests.md) | Vor jedem Agenten-Commit laufen Doku-Zuordnung und die Tests der CI | Vorschlag |
 | [0018](0018-forgejo-wird-nicht-weiterbetrieben.md) | Forgejo wird nicht weiterbetrieben | Angenommen |
@@ -78,5 +85,5 @@ genau einmal, lückenlos, Status hier wie im ADR.
 | [0020](0020-windows-apps-werden-unterstuetzt.md) | Windows-Apps werden unterstützt | Angenommen |
 | [0021](0021-fehlende-vms-werden-markiert-nicht-geloescht.md) | Außerhalb gelöschte VMs werden markiert, nicht automatisch entfernt | Angenommen |
 | [0022](0022-gescheiterter-abbau-laesst-eintrag-entfernen.md) | Nach einem gescheiterten Abbau lässt sich der Eintrag entfernen | Angenommen |
-| [0024](0024-geschuetzte-staging-updates.md) | Geschützte und teilweise inkrementelle Staging-Updates | Vorschlag |
 | [0023](0023-app-freigaben-binden-commits.md) | App-Freigaben binden unveränderliche Git-Commits | Vorschlag |
+| [0024](0024-geschuetzte-staging-updates.md) | Geschützte und teilweise inkrementelle Staging-Updates | Vorschlag |

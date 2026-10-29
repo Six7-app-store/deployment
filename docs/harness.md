@@ -29,7 +29,7 @@ Die Kette steht. Seit dem 23.10.2026 beginnt sie beim Issue statt bei einer
 | **Merge** | **Mensch** | **Mensch — bleibt so** |
 | Staging-Deploy anstoßen | läuft bei jedem Merge auf `develop` von selbst; den develop-Stand darf der Agent zusätzlich neu bauen (ADR 0015) | unverändert |
 | Nachweis, dass es läuft | Agent prüft (`deployment-pruefen`, `make staging-status`) und schreibt den Beleg ins Issue | unverändert |
-| **Produktion** | **Mensch** | **Mensch — bleibt so** |
+| **Produktion freigeben** (Release-PR `develop` → `main`) | **Mensch**; ausgerollt wird danach automatisch | **Mensch — bleibt so** |
 
 ### Was dafür noch fehlt
 
@@ -51,7 +51,9 @@ Merge selbst neu auf (ADR 0003), seit ADR 0013 bei jedem Merge auf `develop`. An
 
 ### Was bewusst außerhalb bleibt
 
-- **Produktions-Deployments.** Bleiben manuell, über die gesamte Projektlaufzeit.
+- **Die Freigabe der Produktion.** Den Release-PR `develop` → `main` mergt
+  ein Mensch, über die gesamte Projektlaufzeit. Danach rollt die Pipeline
+  aus; einen Lauf gegen den main-Stand stößt der Agent nie an.
 - **Merge ohne Menschen.** Der Pull Request ist der Punkt, an dem wir hinsehen.
   Fällt er weg, fällt die Kontrolle weg.
 - **Der Agent ändert die Pipeline selbst.** Wer sein eigenes Prüfsystem
@@ -258,11 +260,11 @@ Dienst übertragen könnten.
 ### Deployment: anstoßen und nachweisen
 
 Der Agent darf **den develop-Stand ausrollen und prüfen, ob es funktioniert
-hat**. Der main-Stand und die Produktion bleiben beim Menschen (ADR 0015).
+hat**. Der main-Stand, also die Produktion, bleibt beim Menschen (ADR 0015).
 
 | Erlaubt | Verboten |
 |---|---|
-| `gh workflow run staging.yml … --ref develop -f stand=develop` | jeder Lauf für den Stand `main`, Produktions-Deployment |
+| `gh workflow run staging.yml … --ref develop -f stand=develop` | jeder Lauf für den Stand `main` (Produktion), Arbeiten an einer eigenständigen Installation |
 | `/health` abfragen, Erreichbarkeit über IPv4 und IPv6 prüfen | `tofu apply` / `destroy` von Hand |
 | Containerstatus und Logs lesen | `deploy.cmd` / `scripts/deploy.sh` von Hand |
 | Pipeline-Ergebnis lesen | Secrets lesen oder schreiben |
@@ -284,7 +286,7 @@ Default `plan` gibt es nicht mehr. Der heutige Workflow kennt `recreate`
 Trockenlauf gibt es nicht — jeder Lauf verändert etwas.
 
 Vertretbar bleibt es aus zwei anderen Gründen. Erstens ist Staging bewusst
-wegwerfbar: es wird ohnehin bei jedem Merge neu gebaut (ADR 0003), ein
+wegwerfbar: es wird ohnehin bei fast jedem Merge neu gebaut (ADR 0003), ein
 zusätzlicher Lauf zerstört also nichts, was nicht ohnehin verginge. Zweitens
 deployt Staging nur, was schon in `develop` steht, und dorthin kommt nichts
 ohne menschlichen Merge. Dazu kommt das Gate im Harness: der Bash-Hook lässt

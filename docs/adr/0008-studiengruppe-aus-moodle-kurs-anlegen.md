@@ -1,9 +1,8 @@
 # 0008 — Eine Studiengruppe entsteht auf Knopfdruck aus einem Moodle-Kurs
 
-**Status:** Vorschlag
+**Status:** Angenommen
 **Datum:** 19.09.2026
 **Beteiligt:** Projektteam
-<!-- TODO: Namen eintragen und Status auf „Angenommen" setzen, bevor das ADR in die Abgabe geht. -->
 
 ## Kontext
 
