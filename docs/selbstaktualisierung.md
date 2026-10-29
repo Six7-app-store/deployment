@@ -1,11 +1,19 @@
 # Staging aktualisiert sich selbst
 
+> **Geschützter Timer:** Eine Variante mit Wartungssperre und begrenztem
+> Image-Rollback beschreibt [ADR 0024](adr/0024-geschuetzte-staging-updates.md).
+> Sie läuft auf `develop` seit dem 29.10.2026 (`GUARDED_STAGING_UPDATES=true`);
+> auf `main` läuft weiter der ungeschützte Timer, den die folgenden Abschnitte
+> beschreiben.
+
 Nach einem Merge auf `develop` steht wenige Minuten später der neue Stand auf
 Staging — ohne dass jemand einen Deploy startet.
 
 > **Seit dem self-hosted Runner gibt es dafür zwei Wege.** Der Hauptweg ist der
 > Deploy auf dem Runner: ein Merge in eines der vier Repositories reißt den
-> Staging-Stack ab und baut ihn vollständig neu auf, mit OpenTofu und Ansible.
+> Stack ab und baut ihn vollständig neu auf, mit OpenTofu und Ansible. Mit
+> eingeschaltetem Schutz (ADR 0024) aktualisiert ein Image-Update aus
+> backend, frontend oder worker die VM stattdessen an Ort und Stelle.
 > Siehe [ADR-0002](adr/0002-self-hosted-runner-auf-eigener-vm.md) und
 > [ADR-0003](adr/0003-staging-wird-bei-jedem-merge-neu-gebaut.md).
 >

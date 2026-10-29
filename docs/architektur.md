@@ -1,5 +1,9 @@
 # Architektur: Self-Service-Portal und Moodle/LTI-Anbindung
 
+> Die experimentelle, noch nicht aktivierte Datenbank-Wartungssperre für
+> Staging-Updates ist im [ADR 0024](adr/0024-geschuetzte-staging-updates.md)
+> beschrieben. Die folgenden Diagramme zeigen weiterhin den bisherigen Stand.
+
 Stand: 23.10.2026
 
 Der App Store hat einen zweiten Weg hinein bekommen. Bisher meldeten sich
@@ -268,6 +272,49 @@ dieselbe Liste unter dem Namen „Meine Umgebungen", und erhält über
 `/deployments/{id}/my-access` ausschließlich ihre **eigenen** Zugangsdaten;
 die der Teamkolleg:innen stecken in denselben OpenTofu-Outputs und werden
 serverseitig herausgefiltert.
+
+Teamänderungen sind auf den Deployment-Eigentümer und Admins beschränkt.
+Deployment-Eingaben können Geheimnisse enthalten und werden nur in der
+Owner-Sicht zurückgegeben, nicht an gewöhnliche Teammitglieder oder fremde
+Lehrende. Der Owner-Sicht entsprechen Eigentümer, Admins und für den Kurs
+des Eigentümers zuständige Lehrende.
+
+Der Worker gibt OpenTofu nur ausgewählte Umgebungsvariablen weiter. Das
+verringert die Weitergabe von Plattform-Secrets, ersetzt aber keine Isolation:
+Templates und Provider laufen weiterhin im Worker und benötigen insbesondere
+Zugriff auf OpenStack-Zugangsdaten und die State-Datenbank.
+Das separate Modul `infrastructure/tofu/modules/runner_egress` stellt eine
+Sicherheitsgruppe mit expliziten Zielnetzen bereit. Es ist noch nicht an einen
+Runner angeschlossen und schränkt den bestehenden Worker nicht ein.
+
+Auch fremde Lehrkräfte dürfen eigene Templates bereitstellen. Deshalb muss ein
+Template als potenziell ausführbarer, nicht vertrauenswürdiger Code behandelt
+werden. Ein eigenes State-Schema pro Deployment ist dafür noch keine
+Berechtigungstrennung, solange alle Aufträge dieselben Datenbankzugangsdaten
+erhalten. Eine künftige Isolation muss Zugriff auf fremde States, Plattform-
+Secrets und die Ausführung anderer Aufträge begrenzen. Kubernetes ist dafür
+keine Voraussetzung; der konkrete Ausführungsort ist noch nicht festgelegt.
+
+Lehrkräfte reichen ihre App-Versionen über die vorhandene Versionsprüfung ein.
+Sie können auch eigene Versionen erst nach der Admin-Freigabe deployen; Admins
+dürfen Versionen weiterhin selbst testen. Private Apps erscheinen nicht in der
+Freigabewarteschlange und müssen vor der Einreichung für den Store sichtbar
+gemacht werden. Die Freigabe ersetzt keine technische Isolation des Workers.
+
+Die Offline-Prüfung der Keycloak-Tokens verlangt neben einer gültigen Signatur
+die Claims `exp`, `iss` und `sub`. Mit `KEYCLOAK_ENFORCE_TOKEN_BINDING=true`
+prüft sie zusätzlich den konfigurierten Issuer und die API-Audience.
+`docker-compose.prod.yml` setzt das fest. Staging und Produktion laufen mit
+`docker-compose.staging.yml` und übernehmen den Schalter aus `STAGING_ENV_FILE`,
+Standard `false`; vorher muss der Audience-Mapper eingerichtet sein.
+
+Bei aktiviertem `REQUIRE_PINNED_RELEASES` wird der Commit beim Einreichen einer
+Version gespeichert und beim Review sowie bei Deploy und späteren Lifecycle-
+Tasks verwendet. Historische Freigaben ohne Commit müssen neu eingereicht und
+geprüft werden. Historische Deployments ohne Commit können bei aktiver Prüfung
+nicht über die Lifecycle-API bedient werden. Sie müssen vor dem Einschalten einzeln
+anhand vertrauenswürdiger Nachweise migriert werden; solange bleibt auch der
+Abbau über die API gesperrt.
 
 Eine Trainerrolle in Moodle macht dabei niemanden zum Lehrenden im App Store.
 Die Rolle regelt den Zugriff auf fremde OpenStack-Ressourcen; wer in irgendeinem

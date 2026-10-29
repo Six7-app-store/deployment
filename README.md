@@ -45,19 +45,21 @@ Die wichtigsten im Alltag:
 | `make seed-data` | Seed-Daten laden; idempotent, gefahrlos wiederholbar |
 | `make health` | Backend, Frontend und Keycloak anpingen |
 
-## Die drei Umgebungen
+## Die Umgebungen
 
 | Umgebung | Compose-Datei | Reverse Proxy | Wie sie ausgerollt wird |
 |---|---|---|---|
 | dev | `docker-compose.dev.yml` | keiner, Dienste direkt auf Ports | `make dev-up` auf dem eigenen Rechner |
-| staging | `docker-compose.staging.yml` | Caddy, Zertifikat über dns-01 | GitHub-Workflow auf dem self-hosted Runner, siehe [Staging Setup](docs/staging-setup.md) |
-| prod | `docker-compose.prod.yml` | nginx, Zertifikat selbst hinterlegt | `make prod-up` auf der Zielmaschine |
+| staging (`develop`, `staging.<zone>`) | `docker-compose.staging.yml` | Caddy, Zertifikat über dns-01 | GitHub-Workflow auf dem self-hosted Runner nach jedem Merge auf `develop`, siehe [Staging Setup](docs/staging-setup.md) |
+| Produktion (`main`, `appstore.<zone>`) | `docker-compose.staging.yml` | Caddy, Zertifikat über dns-01 | derselbe Workflow nach dem Release-Merge `develop` → `main`, den eine Person freigibt (ADR 0014) |
+| eigenständige Installation | `docker-compose.prod.yml` | nginx, Zertifikat selbst hinterlegt | `make prod-up` auf einer eigenen VM, von Hand ([Anleitung](docs/prod-setup.md)); läuft derzeit nirgends |
 
-Staging und Produktion unterscheiden sich nicht nur in der Größe: Staging
-entsteht vollständig aus OpenTofu und Ansible, Produktion wird bislang von Hand
-aufgesetzt. Die Compose-Datei für Staging hat deshalb bewusst keine Make-Targets
-— sie soll nur über die Pipeline laufen, damit kein Arbeitsplatz von dem
-abweicht, was dort erzeugt wird.
+Staging und Produktion entstehen beide vollständig aus OpenTofu und Ansible,
+aus demselben Code; sie unterscheiden sich nur im Branch, in VM, Hostname und
+Datenbanken. Die eigenständige Installation wird dagegen von Hand aufgesetzt.
+Die Compose-Datei für Staging und Produktion hat deshalb bewusst keine
+Make-Targets — sie soll nur über die Pipeline laufen, damit kein Arbeitsplatz
+von dem abweicht, was dort erzeugt wird.
 
 ## Aufbau
 

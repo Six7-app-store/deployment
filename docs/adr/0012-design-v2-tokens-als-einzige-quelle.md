@@ -3,7 +3,6 @@
 **Status:** Angenommen
 **Datum:** 01.10.2026
 **Beteiligt:** Katrin Seeberg
-<!-- TODO: Weitere Beteiligte eintragen, bevor das ADR in die Abgabe geht. -->
 
 ## Kontext
 

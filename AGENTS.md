@@ -25,8 +25,8 @@ Frontend und Worker laufen nur über die Stacks hier.
 |---|---|---|---|
 | dev | beliebig | `docker-compose.dev.yml` | `make dev-up` am eigenen Rechner |
 | staging | `develop` | `docker-compose.staging.yml` | **nur** über die Pipeline, nie von Hand — eigene VM, `staging.<zone>` |
-| main-Stand | `main` | `docker-compose.staging.yml` | **nur** über die Pipeline — die bisherige Staging-VM und -Adresse (ADR 0014) |
-| prod | `main` | `docker-compose.prod.yml` | `make prod-*` auf der Zielmaschine, manuell |
+| Produktion (main-Stand) | `main` | `docker-compose.staging.yml` | **nur** über die Pipeline nach dem Release-Merge einer Person — `appstore.<zone>` (ADR 0014) |
+| eigenständige Installation | `main` | `docker-compose.prod.yml` | `make prod-*` auf einer eigenen VM, von Hand; läuft derzeit nirgends |
 
 Der Staging-Deploy läuft in **GitHub Actions** auf dem self-hosted Runner im
 Campusnetz (`.github/workflows/staging.yml`, ADR 0002) — von außen ist die
@@ -34,8 +34,10 @@ OpenStack-API der DHBW nicht erreichbar. Ausgelöst von Push auf `develop`
 oder `main`, von `repository_dispatch` aus der CI der drei anderen Repos, oder
 von Hand. Der Branch des Auslösers bestimmt, welcher der beiden Stände neu
 gebaut wird (ADR 0014); jeder hat eigene VM, eigenen State und eigene
-Datenbanken. Jeder Lauf reißt die VM ab und baut sie neu (ADR 0003); einen
-Trockenlauf gibt es nicht.
+Datenbanken. Ein Lauf reißt die VM ab und baut sie neu (ADR 0003); einen
+Trockenlauf gibt es nicht. Ausnahme seit ADR 0024: Ist der Schutz für einen Stand eingeschaltet (heute nur
+`develop`), aktualisiert ein Image-Dispatch aus backend, frontend oder worker die
+bestehende VM an Ort und Stelle; laufende App-Aufträge werden vorher abgewartet.
 
 **Bewusst kein `pull_request`-Trigger.** Das Repository ist öffentlich, und ein
 self-hosted Runner an einem Fork-PR gäbe Fremden eine Ausführungsumgebung mit
@@ -48,7 +50,7 @@ staging-status` liest nur.
 **Agent und Staging (ADR 0015):** den Stand `develop` darf der Agent selbst
 neu bauen — `gh workflow run staging.yml -R Six7-app-store/deployment --ref
 develop -f stand=develop`. Der Hook prüft Form und laufende Deploys. Den
-Stand `main` und die Produktion nie. Details: Skill `deployment-pruefen`.
+Stand `main`, also die Produktion, nie. Details: Skill `deployment-pruefen`.
 
 ## Env-Fallen
 

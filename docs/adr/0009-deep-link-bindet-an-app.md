@@ -1,9 +1,8 @@
 # 0009 — Eine deep-verlinkte Moodle-Aktivität bindet an eine App, nicht an eine Umgebung
 
-**Status:** Vorschlag
+**Status:** Angenommen
 **Datum:** 19.09.2026
 **Beteiligt:** Projektteam
-<!-- TODO: Namen eintragen und Status auf „Angenommen" setzen, bevor das ADR in die Abgabe geht. -->
 
 ## Kontext
 

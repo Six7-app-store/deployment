@@ -89,7 +89,10 @@ jobs:
         working-directory: infrastructure/ansible
         run: |
           ansible-galaxy role install -r requirements.yml -p roles_external
-          ansible-galaxy collection install -r requirements.yml
+          # Install explicitly into the user's collection path. pipx gives
+          # ansible-core and ansible-lint separate Python environments; a
+          # collection bundled in one environment is not visible in the other.
+          ansible-galaxy collection install -r requirements.yml -p "$HOME/.ansible/collections" --force
 
       - name: Ansible Syntax Check
         working-directory: infrastructure/ansible
@@ -102,9 +105,13 @@ jobs:
 
       - name: Ansible Lint
         continue-on-error: true
+        working-directory: infrastructure/ansible
+        env:
+          ANSIBLE_CONFIG: ${{ github.workspace }}/infrastructure/ansible/ansible.cfg
         run: |
           pipx install ansible-lint
-          ansible-lint infrastructure/ansible/staging.yml || true
+          # Resolve the downloaded role, but do not lint third-party source.
+          ansible-lint --exclude roles_external staging.yml || true
 
       # Nicht blockierend: ein IaC-Befund soll die Arbeit nicht anhalten.
       # Sichtbar bleibt er trotzdem, über den Security-Tab.

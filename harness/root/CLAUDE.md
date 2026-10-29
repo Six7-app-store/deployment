@@ -44,8 +44,9 @@ und wird auch in die `AGENTS.md` aller sechs lokalen Repositories verteilt:
   durch, ein Hook erklärt den Grund.
 - **Kein Produktions-Deploy, kein `tofu apply` von Hand.** Staging baut
   `develop` und läuft über GitHub Actions auf dem self-hosted Runner
-  (ADR-0002, ADR-0013); Produktion ist `main` und wird von einem Menschen auf
-  der Zielmaschine ausgerollt. Den develop-Stand darf der Agent über
+  (ADR-0002, ADR-0013); Produktion ist der main-Stand unter `appstore.<zone>`.
+  Ein Mensch gibt ihn mit dem Release-Merge frei, danach rollt dieselbe
+  Pipeline aus (ADR-0014). Den develop-Stand darf der Agent über
   `gh workflow run staging.yml` selbst neu bauen, den main-Stand nie
   (ADR-0015, Skill `deployment-pruefen`).
 - **Schreibende `gh`-Aufrufe immer mit `-R Six7-app-store/<repo>`.** Die

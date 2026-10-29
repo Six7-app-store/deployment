@@ -1,21 +1,26 @@
-# 0014 — Die Pipeline baut zwei Stände: `develop` und `main`
+# 0014 — Die Pipeline baut zwei Stände: `develop` als Staging, `main` als Produktion
 
 **Status:** Vorschlag
 **Datum:** 22.10.2026
 **Beteiligt:** Projektteam
+**Korrigiert:** 29.10.2026 — Die erste Fassung nannte die Instanz aus `docker-compose.prod.yml`
+„Produktion“ und verwarf, den main-Stand dazu zu machen. Das Team betreibt
+aber den main-Stand unter `appstore.<zone>` als Produktion, und eine Instanz
+aus `docker-compose.prod.yml` hat es nie gegeben. Titel, Entscheidung,
+Konsequenzen und die verworfene Alternative sind darauf umgestellt.
 
 ## Kontext
 
 ADR 0013 hat `develop` zu Staging gemacht. Die eine Staging-VM unter
 `appstore.<zone>` zieht seitdem `:develop`, eine `main`-Seite gab es danach
-nicht mehr. Die Produktion aus `docker-compose.prod.yml` existiert nur als
-Anleitung, die eine Person auf einer eigenen VM von Hand ausrollt. Eine
+nicht mehr. `docker-compose.prod.yml` beschreibt eine eigenständige
+Installation, die eine Person auf einer eigenen VM von Hand aufsetzt. Eine
 laufende Instanz davon gibt es nicht.
 
 Bis zum 22.10.2026 lief auf genau dieser VM der Stand von `main`. Für das Team
-war sie deshalb die Seite des Projekts. Gewünscht sind zwei Stände
-nebeneinander: Staging mit `develop` und eine Seite mit `main`, beide
-automatisch nach jedem Merge.
+war sie deshalb die Produktion. Gewünscht sind zwei Stände nebeneinander:
+Staging mit `develop` und die Produktion mit `main`, beide automatisch nach
+jedem Merge.
 
 Anwendungs-, Keycloak- und OpenTofu-State-Datenbank liegen seit ADR 0005 und
 0006 in der Postgres-Instanz auf der Runner-VM, außerhalb des Stacks.
@@ -47,15 +52,17 @@ Anwendungs-, Keycloak- und OpenTofu-State-Datenbank liegen seit ADR 0005 und
 - Die CI von backend, frontend und worker stößt den Neuaufbau nach grünen
   Läufen auf `develop` und auf `main` an.
 
-Die Produktion aus `docker-compose.prod.yml` bleibt davon unberührt und wird
-weiterhin von einer Person ausgerollt.
+Der main-Stand ist die Produktion. Eine Person gibt sie mit dem Release-PR
+`develop` → `main` frei, ausgerollt wird automatisch. `docker-compose.prod.yml`
+bleibt eine Anleitung für eine eigenständige Installation außerhalb der
+Pipeline.
 
 ## Konsequenzen
 
 **Leichter:**
 
-- Was nach `main` geht, steht vorher als `develop` auf einer eigenen Seite.
-  Danach läuft es unter der gewohnten Adresse.
+- Was in Produktion geht, steht vorher als `develop` auf Staging. Danach
+  läuft es unter der gewohnten Adresse.
 - Die Stände teilen nichts, was sie gegenseitig beschädigen könnte: Ein
   Neuaufbau von `develop` reißt nur die develop-VM ab, und die Migrationen von
   `develop` laufen nur gegen die develop-Datenbanken. Auch die
@@ -70,12 +77,14 @@ weiterhin von einer Person ausgerollt.
   Deploys der beiden Stände laufen nacheinander, weil es einen Runner gibt.
   Ein Release mit Nachziehen von `develop` kostet so zwei Neuaufbauten
   hintereinander.
-- Beide Stände benutzen dieselben Passwörter, Client-Secrets und Tokens.
-  Für zwei Testinstanzen ist das hinnehmbar, getrennt sind sie damit aber
-  nicht.
-- Ein Merge auf `main` reißt jetzt eine Seite ab und baut sie neu. Seit
-  ADR 0006 überstehen die Daten das, die Seite ist dabei aber einige Minuten
-  weg.
+- Beide Stände benutzen dieselben Passwörter, Client-Secrets, Tokens und
+  OpenStack-Zugangsdaten. Staging und Produktion sind damit nicht getrennt:
+  Wer an die Zugangsdaten von Staging kommt, hat die der Produktion. Ein
+  eigenes Secret `DEVELOP_ENV_FILE` ist vorgesehen, aber nicht angelegt.
+- Ein Merge auf `main` reißt die Produktion ab und baut sie neu. Seit
+  ADR 0006 überstehen die Daten das, die Produktion ist dabei aber einige
+  Minuten weg, und laufende App-Aufträge brechen ab, solange der Schutz aus
+  ADR 0024 für `main` nicht eingeschaltet ist.
 - Ob der TSIG-Schlüssel auch für `staging.<zone>` schreiben darf, ist erst
   nach dem ersten develop-Lauf belegt. Bisher ist das nur für `appstore.<zone>`
   nachgewiesen.
@@ -91,10 +100,11 @@ ein State-Pfad.
 doppelt gepflegt, von denen sich drei unterscheiden. Bleibt als Option für
 den Fall, dass develop eigene Zugangsdaten bekommen soll.
 
-**Den main-Stand zur Produktion machen**, also `docker-compose.prod.yml`
-automatisch ausrollen. Hätte die Regel gebrochen, dass ein Mensch die
-Produktion ausrollt, und eine zweite Infrastruktur (nginx statt Caddy, kein
-OpenTofu) in die Pipeline geholt.
+**`docker-compose.prod.yml` als Produktion automatisch ausrollen**, neben
+dem main-Stand. Hätte eine zweite Infrastruktur (nginx statt Caddy, kein
+OpenTofu) in die Pipeline geholt, für eine Instanz, die es nicht gibt. Der
+Mensch bleibt trotzdem im Ablauf: Er gibt den Release-PR frei, nicht den
+Rollout.
 
 **Gemeinsame Datenbanken für beide Stände.** Dann migrierte `develop` die
 Daten von `main`, und der develop-Worker sähe die OpenTofu-States der
