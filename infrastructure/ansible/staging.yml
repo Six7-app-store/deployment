@@ -401,11 +401,14 @@
       when: guarded_updates_enabled | bool
       ansible.builtin.shell:
         cmd: |
-          set -eu
-          image=$(docker compose -f docker-compose.staging.yml config --images backend)
+          set -euo pipefail
+          # `config --images backend` also includes dependency images.
+          # Read the backend's own reference without printing environment values.
+          image=$(docker compose -f docker-compose.staging.yml config --format json backend \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["backend"]["image"])')
           docker run --rm --network none --entrypoint python "$image" -c \
             "import importlib.util,sys; sys.exit(importlib.util.find_spec('app.services.maintenance_control') is None)"
-        executable: /bin/sh
+        executable: /bin/bash
         chdir: "{{ project_root }}"
       changed_when: false
 

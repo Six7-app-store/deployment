@@ -25,11 +25,18 @@ query() {
 }
 
 case "$action" in
-  begin)
+  begin|resume)
     # UPDATE takes the same row lock as task admission's FOR SHARE. Once the
     # transaction commits, new tasks cannot be admitted; older ones may drain.
-    acquired=$(query "UPDATE platform_maintenance SET owner='$owner' WHERE id=1 AND owner IS NULL RETURNING 1;")
-    [[ "$acquired" == 1 ]] || { echo 'Maintenance gate unavailable' >&2; exit 2; }
+    if [[ "$action" == begin ]]; then
+      acquired=$(query "UPDATE platform_maintenance SET owner='$owner' WHERE id=1 AND owner IS NULL RETURNING 1;")
+      [[ "$acquired" == 1 ]] || { echo 'Maintenance gate unavailable' >&2; exit 2; }
+    else
+      # Resume an explicitly identified failed run. Never steal or clear a
+      # different owner's gate, and preserve this gate on all failures.
+      existing=$(query "SELECT CASE WHEN owner='$owner' THEN 1 ELSE 0 END FROM platform_maintenance WHERE id=1;")
+      [[ "$existing" == 1 ]] || { echo 'Recovery owner does not hold the gate' >&2; exit 2; }
+    fi
     deadline=$((SECONDS + timeout))
     while :; do
       state=$(query "SELECT CASE WHEN owner='$owner' THEN 1 ELSE 0 END FROM platform_maintenance WHERE id=1;")
@@ -41,8 +48,10 @@ case "$action" in
         exit 0
       fi
       if (( SECONDS >= deadline )); then
-        released=$(query "UPDATE platform_maintenance SET owner=NULL WHERE id=1 AND owner='$owner' RETURNING 1;")
-        [[ "$released" == 1 ]] || { echo 'Maintenance release failed' >&2; exit 1; }
+        if [[ "$action" == begin ]]; then
+          released=$(query "UPDATE platform_maintenance SET owner=NULL WHERE id=1 AND owner='$owner' RETURNING 1;")
+          [[ "$released" == 1 ]] || { echo 'Maintenance release failed' >&2; exit 1; }
+        fi
         echo 'Active tasks remain; deployment was not started.' >&2
         exit 2
       fi
@@ -54,5 +63,5 @@ case "$action" in
     [[ "$released" == 1 ]] || { echo 'Maintenance release failed' >&2; exit 1; }
     echo 'Maintenance released.'
     ;;
-  *) echo 'Usage: maintenance-operator.sh begin|end DATABASE OWNER [TIMEOUT_SECONDS]' >&2; exit 1 ;;
+  *) echo 'Usage: maintenance-operator.sh begin|resume|end DATABASE OWNER [TIMEOUT_SECONDS]' >&2; exit 1 ;;
 esac

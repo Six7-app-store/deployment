@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import importlib.util
+import json
 import re
 import subprocess
 import sys
@@ -56,11 +57,17 @@ class Docker:
         return result
 
     def pull_candidate(self, service):
-        ref = self.compose("config", "--images", service).splitlines()
-        if len(ref) != 1 or not ref[0].startswith("ghcr.io/"):
+        try:
+            # Compose also returns dependency images for `config --images`.
+            # The JSON contains environment values: keep it in memory, never log it.
+            config = json.loads(self.compose("config", "--format", "json", service))
+            ref = config["services"][service]["image"]
+        except (ValueError, KeyError, TypeError):
+            raise UpdateError(f"Invalid image configuration for {service}") from None
+        if not isinstance(ref, str) or not ref.startswith("ghcr.io/"):
             raise UpdateError(f"Invalid image configuration for {service}")
-        run(["docker", "pull", "--quiet", ref[0]])
-        result = run(["docker", "image", "inspect", "--format", "{{.Id}}", ref[0]])
+        run(["docker", "pull", "--quiet", ref])
+        result = run(["docker", "image", "inspect", "--format", "{{.Id}}", ref])
         if not IMAGE_ID.fullmatch(result):
             raise UpdateError(f"Cannot identify candidate {service} image")
         return result
