@@ -40,6 +40,11 @@ services:
   postgres-test:
     image: postgres:16-alpine
     container_name: postgres-test-dev
+    # Throwaway data, so durability is not needed. Without this, the
+    # checkpoint that DROP DATABASE forces has to sync everything the
+    # suite just wrote, which takes longer than the 60 s test timeout
+    # on Docker Desktop.
+    command: ["postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"]
     environment:
       POSTGRES_USER: ${TEST_DB_USER:-postgres}
       POSTGRES_PASSWORD: ${TEST_DB_PASSWORD:-postgres}
