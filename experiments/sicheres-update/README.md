@@ -47,7 +47,8 @@ Neben diesem ursprünglichen Mini-Stack existieren jetzt experimentelle
    `staging.yml` manuell mit `stand=develop`, `recreate=false`, `seed=false`
    und `bootstrap_guarded=true` starten. Nur dieser explizite Lauf stoppt den
    alten Timer, wartet auf einen laufenden alten Timer-Job, sperrt und prüft
-   Aufträge und installiert den geschützten Timer.
+   Aufträge und installiert den geschützten Timer. Normalerweise bleibt
+   `bootstrap_resume_owner` leer.
 4. Erst nach erfolgreichem Bootstrap und Überprüfung des Stacks die Repository-
    Variable `GUARDED_STAGING_UPDATES` auf `true` setzen. Ein Image-Dispatch
    kann danach den geschützten In-place-Weg verwenden.
@@ -55,7 +56,11 @@ Neben diesem ursprünglichen Mini-Stack existieren jetzt experimentelle
 Diese Reihenfolge ist noch nicht auf einem separaten OpenStack-Stack getestet.
 Schlägt Bootstrap fehl, können der alte Timer angehalten oder die
 Wartungssperre gesetzt sein. Status und Sperreneigentümer müssen dann gezielt
-geprüft werden, bevor ein weiterer Lauf oder eine Freigabe erfolgt.
+geprüft werden, bevor ein weiterer Lauf oder eine Freigabe erfolgt. Eine
+bestehende Sperre kann gezielt durch einen manuellen Bootstrap-Lauf mit
+`bootstrap_resume_owner` fortgesetzt werden; akzeptiert wird nur der exakte
+Eigentümer des fehlgeschlagenen Laufs, keine fremde oder fehlende Sperre.
+Bei Fehler oder Timeout während der Wiederaufnahme bleibt sie bestehen.
 
 Automatisierte Backend-Tests gegen eine separate Datenbank:
 
@@ -75,6 +80,7 @@ python experiments/sicheres-update/test_guarded_autoupdate.py
 python experiments/sicheres-update/test_inplace_plan.py
 python experiments/sicheres-update/test_broker_queues.py
 python experiments/sicheres-update/test_real_broker.py
+python experiments/sicheres-update/run_backend_tests.py -p tests.conftest /deployment/experiments/sicheres-update/test_operator_recovery.py
 ```
 
 Der Bootstrap-Test verwendet Bash und einen simulierten `systemctl`; unter

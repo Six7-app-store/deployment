@@ -27,6 +27,7 @@ services:
     volumes:
       - ../../../backend-deploy-experiment:/app
       - ../../scripts:/deployment/scripts:ro
+      - ./:/deployment/experiments/sicheres-update:ro
       - backend-test-venv:/app/.venv:ro
     depends_on:
       db:

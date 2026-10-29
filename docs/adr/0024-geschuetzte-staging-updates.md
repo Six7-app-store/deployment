@@ -59,6 +59,8 @@ Rohlogs.
   Grundfälle ab; Tests mit dem echten Worker, laufendem OpenTofu-Prozess,
   Absturz und Wiederanlauf stehen noch aus.
 - Nach unbekanntem Fehler ist ein kontrollierter, manueller Recovery-Ablauf
-  nötig. Der Besitzer der Wartungssperre wird im Workflow protokolliert.
+  nötig. Der Besitzer der Wartungssperre wird im Workflow protokolliert. Eine
+  Wiederaufnahme kann diesen exakten Besitzer angeben und setzt dessen Sperre
+  fort; bei einem Fehler im Wiederaufnahmelauf bleibt die Sperre bestehen.
 - Tests gegen einen unabhängigen OpenStack-Teststack und die Teamentscheidung
   stehen aus. Vorher wird der Vorschlag nicht im Live-Staging aktiviert.

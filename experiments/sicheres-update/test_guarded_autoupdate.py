@@ -1,10 +1,12 @@
 """Exercise real update orchestration with an isolated fake Docker adapter."""
 import importlib.util
+import json
 import unittest
 import subprocess
 import tempfile
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 path = Path(__file__).resolve().parents[2] / "scripts" / "guarded_autoupdate.py"
 spec = importlib.util.spec_from_file_location("guarded_autoupdate", path)
@@ -113,6 +115,26 @@ class GuardedUpdateTests(unittest.TestCase):
 
 
 class RealComposePinTests(unittest.TestCase):
+    def test_candidate_ignores_compose_dependency_images(self):
+        project = "guardedconfig" + uuid.uuid4().hex[:12]
+        with tempfile.TemporaryDirectory(prefix=project) as folder:
+            root = Path(folder) / project
+            root.mkdir()
+            (root / "compose.yaml").write_text(
+                "services:\n  backend:\n    image: ghcr.io/example/backend:dev\n"
+                "    depends_on: [redis]\n  redis:\n    image: redis:7-alpine\n",
+                encoding="utf-8",
+            )
+            docker = module.Docker(root, "compose.yaml")
+            config = json.loads(docker.compose("config", "--format", "json", "backend"))
+            self.assertIn("redis", config["services"])
+            self.assertEqual(config["services"]["backend"]["image"], "ghcr.io/example/backend:dev")
+            image_id = "sha256:" + "a" * 64
+            with patch.object(module, "run", side_effect=["", image_id]) as run_mock:
+                with patch.object(docker, "compose", return_value=json.dumps(config)):
+                    self.assertEqual(docker.pull_candidate("backend"), image_id)
+            self.assertEqual(run_mock.call_args_list[0].args[0][-1], "ghcr.io/example/backend:dev")
+
     def test_compose_switches_and_restores_exact_image_id(self):
         project = "guardedpin" + uuid.uuid4().hex[:12]
         with tempfile.TemporaryDirectory(prefix=project) as folder:
