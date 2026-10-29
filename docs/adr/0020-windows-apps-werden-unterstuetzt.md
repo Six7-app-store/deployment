@@ -18,16 +18,12 @@ an und richtet sie über cloudbase-init ein (siehe `docs/pipeline.md`, Abschnitt
 „Die Windows-App"). Mit [ADR 0010](0010-opentofu-statt-terraform-und-packer.md)
 ist sie auf OpenTofu umgestellt und baut kein Abbild mehr.
 
-<!-- TODO: Wie wird die Lizenzlage aus ADR 0001 jetzt behandelt? Das Projektteam
-muss hier festhalten, auf welcher Grundlage Windows-VMs betrieben werden
-(beschaffte Lizenz, Vereinbarung mit der DHBW, Beschränkung auf einen
-Nutzerkreis) und wie die Ungleichbehandlung von Nutzern ohne Basislizenz
-vermieden wird. Diese Begründung stammt vom Team und ist hier nicht erfunden. -->
+Die Lizenzlage aus ADR 0001 ist damit nicht geklärt. Eine beschaffte Lizenz
+oder eine Vereinbarung mit der DHBW ist nicht dokumentiert.
 
 ## Entscheidung
 
 Der App Store unterstützt Windows-Apps. Dieses ADR löst ADR 0001 ab.
-
 
 ## Konsequenzen
 
@@ -45,8 +41,8 @@ Der App Store unterstützt Windows-Apps. Dieses ADR löst ADR 0001 ab.
   Windows-VMs.
 - Windows 11 erlaubt nur eine Sitzung gleichzeitig. Jede Person braucht eine
   eigene VM (2 vCPU, 8 GB RAM), deshalb gilt eine Obergrenze von zwölf.
-- Offen bleibt, was ADR 0001 als Problem benannt hat, bis das Team die Lizenzfrage
-  oben beantwortet hat.
+- Offen bleibt, was ADR 0001 als Problem benannt hat: auf welcher Lizenz
+  Windows-VMs laufen und wie Nutzer ohne Basislizenz gleich behandelt werden.
 
 ## Verworfene Alternativen
 
