@@ -110,7 +110,8 @@ jobs:
           ANSIBLE_CONFIG: ${{ github.workspace }}/infrastructure/ansible/ansible.cfg
         run: |
           pipx install ansible-lint
-          ansible-lint staging.yml || true
+          # Resolve the downloaded role, but do not lint third-party source.
+          ansible-lint --exclude roles_external staging.yml || true
 
       # Nicht blockierend: ein IaC-Befund soll die Arbeit nicht anhalten.
       # Sichtbar bleibt er trotzdem, über den Security-Tab.
