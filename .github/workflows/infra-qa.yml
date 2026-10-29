@@ -89,7 +89,10 @@ jobs:
         working-directory: infrastructure/ansible
         run: |
           ansible-galaxy role install -r requirements.yml -p roles_external
-          ansible-galaxy collection install -r requirements.yml
+          # Install explicitly into the user's collection path. pipx gives
+          # ansible-core and ansible-lint separate Python environments; a
+          # collection bundled in one environment is not visible in the other.
+          ansible-galaxy collection install -r requirements.yml -p "$HOME/.ansible/collections" --force
 
       - name: Ansible Syntax Check
         working-directory: infrastructure/ansible
