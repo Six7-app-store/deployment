@@ -1,5 +1,9 @@
 # Architektur: Self-Service-Portal und Moodle/LTI-Anbindung
 
+> Die experimentelle, noch nicht aktivierte Datenbank-Wartungssperre für
+> Staging-Updates ist im [ADR 0024](adr/0024-geschuetzte-staging-updates.md)
+> beschrieben. Die folgenden Diagramme zeigen weiterhin den bisherigen Stand.
+
 Stand: 23.10.2026
 
 Der App Store hat einen zweiten Weg hinein bekommen. Bisher meldeten sich

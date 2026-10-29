@@ -1,5 +1,11 @@
 # Staging aktualisiert sich selbst
 
+> **Experiment in dieser Arbeitskopie:** Ein optionaler geschützter Timer
+> mit Wartungssperre und begrenztem Image-Rollback ist in
+> [ADR 0024](adr/0024-geschuetzte-staging-updates.md) beschrieben. Er ist
+> standardmäßig deaktiviert; die folgenden Abschnitte beschreiben den
+> bestehenden Timer.
+
 Nach einem Merge auf `develop` steht wenige Minuten später der neue Stand auf
 Staging — ohne dass jemand einen Deploy startet.
 

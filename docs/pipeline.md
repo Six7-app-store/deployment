@@ -1,5 +1,11 @@
 # Deploymentprozess des App-Stores
 
+> **Experiment in dieser Arbeitskopie:** Der opt-in Entwurf für geschützte,
+> teilweise inkrementelle develop-Updates ist in
+> [ADR 0024](adr/0024-geschuetzte-staging-updates.md) dokumentiert. Er ist
+> standardmäßig deaktiviert und noch nicht für das Live-Staging freigegeben.
+> Die folgende Beschreibung gilt für den bisherigen Ablauf.
+
 ## Die Kette
 
 ```

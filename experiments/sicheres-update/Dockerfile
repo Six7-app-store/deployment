@@ -1,0 +1,3 @@
+FROM python:3.11-alpine
+ARG DEMO_MODE
+ENV APP_MODE=${DEMO_MODE}
