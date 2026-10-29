@@ -75,7 +75,13 @@ python experiments/sicheres-update/test_guarded_autoupdate.py
 python experiments/sicheres-update/test_inplace_plan.py
 python experiments/sicheres-update/test_broker_queues.py
 python experiments/sicheres-update/test_real_broker.py
-python experiments/sicheres-update/test_quiesce_autoupdate.py
+```
+
+Der Bootstrap-Test verwendet Bash und einen simulierten `systemctl`; unter
+Windows kann er im vorhandenen Backend-Image ausgeführt werden:
+
+```powershell
+docker run --rm --entrypoint python -v "${PWD}:/repo" -w /repo deployment-backend experiments/sicheres-update/test_quiesce_autoupdate.py
 ```
 
 ## Was vor einer Übernahme noch fehlt
