@@ -51,6 +51,10 @@ on:
         description: "Seed-Daten anlegen (Benutzer, Kurse, Apps)"
         type: boolean
         default: false
+      bootstrap_guarded:
+        description: "develop: alten Timer sicher durch geschuetzte Variante ersetzen"
+        type: boolean
+        default: false
 
 # BEWUSST kein `pull_request`. Dieses Repository ist oeffentlich, und ein
 # self-hosted Runner an einem PR-Trigger gaebe jedem, der einen Fork-PR oeffnet,
@@ -369,11 +373,27 @@ jobs:
           tofu init -reconfigure -backend-config="path=$STATE_DIR/terraform.tfstate"
           tofu validate
 
+      # Bootstrap is allowed only as an explicit, non-destructive develop run.
+      - name: Bootstrap-Eingaben pruefen
+        if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded
+        env:
+          RECREATE_INPUT: ${{ inputs.recreate }}
+          SEED_INPUT: ${{ inputs.seed }}
+          GUARD_ENABLED: ${{ vars.GUARDED_STAGING_UPDATES }}
+        run: |
+          set -euo pipefail
+          if [ "$STAND" != develop ] || [ "$RECREATE_INPUT" != false ] || [ "$SEED_INPUT" != false ] || [ "$GUARD_ENABLED" = true ]; then
+            echo '::error::Bootstrap requires develop, recreate=false, seed=false and guarded updates not yet enabled.'
+            exit 1
+          fi
+
       # Opt-in after a separate bootstrap: the current backend AND any active
       # timer must already support the same durable maintenance gate.
       - name: Laufende App-Auftraege vor Plattform-Neubau schuetzen
-        if: env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true'
+        if: env.STAND == 'develop' && (vars.GUARDED_STAGING_UPDATES == 'true' || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded))
         working-directory: infrastructure/tofu/envs/staging
+        env:
+          BOOTSTRAP_GUARDED: ${{ github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded }}
         run: |
           set -euo pipefail
           old_ip=$(tofu output -raw vm_ip 2>/dev/null || true)
@@ -381,9 +401,25 @@ jobs:
             ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
               -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 \
               -i ~/.ssh/openstack-key "ubuntu@$old_ip" \
-              'docker exec backend-prod python -c "import app.services.maintenance_control" && { ! systemctl is-active --quiet appstore-autoupdate.timer || grep -q appstore-guarded-autoupdate.py /usr/local/bin/appstore-autoupdate; }' \
+              'docker exec backend-prod python -c "import app.services.maintenance_control"' \
               > /dev/null 2>&1 \
-              || { echo '::error::Backend or active auto-update timer has not been bootstrapped with the guard.'; exit 1; }
+              || { echo '::error::Backend does not support the maintenance guard.'; exit 1; }
+            if [ "$BOOTSTRAP_GUARDED" = true ]; then
+              # Stop the old timer and wait for any already-started update to
+              # finish. No running updater is killed or interrupted.
+              ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 \
+                -i ~/.ssh/openstack-key "ubuntu@$old_ip" \
+                'sudo -n bash -s' < ../../../../scripts/quiesce-autoupdate.sh \
+                || { echo '::error::Could not safely stop the legacy timer; bootstrap aborted.'; exit 1; }
+            else
+              ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 \
+                -i ~/.ssh/openstack-key "ubuntu@$old_ip" \
+                '{ ! systemctl is-active --quiet appstore-autoupdate.timer || grep -q appstore-guarded-autoupdate.py /usr/local/bin/appstore-autoupdate; }' \
+                > /dev/null 2>&1 \
+                || { echo '::error::Active timer is not protected by the maintenance guard.'; exit 1; }
+            fi
           fi
           db=$(grep -E '^DB_NAME=' "$STAND_ENV_FILE" | head -1 | cut -d= -f2-)
           [[ "$db" =~ ^[a-zA-Z0-9_]+$ ]] || { echo '::error::Invalid DB_NAME'; exit 1; }
@@ -421,7 +457,7 @@ jobs:
       # allerersten Lauf gibt es keine alte VM, und ein neues Zertifikat
       # anzufordern ist dann richtig.
       - name: Caddy-Zertifikat der alten VM sichern
-        if: ${{ !(env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch') }}
+        if: ${{ !(env.STAND == 'develop' && ((vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch') || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded))) }}
         continue-on-error: true
         working-directory: infrastructure/tofu/envs/staging
         run: |
@@ -482,7 +518,7 @@ jobs:
       - name: OpenTofu Plan & Apply (neuen Stack aufbauen)
         working-directory: infrastructure/tofu/envs/staging
         env:
-          GUARDED_IN_PLACE: ${{ env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch' }}
+          GUARDED_IN_PLACE: ${{ env.STAND == 'develop' && ((vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch') || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded)) }}
         run: |
           set -euo pipefail
           tofu plan -out=tfplan
@@ -645,8 +681,8 @@ jobs:
           # Wirkung. So herum steht der Default links und wird nur dann
           # ausgewertet, wenn es kein workflow_dispatch ist.
           SEED: ${{ env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch' && 'false' || (github.event_name != 'workflow_dispatch' && 'true' || inputs.seed) }}
-          GUARDED_UPDATES: ${{ env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true' }}
-          IN_PLACE_UPDATE: ${{ env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch' }}
+          GUARDED_UPDATES: ${{ env.STAND == 'develop' && (vars.GUARDED_STAGING_UPDATES == 'true' || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded)) }}
+          IN_PLACE_UPDATE: ${{ env.STAND == 'develop' && ((vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch') || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded)) }}
         # Das Playbook liest die .env aus STAGING_ENV_FILE - der Name bleibt,
         # der Inhalt ist die .env des Stands. caddy_backup_file kennt ein
         # Playbook von vor ADR 0014 nicht; es nimmt dann den alten Pfad, und

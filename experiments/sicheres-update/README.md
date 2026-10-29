@@ -37,6 +37,26 @@ Neben diesem ursprünglichen Mini-Stack existieren jetzt experimentelle
   sind weder gemerged noch ausgerollt. Der beschriebene Teststack arbeitet
   weiterhin unabhängig vom echten Staging.
 
+### Vorgesehene Bootstrap-Reihenfolge
+
+1. Backend mit Migration und Wartungssperre bereitstellen und prüfen.
+2. Deployment-Änderung bei nicht gesetzter Guard-Variable übernehmen. Dieser
+   Merge löst zunächst weiterhin den bisherigen VM-Neubau aus; währenddessen
+   dürfen keine wichtigen App-Aufträge laufen.
+3. Den vollständigen Workflow und App Store prüfen. Dann den Workflow
+   `staging.yml` manuell mit `stand=develop`, `recreate=false`, `seed=false`
+   und `bootstrap_guarded=true` starten. Nur dieser explizite Lauf stoppt den
+   alten Timer, wartet auf einen laufenden alten Timer-Job, sperrt und prüft
+   Aufträge und installiert den geschützten Timer.
+4. Erst nach erfolgreichem Bootstrap und Überprüfung des Stacks die Repository-
+   Variable `GUARDED_STAGING_UPDATES` auf `true` setzen. Ein Image-Dispatch
+   kann danach den geschützten In-place-Weg verwenden.
+
+Diese Reihenfolge ist noch nicht auf einem separaten OpenStack-Stack getestet.
+Schlägt Bootstrap fehl, können der alte Timer angehalten oder die
+Wartungssperre gesetzt sein. Status und Sperreneigentümer müssen dann gezielt
+geprüft werden, bevor ein weiterer Lauf oder eine Freigabe erfolgt.
+
 Automatisierte Backend-Tests gegen eine separate Datenbank:
 
 ```powershell
@@ -55,6 +75,7 @@ python experiments/sicheres-update/test_guarded_autoupdate.py
 python experiments/sicheres-update/test_inplace_plan.py
 python experiments/sicheres-update/test_broker_queues.py
 python experiments/sicheres-update/test_real_broker.py
+python experiments/sicheres-update/test_quiesce_autoupdate.py
 ```
 
 ## Was vor einer Übernahme noch fehlt
@@ -67,10 +88,13 @@ simuliertem Dienst, keine Images des App-Stores. Für den tatsächlichen Einsatz
   Test prüft außerdem wartende und aktive simulierte Tasks; echter Worker,
   laufendes OpenTofu sowie Abstürze und Wiederanlauf müssen separat geprüft
   werden. Eine reine einmalige Datenbank-Statusabfrage hätte ein Race.
-- Beide Wege sind vorbereitet, benötigen aber einen koordinierten Bootstrap:
-  Backend/Migration zuerst, alter Timer ausgeschaltet oder geschützt, erst
-  danach das Flag aktivieren. Ein ungeschützter alter Backend-Prozess oder
-  Timer kann die Sperre umgehen.
+- Beide Wege benötigen einen koordinierten Bootstrap: Backend/Migration zuerst.
+  Der neue manuelle Bootstrap-Modus hält den alten Timer an, wartet auf einen
+  gegebenenfalls laufenden Timer-Job, sperrt und leert Aufträge und installiert
+  den geschützten Timer. Erst nach Erfolg darf die Flag aktiviert werden. Ein
+  ungeschützter alter Backend-Prozess oder Timer kann die Sperre umgehen.
+  Ein abgebrochener Bootstrap kann den alten Timer angehalten lassen; der
+  Zustand muss dann vor einem weiteren Versuch geprüft werden.
 - Der Timer nutzt lokale Image-IDs zum Rückwechsel. Diese Images müssen auch
   im Fehlerfall verfügbar bleiben; für dauerhaften Rückwechsel sind Registry-
   Digests nötig. Datenbankmigrationen brauchen ein geeignetes

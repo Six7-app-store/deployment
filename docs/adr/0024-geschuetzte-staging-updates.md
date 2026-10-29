@@ -40,6 +40,11 @@ Rohlogs.
 - Der neue Backend-Code und seine Migration müssen vor der Aktivierung
   bereits laufen. Während der Umstellung darf kein alter, ungeschützter Timer
   aktiv sein. Die Flag `GUARDED_STAGING_UPDATES` ist zunächst nicht gesetzt.
+  Ein ausdrücklich manueller Bootstrap-Lauf kann den alten Timer anhalten,
+  einen bereits laufenden Timer-Job fertig werden lassen, die gemeinsame
+  Sperre setzen und anschließend die geschützte Timer-Variante installieren.
+  Der Lauf ist auf `develop`, `recreate=false` und `seed=false` beschränkt und muss vor
+  dem Setzen der Flag erfolgreich auf einem Teststack erprobt werden.
 - Der Workflow ändert bei einem Image-Dispatch auch Ansible- und
   Compose-Konfiguration. Ob diese Aktualisierung unabhängig von weiteren
   Infrastrukturänderungen akzeptabel ist, muss auf einem getrennten Stack
