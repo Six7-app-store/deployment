@@ -302,15 +302,17 @@ Freigabewarteschlange und müssen vor der Einreichung für den Store sichtbar
 gemacht werden. Die Freigabe ersetzt keine technische Isolation des Workers.
 
 Die Offline-Prüfung der Keycloak-Tokens verlangt neben einer gültigen Signatur
-die Claims `exp`, `iss` und `sub`. In Produktion prüft sie zusätzlich den
-konfigurierten Issuer und die API-Audience; Dev und Staging können die Prüfung
-nach Einrichtung des Audience-Mappers ausdrücklich aktivieren.
+die Claims `exp`, `iss` und `sub`. Mit `KEYCLOAK_ENFORCE_TOKEN_BINDING=true`
+prüft sie zusätzlich den konfigurierten Issuer und die API-Audience.
+`docker-compose.prod.yml` setzt das fest. Staging und Produktion laufen mit
+`docker-compose.staging.yml` und übernehmen den Schalter aus `STAGING_ENV_FILE`,
+Standard `false`; vorher muss der Audience-Mapper eingerichtet sein.
 
 Bei aktiviertem `REQUIRE_PINNED_RELEASES` wird der Commit beim Einreichen einer
 Version gespeichert und beim Review sowie bei Deploy und späteren Lifecycle-
 Tasks verwendet. Historische Freigaben ohne Commit müssen neu eingereicht und
 geprüft werden. Historische Deployments ohne Commit können bei aktiver Prüfung
-nicht über die Lifecycle-API bedient werden. Sie müssen vor Produktion einzeln
+nicht über die Lifecycle-API bedient werden. Sie müssen vor dem Einschalten einzeln
 anhand vertrauenswürdiger Nachweise migriert werden; solange bleibt auch der
 Abbau über die API gesperrt.
 

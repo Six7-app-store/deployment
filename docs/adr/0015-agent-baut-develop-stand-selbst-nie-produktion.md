@@ -1,15 +1,19 @@
-# 0015 — Der Agent baut den develop-Stand selbst neu, den main-Stand und die Produktion nie
+# 0015 — Der Agent baut den develop-Stand selbst neu, die Produktion nie
 
 **Status:** Vorschlag
 **Datum:** 23.10.2026
 **Beteiligt:** Projektteam
+**Korrigiert:** 29.10.2026 — Die erste Fassung trennte den main-Stand von „der Produktion“ aus
+`docker-compose.prod.yml`. Der main-Stand ist die Produktion (ADR 0014).
+Die Sperren selbst sind unverändert.
 
 ## Kontext
 
 Seit ADR 0013 ist `develop` Staging und `main` Produktion. Seit ADR 0014 baut
 `.github/workflows/staging.yml` zwei Stände: `develop` auf eigener VM unter
-`staging.<zone>`, `main` auf der bisherigen VM unter `appstore.<zone>`. Die
-Produktion aus `docker-compose.prod.yml` rollt eine Person von Hand aus.
+`staging.<zone>`, `main` als Produktion auf der bisherigen VM unter
+`appstore.<zone>`. Daneben beschreibt `docker-compose.prod.yml` eine
+eigenständige Installation, die eine Person von Hand aufsetzt.
 
 Bis heute stand `gh workflow run` in `permissions.ask`: Jeder Lauf, den ein
 Agent anstoßen wollte, wartete auf einen Klick. `docs/harness.md` begründete
@@ -33,7 +37,8 @@ Produktion nicht.
 ## Entscheidung
 
 Wir erlauben dem Agenten, den Stand `develop` ohne Rückfrage neu zu bauen, und
-sperren für ihn jeden Lauf gegen den Stand `main` sowie jede Produktionsaktion.
+sperren für ihn jeden Lauf gegen den Stand `main`, also die Produktion, sowie
+jede Aktion gegen eine eigenständige Installation.
 
 Umgesetzt in drei Reihen:
 
@@ -44,8 +49,8 @@ Umgesetzt in drei Reihen:
    Staging-Deploy läuft oder wartet. Lässt sich das nicht feststellen, blockt
    er. Für Eingaben per `--json` blockt er immer.
 3. `permissions.deny` sperrt `gh workflow run *stand=main*` zusätzlich, falls
-   der Hook ausfällt. Produktion bleibt wie bisher gesperrt (`make prod*`,
-   Compose gegen Prod und Staging, `deploy.cmd`, `tofu apply`).
+   der Hook ausfällt. Wie bisher gesperrt bleiben `make prod*`, Compose gegen
+   die Prod- und Staging-Datei, `deploy.cmd` und `tofu apply`.
 
 Lesend kommt `make staging-status` dazu: DNS beider Stände (lokal gegen
 öffentlich), Frontend, IPv4/IPv6, `/api/health`, Keycloak, letzte Läufe.
@@ -87,8 +92,9 @@ Ihn zu öffnen oder einen Tunnel zu bauen hieße, einen Schlüssel mit
 VM-Zugriff in die Agentensitzung zu bringen. Das ist genau die Infrastruktur
 unter dem Knopf, die nach `docs/harness.md` bei der Pipeline bleibt.
 
-**Beide Stände freigeben.** `main` ist seit ADR 0013 der Produktionsstand.
-Ihn neu zu bauen, verändert, was als Nächstes in Produktion geht.
+**Beide Stände freigeben.** Der main-Stand ist die Produktion. Ihn neu zu
+bauen, nimmt sie für einige Minuten vom Netz und bricht laufende
+App-Aufträge ab.
 
 **Nur Berechtigungsmuster, kein Hook.** Muster vergleichen Wörter in fester
 Reihenfolge. Die Reihenfolge der `-f`-Felder ist frei, und ob gerade ein

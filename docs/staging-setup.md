@@ -15,7 +15,9 @@ Standard sind `github.com` und `gitlab.com`; zusätzliche GitLab-Hosts müssen
 in der Umgebung als JSON-Liste eingetragen werden.
 `OPENSTACK_ALLOWED_AUTH_URLS` und `OPENSTACK_ENFORCE_ALLOWED_AUTH_URLS=true`
 aktivieren die Keystone-URL-Prüfung auch in Staging. Ohne diese Konfiguration
-bleibt die Hostprüfung dort deaktiviert, während Produktion sie verlangt.
+bleibt die Hostprüfung deaktiviert; nur `docker-compose.prod.yml` verlangt sie.
+Die Produktion (main-Stand) läuft mit derselben Compose-Datei wie Staging und
+bekommt die Prüfung nur, wenn `STAGING_ENV_FILE` sie einschaltet.
 Für produktionsnahe Tests müssen `KEYCLOAK_TOKEN_ISSUER`,
 `KEYCLOAK_ENFORCE_TOKEN_BINDING=true` und `REQUIRE_PINNED_RELEASES=true`
 gesetzt und der Audience-Mapper vorab auf dem bestehenden Realm eingerichtet
@@ -143,5 +145,9 @@ die Entwicklungsumgebung.
 ## Was Staging nicht ist
 
 Kein Produktivsystem. Die Datenbank enthält Seed-Daten, die Nutzer haben ein
-bekanntes Passwort, und `/var/lib/docker` liegt auf der Root-Disk der Instanz —
-eine Neuerstellung der VM nimmt beide Datenbanken mit. 
+bekanntes Passwort. Die Datenbanken liegen seit ADR 0006 auf der Runner-VM und
+überstehen eine Neuerstellung der VM; Container-Daten auf der Root-Disk der
+Instanz nicht.
+
+Der Seed-Lauf ist bei jedem automatischen Deploy eingeschaltet, auch für den
+Stand `main`. Die Seed-Nutzer gibt es damit auch in der Produktion. 

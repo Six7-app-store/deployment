@@ -33,12 +33,14 @@ Entwickler → GitHub Actions → GHCR → Self-hosted Runner → OpenTofu → A
 |---|---|
 | CI, Build, Security Scans | Codeänderung |
 | OpenTofu (destroy + apply) | Review und Merge |
-| Ansible, Compose, Migrationen | Production Rollout |
+| Ansible, Compose, Migrationen | Release-PR `develop` → `main` freigeben |
 | TLS-Zertifikat, DNS-Eintrag | |
+| Rollout von Staging und Produktion | |
 
-Ein Merge nach `develop` baut Staging neu, ein Merge nach `main` den main-Stand
-(ADR 0013, ADR 0014). Alles danach läuft ohne Eingriff. Die Produktion aus
-`docker-compose.prod.yml` rollt weiterhin eine Person aus.
+Ein Merge nach `develop` baut Staging neu, ein Merge nach `main` die
+Produktion unter `appstore.<zone>` (ADR 0013, ADR 0014). Der Mensch gibt den
+Release-PR frei, alles danach läuft ohne Eingriff. Nur eine eigenständige
+Installation aus `docker-compose.prod.yml` setzt eine Person von Hand auf.
 
 Das gilt nur bei grüner CI. Den Staging-Deploy stößt jedes Repo erst an, wenn
 sein CI-Lauf auf dem Branch durchgelaufen ist. Ist ein Gate rot (Tests,

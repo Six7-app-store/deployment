@@ -25,8 +25,8 @@ Frontend und Worker laufen nur über die Stacks hier.
 |---|---|---|---|
 | dev | beliebig | `docker-compose.dev.yml` | `make dev-up` am eigenen Rechner |
 | staging | `develop` | `docker-compose.staging.yml` | **nur** über die Pipeline, nie von Hand — eigene VM, `staging.<zone>` |
-| main-Stand | `main` | `docker-compose.staging.yml` | **nur** über die Pipeline — die bisherige Staging-VM und -Adresse (ADR 0014) |
-| prod | `main` | `docker-compose.prod.yml` | `make prod-*` auf der Zielmaschine, manuell |
+| Produktion (main-Stand) | `main` | `docker-compose.staging.yml` | **nur** über die Pipeline nach dem Release-Merge einer Person — `appstore.<zone>` (ADR 0014) |
+| eigenständige Installation | `main` | `docker-compose.prod.yml` | `make prod-*` auf einer eigenen VM, von Hand; läuft derzeit nirgends |
 
 Der Staging-Deploy läuft in **GitHub Actions** auf dem self-hosted Runner im
 Campusnetz (`.github/workflows/staging.yml`, ADR 0002) — von außen ist die
@@ -48,7 +48,7 @@ staging-status` liest nur.
 **Agent und Staging (ADR 0015):** den Stand `develop` darf der Agent selbst
 neu bauen — `gh workflow run staging.yml -R Six7-app-store/deployment --ref
 develop -f stand=develop`. Der Hook prüft Form und laufende Deploys. Den
-Stand `main` und die Produktion nie. Details: Skill `deployment-pruefen`.
+Stand `main`, also die Produktion, nie. Details: Skill `deployment-pruefen`.
 
 ## Env-Fallen
 

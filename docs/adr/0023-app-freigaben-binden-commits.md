@@ -3,6 +3,8 @@
 **Status:** Vorschlag
 **Datum:** 27.10.2026
 **Beteiligt:** Projektteam, Codex
+**Korrigiert:** 29.10.2026 — „Produktionsmodus“ ist der Schalter `REQUIRE_PINNED_RELEASES`, nicht eine
+Umgebung. Das steht jetzt in der Entscheidung.
 
 ## Kontext
 
@@ -14,7 +16,8 @@ Historische Datensätze enthalten nicht zwingend einen vollständigen Commit.
 ## Entscheidung
 
 Wir speichern bei der Einreichung die vollständige Commit-SHA und verwenden
-sie im Produktionsmodus für Review und Deployment. Jeder neue Deployment-
+sie im Produktionsmodus (`REQUIRE_PINNED_RELEASES=true`) für Review und
+Deployment. Jeder neue Deployment-
 Datensatz speichert den tatsächlich vorgesehenen Commit für spätere Aktionen.
 Historische Einträge ohne nachweisbaren Commit werden nicht automatisch aus
 dem aktuellen Tag ergänzt; im Produktionsmodus bleiben ihre Lifecycle-Aktionen
@@ -29,6 +32,11 @@ nicht migrierte historische Deployments können den Abbau blockieren, deshalb
 müssen Betreiber die Altbestände vor der Aktivierung prüfen und die Warteschlange
 vor dem Wechsel leeren. Für Dev und Staging bleibt die Prüfung bis zur
 Umstellung explizit schaltbar.
+
+`docker-compose.prod.yml` setzt den Schalter fest auf `true`.
+`docker-compose.staging.yml`, mit der beide Pipeline-Stände und damit auch
+die Produktion laufen, übernimmt ihn aus `STAGING_ENV_FILE`, Standard
+`false`.
 
 ## Verworfene Alternativen
 

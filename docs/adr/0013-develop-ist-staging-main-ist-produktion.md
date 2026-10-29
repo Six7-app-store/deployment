@@ -3,6 +3,10 @@
 **Status:** Angenommen
 **Datum:** 22.10.2026
 **Beteiligt:** Projektteam
+**Korrigiert:** 29.10.2026 — Die erste Fassung ließ den Produktionsdeploy bei einer Person auf der
+Zielmaschine und schloss einen Deploy nach einem Merge auf `main` aus. Seit
+ADR 0014 rollt die Pipeline `main` automatisch unter `appstore.<zone>` aus,
+und das Team betreibt genau diesen Stand als Produktion.
 
 ## Kontext
 
@@ -37,9 +41,8 @@ jeden Feature-PR ohne Gegenstück rot, und mehrere wurden trotzdem gemergt.
   Push auf `develop` im deployment-Repo tut das direkt.
   `docker-compose.staging.yml` zieht standardmäßig `:develop`.
 - `main` bekommt nur Release-PRs `develop` → `main`, gemergt mit
-  Merge-Commit. Daraus entstehen die Images `:latest`; den Produktionsdeploy
-  fährt weiterhin eine Person auf der Zielmaschine. Ein Merge auf `main` löst
-  keinen Staging-Deploy aus.
+  Merge-Commit. Daraus entstehen die Images `:latest`. Den Release-Merge gibt
+  eine Person frei; ausgerollt wird danach automatisch (ADR 0014).
 - Nach einem Release wird `develop` per Fast-Forward auf `main` gezogen.
   Hotfixes zweigen von `main` ab und werden danach in `develop` gemergt.
 - Standardbranch ist in allen vier Repos `develop`. Das Tag `latest` hängt

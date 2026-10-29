@@ -3,6 +3,9 @@
 **Status:** Vorschlag
 **Datum:** 28.10.2026
 **Beteiligt:** Projektteam (Entscheidung ausstehend)
+**Korrigiert:** 29.10.2026 — Die erste Fassung sagte, der Schutz werde vor Tests und Teamentscheidung
+nicht im Live-Staging aktiviert. Er ist für `develop` seit dem 29.10.2026
+aktiv; für `main` ist er vorbereitet, aber aus. Abschnitt „Stand“ ergänzt.
 
 ## Kontext
 
@@ -39,7 +42,7 @@ Rohlogs.
 
 - Der neue Backend-Code und seine Migration müssen vor der Aktivierung
   bereits laufen. Während der Umstellung darf kein alter, ungeschützter Timer
-  aktiv sein. Die Flag `GUARDED_STAGING_UPDATES` ist zunächst nicht gesetzt.
+  aktiv sein. Bis zum Bootstrap ist der Schalter des Stands nicht gesetzt.
   Ein ausdrücklich manueller Bootstrap-Lauf kann den alten Timer anhalten,
   einen bereits laufenden Timer-Job fertig werden lassen, die gemeinsame
   Sperre setzen und anschließend die geschützte Timer-Variante installieren.
@@ -63,4 +66,16 @@ Rohlogs.
   Wiederaufnahme kann diesen exakten Besitzer angeben und setzt dessen Sperre
   fort; bei einem Fehler im Wiederaufnahmelauf bleibt die Sperre bestehen.
 - Tests gegen einen unabhängigen OpenStack-Teststack und die Teamentscheidung
-  stehen aus. Vorher wird der Vorschlag nicht im Live-Staging aktiviert.
+  stehen aus.
+
+## Stand
+
+| Stand | Schalter (Repository-Variable) | Zustand |
+|---|---|---|
+| `develop` (Staging) | `GUARDED_STAGING_UPDATES` | `true` seit 29.10.2026, nach Bootstrap-Lauf |
+| `main` (Produktion) | `GUARDED_MAIN_UPDATES` | nicht gesetzt, Schutz aus |
+
+Der Ablauf bis zur Aktivierung für `main` steht in
+[docs/geschuetzte-main-updates-vorbereitung.md](../geschuetzte-main-updates-vorbereitung.md).
+Bis dahin reißt jeder Release-Merge die Produktion ab und baut sie neu
+(ADR 0003), auch während App-Aufträge laufen.
