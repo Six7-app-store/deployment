@@ -45,6 +45,10 @@
     # Auf false setzen, um ihn wieder abzuschalten - die Tasks am Playbook-Ende
     # halten den Dienst dann an und entfernen ihn.
     auto_update: true
+    # Opt-in only after the backend gate and runner workflow are bootstrapped.
+    guarded_updates_enabled: false
+    # The VM and its Caddy volume already exist; do not restore an old backup.
+    in_place_update: false
     # Wie oft nachgesehen wird. systemd-Zeitangabe.
     auto_update_interval: "5min"
     # Wo der Workflow das Caddy-Datenverzeichnis der alten VM abgelegt hat, auf
@@ -393,6 +397,18 @@
       async: 600
       poll: 30
 
+    - name: Backend-Image auf Wartungssperre pruefen
+      when: guarded_updates_enabled | bool
+      ansible.builtin.shell:
+        cmd: |
+          set -eu
+          image=$(docker compose -f docker-compose.staging.yml config --images backend)
+          docker run --rm --network none --entrypoint python "$image" -c \
+            "import importlib.util,sys; sys.exit(importlib.util.find_spec('app.services.maintenance_control') is None)"
+        executable: /bin/sh
+        chdir: "{{ project_root }}"
+      changed_when: false
+
     # Validiert die zusammengesetzte Konfiguration, bevor das Modul übernimmt.
     # Der Schritt existiert nur wegen der Diagnose: docker_compose_v2 ruft
     # `compose images --format json` auf und liest ausschließlich stdout.
@@ -444,6 +460,7 @@
       delegate_to: localhost
       become: false
       register: caddy_sicherung
+      when: not in_place_update | bool
       tags: [tls]
 
     - name: Sicherung auf die VM legen
@@ -451,7 +468,7 @@
         src: "{{ caddy_backup_file }}"
         dest: /tmp/caddy_data.tgz
         mode: '0600'
-      when: caddy_sicherung.stat.exists
+      when: not in_place_update | bool and caddy_sicherung.stat.exists
       tags: [tls]
 
     # Das Volume wird angelegt, bevor compose es tut - sonst gaebe es nichts,
@@ -463,7 +480,7 @@
           docker run --rm -v app_caddy_data:/d
           -v /tmp/caddy_data.tgz:/sicherung.tgz:ro
           alpine tar xzf /sicherung.tgz -C /d
-      when: caddy_sicherung.stat.exists
+      when: not in_place_update | bool and caddy_sicherung.stat.exists
       changed_when: true
       tags: [tls]
 
@@ -471,7 +488,7 @@
       ansible.builtin.file:
         path: /tmp/caddy_data.tgz
         state: absent
-      when: caddy_sicherung.stat.exists
+      when: not in_place_update | bool and caddy_sicherung.stat.exists
       tags: [tls]
 
     - name: Start the application with Docker Compose
@@ -743,12 +760,30 @@
     # Compose-Datei. Dafuer bleibt dieses Playbook zustaendig.
     - name: Update-Skript auf die VM legen
       ansible.builtin.copy:
-        src: "{{ local_compose_path }}/scripts/autoupdate.sh"
+        src: "{{ local_compose_path }}/scripts/{{ 'guarded-autoupdate.sh' if guarded_updates_enabled | bool else 'autoupdate.sh' }}"
         dest: /usr/local/bin/appstore-autoupdate
         owner: root
         group: root
         mode: "0755"
       when: auto_update | bool
+
+    - name: Abgesicherte Update-Logik auf die VM legen
+      ansible.builtin.copy:
+        src: "{{ local_compose_path }}/scripts/guarded_autoupdate.py"
+        dest: /usr/local/bin/appstore-guarded-autoupdate.py
+        owner: root
+        group: root
+        mode: "0755"
+      when: auto_update | bool and guarded_updates_enabled | bool
+
+    - name: Broker-Pruefung fuer abgesicherte Updates auf die VM legen
+      ansible.builtin.copy:
+        src: "{{ local_compose_path }}/scripts/check_broker_queues.py"
+        dest: /usr/local/bin/check_broker_queues.py
+        owner: root
+        group: root
+        mode: "0755"
+      when: auto_update | bool and guarded_updates_enabled | bool
 
     - name: Service-Unit fuer die Selbstaktualisierung
       ansible.builtin.copy:

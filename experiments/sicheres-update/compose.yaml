@@ -1,0 +1,16 @@
+services:
+  gate:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1::6379"
+  app:
+    image: ${APP_IMAGE}
+    command: ["python", "/demo/app.py"]
+    environment:
+      REDIS_HOST: gate
+    volumes:
+      - ./demo:/demo:ro
+    depends_on:
+      - gate
+    ports:
+      - "127.0.0.1::8080"

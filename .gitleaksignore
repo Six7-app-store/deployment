@@ -14,3 +14,9 @@ ae6597035409374d1fe83f23a7d267a3014ae343:keycloak/keycloak-export.json:generic-a
 # the exact fingerprint of the historical commit — current HEAD does
 # not contain any high-entropy literal in this file.
 ba5dbed0e73e054f8f4044e7d0d36b7a73bf4e76:docs/setup.md:generic-api-key:74
+
+# Historical, public, fixed Fernet key used exclusively by isolated Docker
+# tests in this experiment. The test runners now generate a fresh key per run.
+# These two exact fingerprints cover only the original experimental commit.
+8f796a6a1ca4af15f8dbd133da91392a540b15ed:experiments/sicheres-update/backend-test.yaml:generic-api-key:22
+8f796a6a1ca4af15f8dbd133da91392a540b15ed:experiments/sicheres-update/broker-test.yaml:generic-api-key:32

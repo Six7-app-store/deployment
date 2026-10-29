@@ -51,6 +51,10 @@ on:
         description: "Seed-Daten anlegen (Benutzer, Kurse, Apps)"
         type: boolean
         default: false
+      bootstrap_guarded:
+        description: "develop: alten Timer sicher durch geschuetzte Variante ersetzen"
+        type: boolean
+        default: false
 
 # BEWUSST kein `pull_request`. Dieses Repository ist oeffentlich, und ein
 # self-hosted Runner an einem PR-Trigger gaebe jedem, der einen Fork-PR oeffnet,
@@ -369,6 +373,78 @@ jobs:
           tofu init -reconfigure -backend-config="path=$STATE_DIR/terraform.tfstate"
           tofu validate
 
+      # Bootstrap is allowed only as an explicit, non-destructive develop run.
+      - name: Bootstrap-Eingaben pruefen
+        if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded
+        env:
+          RECREATE_INPUT: ${{ inputs.recreate }}
+          SEED_INPUT: ${{ inputs.seed }}
+          GUARD_ENABLED: ${{ vars.GUARDED_STAGING_UPDATES }}
+        run: |
+          set -euo pipefail
+          if [ "$STAND" != develop ] || [ "$RECREATE_INPUT" != false ] || [ "$SEED_INPUT" != false ] || [ "$GUARD_ENABLED" = true ]; then
+            echo '::error::Bootstrap requires develop, recreate=false, seed=false and guarded updates not yet enabled.'
+            exit 1
+          fi
+
+      # Opt-in after a separate bootstrap: the current backend AND any active
+      # timer must already support the same durable maintenance gate.
+      - name: Laufende App-Auftraege vor Plattform-Neubau schuetzen
+        if: env.STAND == 'develop' && (vars.GUARDED_STAGING_UPDATES == 'true' || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded))
+        working-directory: infrastructure/tofu/envs/staging
+        env:
+          BOOTSTRAP_GUARDED: ${{ github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded }}
+        run: |
+          set -euo pipefail
+          old_ip=$(tofu output -raw vm_ip 2>/dev/null || true)
+          if [ -n "$old_ip" ]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+              -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 \
+              -i ~/.ssh/openstack-key "ubuntu@$old_ip" \
+              'docker exec backend-prod python -c "import app.services.maintenance_control"' \
+              > /dev/null 2>&1 \
+              || { echo '::error::Backend does not support the maintenance guard.'; exit 1; }
+            if [ "$BOOTSTRAP_GUARDED" = true ]; then
+              # Stop the old timer and wait for any already-started update to
+              # finish. No running updater is killed or interrupted.
+              ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 \
+                -i ~/.ssh/openstack-key "ubuntu@$old_ip" \
+                'sudo -n bash -s' < ../../../../scripts/quiesce-autoupdate.sh \
+                || { echo '::error::Could not safely stop the legacy timer; bootstrap aborted.'; exit 1; }
+            else
+              ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 \
+                -i ~/.ssh/openstack-key "ubuntu@$old_ip" \
+                '{ ! systemctl is-active --quiet appstore-autoupdate.timer || grep -q appstore-guarded-autoupdate.py /usr/local/bin/appstore-autoupdate; }' \
+                > /dev/null 2>&1 \
+                || { echo '::error::Active timer is not protected by the maintenance guard.'; exit 1; }
+            fi
+          fi
+          db=$(grep -E '^DB_NAME=' "$STAND_ENV_FILE" | head -1 | cut -d= -f2-)
+          [[ "$db" =~ ^[a-zA-Z0-9_]+$ ]] || { echo '::error::Invalid DB_NAME'; exit 1; }
+          owner="gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "MAINTENANCE_DB=$db" >> "$GITHUB_ENV"
+          echo "MAINTENANCE_OWNER=$owner" >> "$GITHUB_ENV"
+          echo "Maintenance owner: $owner"
+          bash ../../../../scripts/maintenance-operator.sh begin "$db" "$owner" 600
+          if [ -n "$old_ip" ]; then
+            if ! ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+                 -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 \
+                 -i ~/.ssh/openstack-key "ubuntu@$old_ip" \
+                 'docker exec backend-prod python -m app.services.maintenance_control verify-workers' \
+                 > /dev/null 2>&1 ||
+               ! ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+                 -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 \
+                 -i ~/.ssh/openstack-key "ubuntu@$old_ip" \
+                 'docker exec rabbitmq-prod sh -c '\''exec rabbitmqctl list_queues -q -p "$RABBITMQ_DEFAULT_VHOST" name messages_ready messages_unacknowledged'\''' \
+                 2>/dev/null | python3 ../../../../scripts/check_broker_queues.py; then
+              bash ../../../../scripts/maintenance-operator.sh end "$db" "$owner" || true
+              echo '::error::Workers or broker busy or unreachable; deployment not started.'
+              exit 1
+            fi
+          fi
+
       # Ohne diesen Schritt fordert Caddy nach jedem Neuaufbau ein neues
       # Zertifikat an: sein Datenverzeichnis liegt in einem Docker-Volume auf
       # der VM, und die ist gleich weg. Das kostet jedes Mal einen
@@ -381,6 +457,7 @@ jobs:
       # allerersten Lauf gibt es keine alte VM, und ein neues Zertifikat
       # anzufordern ist dann richtig.
       - name: Caddy-Zertifikat der alten VM sichern
+        if: ${{ !(env.STAND == 'develop' && ((vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch') || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded))) }}
         continue-on-error: true
         working-directory: infrastructure/tofu/envs/staging
         run: |
@@ -434,19 +511,31 @@ jobs:
       # Beim allerersten Lauf ist der State leer und destroy ein No-op - das
       # ist kein Fehler.
       - name: OpenTofu Destroy (alten Stack abreissen)
-        if: github.event_name != 'workflow_dispatch' || inputs.recreate
+        if: (github.event_name != 'workflow_dispatch' || inputs.recreate) && !(env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch')
         working-directory: infrastructure/tofu/envs/staging
         run: tofu destroy -auto-approve
 
       - name: OpenTofu Plan & Apply (neuen Stack aufbauen)
         working-directory: infrastructure/tofu/envs/staging
+        env:
+          GUARDED_IN_PLACE: ${{ env.STAND == 'develop' && ((vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch') || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded)) }}
         run: |
+          set -euo pipefail
           tofu plan -out=tfplan
+          # Only component-image dispatches may reuse the VM. Fail closed if
+          # the actual plan wants to delete or replace *any* infrastructure.
+          # Do not print the JSON plan: it can contain sensitive values.
+          if [ "$GUARDED_IN_PLACE" = true ]; then
+            tofu show -json tfplan | python3 ../../../../scripts/check_inplace_plan.py \
+              || { echo '::error::In-place update would delete or replace infrastructure; use an explicitly reviewed rebuild.'; exit 1; }
+          fi
           tofu apply tfplan
-          echo "VM_IP=$(tofu output -raw vm_ip)" >> "$GITHUB_ENV"
-          echo "VM_IPV4=$(tofu output -raw vm_ipv4)" >> "$GITHUB_ENV"
-          echo "VM_IPV4_GATEWAY=$(tofu output -raw vm_ipv4_gateway)" >> "$GITHUB_ENV"
-          echo "VM_IPV4_MAC=$(tofu output -raw vm_ipv4_mac)" >> "$GITHUB_ENV"
+          {
+            echo "VM_IP=$(tofu output -raw vm_ip)"
+            echo "VM_IPV4=$(tofu output -raw vm_ipv4)"
+            echo "VM_IPV4_GATEWAY=$(tofu output -raw vm_ipv4_gateway)"
+            echo "VM_IPV4_MAC=$(tofu output -raw vm_ipv4_mac)"
+          } >> "$GITHUB_ENV"
 
       # Ohne diesen Schritt ist der Neuaufbau wertlos: die neue VM bekommt eine
       # neue IPv6-Adresse, der AAAA-Record zeigt aber weiter auf die alte, und
@@ -591,7 +680,9 @@ jobs:
           # `false || 'true'` wieder 'true' - die Wahl im Formular haette keine
           # Wirkung. So herum steht der Default links und wird nur dann
           # ausgewertet, wenn es kein workflow_dispatch ist.
-          SEED: ${{ github.event_name != 'workflow_dispatch' && 'true' || inputs.seed }}
+          SEED: ${{ env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch' && 'false' || (github.event_name != 'workflow_dispatch' && 'true' || inputs.seed) }}
+          GUARDED_UPDATES: ${{ env.STAND == 'develop' && (vars.GUARDED_STAGING_UPDATES == 'true' || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded)) }}
+          IN_PLACE_UPDATE: ${{ env.STAND == 'develop' && ((vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch') || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded)) }}
         # Das Playbook liest die .env aus STAGING_ENV_FILE - der Name bleibt,
         # der Inhalt ist die .env des Stands. caddy_backup_file kennt ein
         # Playbook von vor ADR 0014 nicht; es nimmt dann den alten Pfad, und
@@ -600,12 +691,36 @@ jobs:
           STAGING_ENV_FILE="$(cat "$STAND_ENV_FILE")" \
           ansible-playbook -i inventory.ini \
             --private-key ~/.ssh/openstack-key \
-            -e seed_data=${SEED} \
+            -e "seed_data=${SEED}" \
+            -e "guarded_updates_enabled=${GUARDED_UPDATES}" \
+            -e "in_place_update=${IN_PLACE_UPDATE}" \
             -e "caddy_backup_file=${CADDY_BACKUP}" \
             -e "secondary_ipv4=${VM_IPV4}" \
             -e "secondary_gateway=${VM_IPV4_GATEWAY}" \
             -e "secondary_mac=${VM_IPV4_MAC}" \
             staging.yml
+
+      - name: Wartung nach erfolgreichem Backend-Healthcheck beenden
+        if: env.MAINTENANCE_OWNER != ''
+        run: |
+          set -euo pipefail
+          ready=false
+          for _ in $(seq 1 60); do
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+                 -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 \
+                 -i ~/.ssh/openstack-key "ubuntu@$VM_IP" \
+                 'test "$(docker inspect --format "{{.State.Health.Status}}" backend-prod)" = healthy && docker exec backend-prod python -c "import app.services.maintenance_control"' \
+                 2>/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ready" != true ]; then
+            echo "::error::Backend not ready; maintenance stays enabled (owner $MAINTENANCE_OWNER)."
+            exit 1
+          fi
+          bash scripts/maintenance-operator.sh end "$MAINTENANCE_DB" "$MAINTENANCE_OWNER"
 
       - name: Ergebnis
         if: success()
@@ -620,6 +735,27 @@ jobs:
             echo "| Stand | ${STAND} (Images \`:${IMAGE_TAG}\`) |"
             echo "| VM-Adresse | \`${VM_IP}\` |"
             echo "| Ausgeloest durch | ${{ github.event_name }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fehlerdiagnose ohne Rohlogs
+        if: failure() && env.MAINTENANCE_OWNER != ''
+        run: |
+          {
+            echo '### Geschuetzter Deploy fehlgeschlagen'
+            echo "Wartungseigentuemer: ${MAINTENANCE_OWNER}"
+            echo 'Sperrenstatus, Fehler und Auftraege vor einem neuen Versuch pruefen.'
+            if [ -z "${VM_IP:-}" ]; then
+              echo 'Keine neue VM-Adresse verfuegbar.'
+            else
+              ssh -o BatchMode=yes -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 \
+                -i ~/.ssh/openstack-key "ubuntu@$VM_IP" \
+                'for name in backend-prod worker-prod frontend-prod; do
+                   state=$(docker inspect --format "{{.State.Status}}" "$name" 2>/dev/null || true)
+                   case "$state" in running|restarting|exited|created|dead) ;; *) state=unavailable ;; esac
+                   printf "%s: %s\n" "$name" "$state"
+                 done' 2>/dev/null || echo 'VM oder Docker fuer Diagnose nicht erreichbar.'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       # Laeuft auch nach einem Abbruch. Der Runner ist eine dauerhafte Maschine,

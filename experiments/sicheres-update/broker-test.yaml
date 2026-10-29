@@ -1,0 +1,42 @@
+services:
+  broker:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: experiment
+      RABBITMQ_DEFAULT_PASS: experiment
+      RABBITMQ_DEFAULT_VHOST: /
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+  worker:
+    image: deployment-backend:latest
+    working_dir: /experiment
+    entrypoint: ["/app/.venv/bin/python", "-m", "celery", "-A", "mini_worker", "worker", "--concurrency=1", "--loglevel=WARNING"]
+    environment:
+      BROKER_URL: amqp://experiment:experiment@broker:5672//
+      C_FORCE_ROOT: "1"
+    volumes:
+      - ./:/experiment:ro
+      - backend-test-venv:/app/.venv:ro
+    depends_on:
+      broker:
+        condition: service_healthy
+  probe:
+    image: deployment-backend:latest
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql://unused:unused@unused:5432/unused
+      CELERY_BROKER_URL: amqp://experiment:experiment@broker:5672//
+      CREDENTIAL_ENCRYPTION_KEY: ${EXPERIMENT_FERNET_KEY:?Use test_real_broker.py to generate a test key}
+    volumes:
+      - ../../../backend-deploy-experiment:/app:ro
+      - backend-test-venv:/app/.venv:ro
+    depends_on:
+      broker:
+        condition: service_healthy
+volumes:
+  backend-test-venv:
+    external: true
+    name: ${BACKEND_TEST_VENV}
