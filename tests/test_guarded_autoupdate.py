@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from unittest.mock import patch
 
-path = Path(__file__).resolve().parents[2] / "scripts" / "guarded_autoupdate.py"
+path = Path(__file__).resolve().parents[1] / "scripts" / "guarded_autoupdate.py"
 spec = importlib.util.spec_from_file_location("guarded_autoupdate", path)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
