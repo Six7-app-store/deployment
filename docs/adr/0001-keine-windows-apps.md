@@ -3,7 +3,6 @@
 **Status:** Abgelöst durch ADR-0020
 **Datum:** 17.09.2026
 **Beteiligt:** Projektteam; Gesprächspartner Infrastruktur/Lehre am 16.09.2026
-<!-- TODO: Namen des Gesprächspartners eintragen, bevor das ADR in die Abgabe geht. -->
 
 ## Kontext
 

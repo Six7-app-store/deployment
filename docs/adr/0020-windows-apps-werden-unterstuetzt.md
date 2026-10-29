@@ -3,7 +3,6 @@
 **Status:** Angenommen
 **Datum:** 22.10.2026
 **Beteiligt:** Projektteam
-<!-- TODO: Wer hat die Entscheidung getragen? Namen eintragen, bevor das ADR in die Abgabe geht. -->
 
 ## Kontext
 
@@ -29,7 +28,6 @@ vermieden wird. Diese Begründung stammt vom Team und ist hier nicht erfunden. -
 
 Der App Store unterstützt Windows-Apps. Dieses ADR löst ADR 0001 ab.
 
-<!-- TODO: Bedingungen der Lizenzlösung ergänzen (siehe oben). -->
 
 ## Konsequenzen
 

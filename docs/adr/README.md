@@ -70,8 +70,8 @@ genau einmal, lückenlos, Status hier wie im ADR.
 | [0005](0005-tfstate-der-app-deployments-gehoert-von-der-staging-vm-herunter.md) | Der Terraform-State der App-Deployments gehört von der Staging-VM herunter | Angenommen |
 | [0006](0006-auch-die-anwendungsdaten-gehoeren-von-der-staging-vm-herunter.md) | Auch die Anwendungsdaten gehören von der Staging-VM herunter | Angenommen |
 | [0007](0007-protokoll-statt-type-im-account-vertrag.md) | Das Zugangsprotokoll ist ein eigenes Feld, kein Wert in `type` | Angenommen |
-| [0008](0008-studiengruppe-aus-moodle-kurs-anlegen.md) | Eine Studiengruppe entsteht auf Knopfdruck aus einem Moodle-Kurs | Vorschlag |
-| [0009](0009-deep-link-bindet-an-app.md) | Eine deep-verlinkte Moodle-Aktivität bindet an eine App, nicht an eine Umgebung | Vorschlag |
+| [0008](0008-studiengruppe-aus-moodle-kurs-anlegen.md) | Eine Studiengruppe entsteht auf Knopfdruck aus einem Moodle-Kurs | Angenommen |
+| [0009](0009-deep-link-bindet-an-app.md) | Eine deep-verlinkte Moodle-Aktivität bindet an eine App, nicht an eine Umgebung | Angenommen |
 | [0010](0010-opentofu-statt-terraform-und-packer.md) | Die Plattform verwaltet Infrastruktur nur noch mit OpenTofu, ohne Image-Bau | Angenommen |
 | [0011](0011-deploy-wartet-auf-die-einrichtung-der-vms.md) | Ein Deploy ist erst fertig, wenn cloud-init in allen VMs durchgelaufen ist | Angenommen |
 | [0012](0012-design-v2-tokens-als-einzige-quelle.md) | Das Design v2 hat die Tokens als einzige Quelle, Light ist Standard | Angenommen |
