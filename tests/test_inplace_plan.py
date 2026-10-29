@@ -2,7 +2,7 @@ import importlib.util
 import unittest
 from pathlib import Path
 
-path = Path(__file__).resolve().parents[2] / "scripts" / "check_inplace_plan.py"
+path = Path(__file__).resolve().parents[1] / "scripts" / "check_inplace_plan.py"
 spec = importlib.util.spec_from_file_location("check_inplace_plan", path)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)

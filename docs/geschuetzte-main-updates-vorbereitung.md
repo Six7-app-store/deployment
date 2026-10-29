@@ -56,7 +56,7 @@ automatischen Rollback von Datenbank und Plattform gibt es nicht.
 
 ## Lokale Workflow-Prüfung
 
-`python experiments/sicheres-update/test_workflow_routing.py` liest die
+`python tests/test_workflow_routing.py` liest die
 tatsächlichen Bedingungen des Workflows und prüft sie für beide Stände,
 unterschiedliche Ereignisse, Schalter und Eingaben. Der Test benötigt PyYAML
 und Node.js und greift nicht auf GitHub oder den Stack zu. Ein echter

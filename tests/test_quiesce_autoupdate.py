@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "quiesce-autoupdate.sh"
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "quiesce-autoupdate.sh"
 
 
 class QuiesceTests(unittest.TestCase):

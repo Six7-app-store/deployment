@@ -102,9 +102,12 @@ jobs:
 
       - name: Ansible Lint
         continue-on-error: true
+        working-directory: infrastructure/ansible
+        env:
+          ANSIBLE_CONFIG: ${{ github.workspace }}/infrastructure/ansible/ansible.cfg
         run: |
           pipx install ansible-lint
-          ansible-lint infrastructure/ansible/staging.yml || true
+          ansible-lint staging.yml || true
 
       # Nicht blockierend: ein IaC-Befund soll die Arbeit nicht anhalten.
       # Sichtbar bleibt er trotzdem, über den Security-Tab.

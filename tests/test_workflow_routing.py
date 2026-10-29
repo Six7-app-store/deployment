@@ -13,7 +13,7 @@ from pathlib import Path
 import yaml
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = yaml.safe_load((ROOT / ".github/workflows/staging.yml").read_text(encoding="utf-8"))
 STEPS = {step.get("name"): step for step in WORKFLOW["jobs"]["deploy"]["steps"]}
 
