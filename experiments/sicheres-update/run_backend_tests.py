@@ -1,5 +1,8 @@
 """Run integration checks on an isolated DB without touching the dev stack."""
+import base64
 import json
+import os
+import secrets
 import subprocess
 import sys
 import uuid
@@ -12,9 +15,9 @@ venv = next(
     mount["Name"] for mount in info["Mounts"]
     if mount["Destination"] == "/app/.venv" and mount["Type"] == "volume"
 )
-import os
 env = os.environ.copy()
 env["BACKEND_TEST_VENV"] = venv
+env["EXPERIMENT_FERNET_KEY"] = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
 cmd = ["docker", "compose", "-p", project, "-f", str(folder / "backend-test.yaml")]
 try:
     result = subprocess.run(

@@ -29,7 +29,7 @@ services:
     environment:
       DATABASE_URL: postgresql://unused:unused@unused:5432/unused
       CELERY_BROKER_URL: amqp://experiment:experiment@broker:5672//
-      CREDENTIAL_ENCRYPTION_KEY: "Q1PNlFd4It9oQPtjCcXcmB7wGDkY4w8KwpIRNSF4u7U="
+      CREDENTIAL_ENCRYPTION_KEY: ${EXPERIMENT_FERNET_KEY:?Use test_real_broker.py to generate a test key}
     volumes:
       - ../../../backend-deploy-experiment:/app:ro
       - backend-test-venv:/app/.venv:ro

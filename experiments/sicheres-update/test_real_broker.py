@@ -1,7 +1,9 @@
 """Run RabbitMQ and Celery checks in their own uniquely named local project."""
+import base64
 import importlib.util
 import json
 import os
+import secrets
 import subprocess
 import time
 import unittest
@@ -20,7 +22,8 @@ class BrokerIntegration(unittest.TestCase):
         cls.project = "guardedbroker" + uuid.uuid4().hex[:12]
         info = json.loads(subprocess.check_output(["docker", "inspect", "backend-dev"]))[0]
         venv = next(m["Name"] for m in info["Mounts"] if m["Destination"] == "/app/.venv")
-        cls.env = {**os.environ, "BACKEND_TEST_VENV": venv}
+        key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
+        cls.env = {**os.environ, "BACKEND_TEST_VENV": venv, "EXPERIMENT_FERNET_KEY": key}
         cls.cmd = ["docker", "compose", "-p", cls.project, "-f", str(folder / "broker-test.yaml")]
         try:
             cls.run_compose("up", "-d", "worker", timeout=100)

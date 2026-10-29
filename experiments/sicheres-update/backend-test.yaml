@@ -19,7 +19,7 @@ services:
       DATABASE_URL: postgresql://experiment:experiment@db:5432/experiment
       TEST_DATABASE_URL: postgresql://experiment:experiment@db:5432/experiment
       DISABLE_BACKGROUND_TASKS: "1"
-      CREDENTIAL_ENCRYPTION_KEY: "Q1PNlFd4It9oQPtjCcXcmB7wGDkY4w8KwpIRNSF4u7U="
+      CREDENTIAL_ENCRYPTION_KEY: ${EXPERIMENT_FERNET_KEY:?Use run_backend_tests.py to generate a test key}
       MAINTENANCE_PSQL_MODE: direct
       PGHOST: db
       PGUSER: experiment
