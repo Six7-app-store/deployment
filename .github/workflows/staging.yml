@@ -52,7 +52,7 @@ on:
         type: boolean
         default: false
       bootstrap_guarded:
-        description: "develop: alten Timer sicher durch geschuetzte Variante ersetzen"
+        description: "Ausgewaehlter Stand: alten Timer sicher durch geschuetzte Variante ersetzen"
         type: boolean
         default: false
       bootstrap_resume_owner:
@@ -377,18 +377,18 @@ jobs:
           tofu init -reconfigure -backend-config="path=$STATE_DIR/terraform.tfstate"
           tofu validate
 
-      # Bootstrap is allowed only as an explicit, non-destructive develop run.
+      # Bootstrap is an explicit, non-destructive run of the selected stand.
       - name: Bootstrap-Eingaben pruefen
         if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded
         env:
           RECREATE_INPUT: ${{ inputs.recreate }}
           SEED_INPUT: ${{ inputs.seed }}
-          GUARD_ENABLED: ${{ vars.GUARDED_STAGING_UPDATES }}
+          GUARD_ENABLED: ${{ (env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true') || (env.STAND == 'main' && vars.GUARDED_MAIN_UPDATES == 'true') }}
           RESUME_OWNER: ${{ inputs.bootstrap_resume_owner }}
         run: |
           set -euo pipefail
-          if [ "$STAND" != develop ] || [ "$RECREATE_INPUT" != false ] || [ "$SEED_INPUT" != false ] || [ "$GUARD_ENABLED" = true ]; then
-            echo '::error::Bootstrap requires develop, recreate=false, seed=false and guarded updates not yet enabled.'
+          if { [ "$STAND" != develop ] && [ "$STAND" != main ]; } || [ "$RECREATE_INPUT" != false ] || [ "$SEED_INPUT" != false ] || [ "$GUARD_ENABLED" = true ]; then
+            echo '::error::Bootstrap requires develop or main, recreate=false, seed=false and guarded updates not yet enabled for the selected stand.'
             exit 1
           fi
           if [ -n "$RESUME_OWNER" ] && ! [[ "$RESUME_OWNER" =~ ^gha-[0-9]+-[0-9]+$ ]]; then
@@ -399,7 +399,7 @@ jobs:
       # Opt-in after a separate bootstrap: the current backend AND any active
       # timer must already support the same durable maintenance gate.
       - name: Laufende App-Auftraege vor Plattform-Neubau schuetzen
-        if: env.STAND == 'develop' && (vars.GUARDED_STAGING_UPDATES == 'true' || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded))
+        if: (env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true') || (env.STAND == 'main' && vars.GUARDED_MAIN_UPDATES == 'true') || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded)
         working-directory: infrastructure/tofu/envs/staging
         env:
           BOOTSTRAP_GUARDED: ${{ github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded }}
@@ -474,7 +474,7 @@ jobs:
       # allerersten Lauf gibt es keine alte VM, und ein neues Zertifikat
       # anzufordern ist dann richtig.
       - name: Caddy-Zertifikat der alten VM sichern
-        if: ${{ !(env.STAND == 'develop' && ((vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch') || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded))) }}
+        if: ${{ !((github.event_name == 'repository_dispatch' && ((env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true') || (env.STAND == 'main' && vars.GUARDED_MAIN_UPDATES == 'true'))) || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded)) }}
         continue-on-error: true
         working-directory: infrastructure/tofu/envs/staging
         run: |
@@ -528,14 +528,14 @@ jobs:
       # Beim allerersten Lauf ist der State leer und destroy ein No-op - das
       # ist kein Fehler.
       - name: OpenTofu Destroy (alten Stack abreissen)
-        if: (github.event_name != 'workflow_dispatch' || inputs.recreate) && !(env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch')
+        if: (github.event_name != 'workflow_dispatch' || inputs.recreate) && !(github.event_name == 'repository_dispatch' && ((env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true') || (env.STAND == 'main' && vars.GUARDED_MAIN_UPDATES == 'true')))
         working-directory: infrastructure/tofu/envs/staging
         run: tofu destroy -auto-approve
 
       - name: OpenTofu Plan & Apply (neuen Stack aufbauen)
         working-directory: infrastructure/tofu/envs/staging
         env:
-          GUARDED_IN_PLACE: ${{ env.STAND == 'develop' && ((vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch') || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded)) }}
+          GUARDED_IN_PLACE: ${{ (github.event_name == 'repository_dispatch' && ((env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true') || (env.STAND == 'main' && vars.GUARDED_MAIN_UPDATES == 'true'))) || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded) }}
         run: |
           set -euo pipefail
           tofu plan -out=tfplan
@@ -697,9 +697,9 @@ jobs:
           # `false || 'true'` wieder 'true' - die Wahl im Formular haette keine
           # Wirkung. So herum steht der Default links und wird nur dann
           # ausgewertet, wenn es kein workflow_dispatch ist.
-          SEED: ${{ env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch' && 'false' || (github.event_name != 'workflow_dispatch' && 'true' || inputs.seed) }}
-          GUARDED_UPDATES: ${{ env.STAND == 'develop' && (vars.GUARDED_STAGING_UPDATES == 'true' || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded)) }}
-          IN_PLACE_UPDATE: ${{ env.STAND == 'develop' && ((vars.GUARDED_STAGING_UPDATES == 'true' && github.event_name == 'repository_dispatch') || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded)) }}
+          SEED: ${{ github.event_name == 'repository_dispatch' && ((env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true') || (env.STAND == 'main' && vars.GUARDED_MAIN_UPDATES == 'true')) && 'false' || (github.event_name != 'workflow_dispatch' && 'true' || inputs.seed) }}
+          GUARDED_UPDATES: ${{ (env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true') || (env.STAND == 'main' && vars.GUARDED_MAIN_UPDATES == 'true') || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded) }}
+          IN_PLACE_UPDATE: ${{ (github.event_name == 'repository_dispatch' && ((env.STAND == 'develop' && vars.GUARDED_STAGING_UPDATES == 'true') || (env.STAND == 'main' && vars.GUARDED_MAIN_UPDATES == 'true'))) || (github.event_name == 'workflow_dispatch' && inputs.bootstrap_guarded) }}
         # Das Playbook liest die .env aus STAGING_ENV_FILE - der Name bleibt,
         # der Inhalt ist die .env des Stands. caddy_backup_file kennt ein
         # Playbook von vor ADR 0014 nicht; es nimmt dann den alten Pfad, und
